@@ -1,0 +1,383 @@
+// ສ້າງຟັງຊັນສຳລັບດຶງໄຟລ໌ຍ່ອຍມາລວມກັນ
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+function doGet() { 
+  // ສ້າງ Sheet ສຳລັບເກັບຜົນກວດ ແລະ ຕັ້ງຄ່າອັດຕະໂນມັດ
+  initDatabaseSheets();
+
+  return HtmlService.createTemplateFromFile('Index')
+    .evaluate()
+    .setTitle('LIS Test By No V2')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1'); 
+}
+
+// ==========================================
+// ລະບົບສ້າງ SHEET ອັດຕະໂນມັດປ້ອງກັນການພິມຜິດ
+// ==========================================
+function initDatabaseSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // ກວດສອບ ແລະ ສ້າງ Sheet "Test_Parameters"
+  var paramSheet = ss.getSheetByName('Test_Parameters');
+  if (!paramSheet) {
+    paramSheet = ss.insertSheet('Test_Parameters');
+    paramSheet.appendRow(['Test_Name', 'Parameter_Name', 'Input_Type', 'Options', 'Unit', 'Normal_Min', 'Normal_Max']);
+    paramSheet.getRange("A1:G1").setFontWeight("bold").setBackground("#D9EAD3");
+  }
+  
+  // ກວດສອບ ແລະ ສ້າງ Sheet "Test_Results"
+  var resSheet = ss.getSheetByName('Test_Results');
+  if (!resSheet) {
+    resSheet = ss.insertSheet('Test_Results');
+    resSheet.appendRow(['Order_ID', 'Test_Name', 'Parameter_Name', 'Result_Value', 'Flag', 'Timestamp', 'User']);
+    resSheet.getRange("A1:G1").setFontWeight("bold").setBackground("#D9EAD3");
+  }
+}
+
+function logActivity(user, action, target, details) { 
+  try { SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Audit_Log').appendRow([new Date(), user, action, target, details]); } catch(e) {} 
+}
+function logActivityFrontend(user, action, target, details) { logActivity(user, action, target, details); }
+
+function loginUser(username, password) { 
+  try { 
+    var data = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users').getDataRange().getValues(); 
+    var inputUser = String(username).trim(); var inputPass = String(password).trim(); 
+    for (var i = 1; i < data.length; i++) { 
+      if (String(data[i][0]).trim() === inputUser && String(data[i][1]).trim() === inputPass) { 
+        logActivity(inputUser, "Login", "System", "ເຂົ້າສູ່ລະບົບ"); 
+        return { success: true, username: inputUser, role: data[i][2] }; 
+      } 
+    } 
+    return { success: false, message: "Username ຫຼື Password ບໍ່ຖືກຕ້ອງ!" }; 
+  } catch(e) { return { success: false, message: e.toString() }; } 
+}
+
+// === MAINTENANCE ===
+function saveMaintenanceLog(data, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Maintenance_Log'); var logId = "MNT-" + new Date().getTime().toString().substr(-6); sheet.appendRow([logId, data.date, data.machine, data.type, data.issues, data.action, data.nextDue, user]); logActivity(user, "Maintenance", data.machine, data.type); return { success: true, message: "ບັນທຶກປະຫວັດ Maintenance ສຳເລັດ!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+function getMaintenanceLogs() { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Maintenance_Log'); if(!sheet) return []; var data = sheet.getDataRange().getValues(); var logs = []; for(var i = data.length - 1; i > 0; i--) { logs.push({ id: data[i][0], date: data[i][1] ? new Date(data[i][1]).getTime() : null, machine: data[i][2], type: data[i][3], issues: data[i][4], action: data[i][5], nextDue: data[i][6] ? new Date(data[i][6]).getTime() : null, user: data[i][7] }); if(logs.length >= 100) break; } return logs; } catch(e) { return []; } }
+function deleteMaintenanceLog(logId, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Maintenance_Log'); var data = sheet.getDataRange().getValues(); for (var i = data.length - 1; i > 0; i--) { if (data[i][0] === logId) { sheet.deleteRow(i + 1); break; } } logActivity(user, "Delete Maintenance", logId, ""); return { success: true, message: "ລຶບຂໍ້ມູນສຳເລັດແລ້ວ!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+
+// === INVENTORY & STOCK ===
+function saveInventoryLot(data, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Inventory_Lots'); var lotId = "INV-" + new Date().getTime().toString().substr(-6); var rowData = [ lotId, data.reagentId, data.reagentName, data.lotNo, data.supplier, data.location, data.receiveDate, data.expDate, Number(data.qty), Number(data.qty) ]; sheet.appendRow(rowData); recordStockTransaction(data.reagentId, data.reagentName, "IN", data.qty, "ຮັບເຂົ້າ Lot: " + data.lotNo, user); logActivity(user, "Add Inventory Lot", lotId, data.reagentName + " Qty: " + data.qty); return { success: true, message: "ບັນທຶກ Lot ນ້ຳຢາສຳເລັດ!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+function getInventoryData() { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Inventory_Lots'); if(!sheet) return { success: false, data: [], alerts: { expired: 0, expiringSoon: 0, outOfStock: 0 } }; var data = sheet.getDataRange().getValues(); var lots = []; var alerts = { expired: 0, expiringSoon: 0, outOfStock: 0 }; var today = new Date(); today.setHours(0,0,0,0); for(var i = data.length - 1; i > 0; i--) { var expDateStr = data[i][7]; var qty = Number(data[i][9]); var status = "Normal"; var diffDays = 0; if (expDateStr) { var expDate = new Date(expDateStr); var diffTime = expDate - today; diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); if(qty <= 0) { status = "Empty"; alerts.outOfStock++; } else if (diffDays < 0) { status = "Expired"; alerts.expired++; } else if (diffDays <= 30) { status = "Expiring Soon"; alerts.expiringSoon++; } } lots.push({ id: data[i][0], reagentId: data[i][1], name: data[i][2], lotNo: data[i][3], supplier: data[i][4], location: data[i][5], receiveDate: data[i][6] ? new Date(data[i][6]).getTime() : null, expDate: data[i][7] ? new Date(data[i][7]).getTime() : null, qty: qty, status: status, daysLeft: diffDays }); } return { success: true, data: lots, alerts: alerts }; } catch(e) { return { success: false, data: [] }; } }
+function updateInventoryLot(lotId, lotNo, expDate, location, supplier, qty, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Inventory_Lots'); var data = sheet.getDataRange().getValues(); for (var i = 1; i < data.length; i++) { if (data[i][0] === lotId) { sheet.getRange(i + 1, 4).setValue(lotNo); sheet.getRange(i + 1, 5).setValue(supplier); sheet.getRange(i + 1, 6).setValue(location); sheet.getRange(i + 1, 8).setValue(expDate); sheet.getRange(i + 1, 10).setValue(Number(qty)); logActivity(user, "Edit Inventory Lot", lotId, "ອັບເດດ Lot: " + lotNo); return { success: true, message: "ແກ້ໄຂລາຍການສຳເລັດ!" }; } } return { success: false, message: "ບໍ່ພົບລາຍການນີ້!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+function deleteInventoryLot(lotId, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Inventory_Lots'); var data = sheet.getDataRange().getValues(); for (var i = data.length - 1; i > 0; i--) { if (data[i][0] === lotId) { sheet.deleteRow(i + 1); logActivity(user, "Delete Inventory Lot", lotId, "ລຶບ Lot ອອກຈາກສາງ"); return { success: true, message: "ລຶບລາຍການສຳເລັດແລ້ວ!" }; } } return { success: false, message: "ບໍ່ພົບລາຍການນີ້!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+
+function getStockMaster() { try { var ss = SpreadsheetApp.getActiveSpreadsheet(); var masterData = ss.getSheetByName('Stock_Master').getDataRange().getValues(); var invSheet = ss.getSheetByName('Inventory_Lots'); var invData = invSheet ? invSheet.getDataRange().getValues() : []; var stock = []; for(var i = 1; i < masterData.length; i++) { if(masterData[i][0]) { var rId = masterData[i][0]; var realQty = 0; for(var j = 1; j < invData.length; j++) { if(invData[j][1] === rId) { realQty += Number(invData[j][9]) || 0; } } stock.push({ id: rId, name: masterData[i][1], unit: masterData[i][2], qty: realQty }); } } return stock; } catch(e) { return []; } }
+function addNewReagent(name, unit) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stock_Master'); sheet.appendRow(["REG-" + new Date().getTime().toString().substr(-5), name, unit, 0]); return { success: true, message: "ເພີ່ມນ້ຳຢາສຳເລັດ!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+function updateReagentMaster(id, name, unit, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stock_Master'); var data = sheet.getDataRange().getValues(); for (var i = 1; i < data.length; i++) { if (data[i][0] === id) { sheet.getRange(i + 1, 2).setValue(name); sheet.getRange(i + 1, 3).setValue(unit); logActivity(user, "Edit Reagent", id, "ແກ້ໄຂເປັນ: " + name); return { success: true, message: "ອັບເດດລາຍຊື່ສຳເລັດ!" }; } } return { success: false, message: "ບໍ່ພົບລາຍການນີ້!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+function deleteReagentMaster(id, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stock_Master'); var data = sheet.getDataRange().getValues(); for (var i = data.length - 1; i > 0; i--) { if (data[i][0] === id) { sheet.deleteRow(i + 1); logActivity(user, "Delete Reagent", id, ""); return { success: true, message: "ລຶບລາຍການສຳເລັດ!" }; } } return { success: false, message: "ບໍ່ພົບລາຍການນີ້!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+
+function recordStockTransaction(id, name, type, qty, note, user) { try { var ss = SpreadsheetApp.getActiveSpreadsheet(); var numQty = Number(qty); ss.getSheetByName('Stock_Transactions').appendRow([new Date(), id, name, type, numQty, note, user]); if (type === "OUT") { var invSheet = ss.getSheetByName('Inventory_Lots'); if (invSheet) { var invData = invSheet.getDataRange().getValues(); var lotsToDeduct = []; for (var r = 1; r < invData.length; r++) { if (invData[r][1] === id && Number(invData[r][9]) > 0) { lotsToDeduct.push({ rowIndex: r + 1, expDate: invData[r][7] ? new Date(invData[r][7]).getTime() : 9999999999999, currentQty: Number(invData[r][9]) }); } } lotsToDeduct.sort(function(a, b) { return a.expDate - b.expDate; }); var remainingToDeduct = numQty; for (var k = 0; k < lotsToDeduct.length; k++) { if (remainingToDeduct <= 0) break; var lot = lotsToDeduct[k]; var deductAmount = Math.min(lot.currentQty, remainingToDeduct); invSheet.getRange(lot.rowIndex, 10).setValue(lot.currentQty - deductAmount); remainingToDeduct -= deductAmount; } } } return { success: true, message: "ບັນທຶກສຳເລັດ! ຕັດສະຕັອກແລ້ວ." }; } catch(e) { return { success: false, message: e.toString() }; } }
+function getStockHistory() { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stock_Transactions'); if (!sheet) return []; var data = sheet.getDataRange().getValues(); var history = []; for(var i = data.length - 1; i > 0; i--) { var timestamp = data[i][0] ? new Date(data[i][0]).getTime() : new Date().getTime(); history.push({ rowIdx: i + 1, date: timestamp, reagentId: data[i][1], name: data[i][2], type: data[i][3], qty: data[i][4], note: data[i][5], user: data[i][6] }); if(history.length >= 100) break; } return history; } catch(e) { return []; } }
+function updateStockTransaction(rowIdx, qty, note, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stock_Transactions'); sheet.getRange(rowIdx, 5).setValue(Number(qty)); sheet.getRange(rowIdx, 6).setValue(note); logActivity(user, "Edit Stock History", "Row " + rowIdx, "Qty: " + qty); return { success: true, message: "ອັບເດດປະຫວັດສຳເລັດແລ້ວ!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+function deleteStockTransaction(rowIdx, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stock_Transactions'); sheet.deleteRow(rowIdx); logActivity(user, "Delete Stock History", "Row " + rowIdx, "ລຶບປະຫວັດ"); return { success: true, message: "ລຶບປະຫວັດສຳເລັດແລ້ວ!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+
+function getDashboardData(startDateStr, endDateStr) { try { var ss = SpreadsheetApp.getActiveSpreadsheet(); var kpis = { totalPatients: 0, totalRevenue: 0, inlabRev: 0, outlabRev: 0 }; var charts = { gender: { Male: 0, Female: 0 }, visitType: { GN: 0, Insurance: 0, B2B: 0 }, testTypeRev: { Normal: 0, Package: 0 }, deptRev: {}, labType: { InHouse: 0, Outsource: 0 }, timeSlot: {}, insite: {}, doctors: {}, tests: {}, categories: {}, stockUsage: {} }; var alerts = { expired: 0, expiringSoon: 0 }; var start = startDateStr ? new Date(startDateStr) : new Date(); start.setHours(0,0,0,0); var end = endDateStr ? new Date(endDateStr) : new Date(); end.setHours(23,59,59,999); var sheet = ss.getSheetByName('Test_Orders'); if(sheet) { var data = sheet.getDataRange().getValues(); var uniquePatients = new Set(); for (var i = 1; i < data.length; i++) { var rowDate = new Date(data[i][1]); if (isNaN(rowDate.getTime())) continue; if (rowDate >= start && rowDate <= end) { var orderId = data[i][0], tSlot = data[i][2], visitType = data[i][3]||'Other', insite = data[i][4]||'Other', patientId = data[i][5], gender = data[i][8]||'Other', doctor = data[i][9]||'Other', dept = data[i][10]||'Other', testType = data[i][11] || "Normal", testName = data[i][12], price = Number(data[i][13]) || 0, labDest = data[i][16], status = data[i][18], category = data[i][19] || "Other"; if (status === "Cancelled") continue; uniquePatients.add(patientId); kpis.totalRevenue += price; if(labDest && labDest !== "In-house") { kpis.outlabRev += price; charts.labType.Outsource += price; } else { kpis.inlabRev += price; charts.labType.InHouse += price; } if(gender === "Male") charts.gender.Male++; else if(gender === "Female") charts.gender.Female++; if(charts.visitType[visitType] !== undefined) charts.visitType[visitType] += price; else charts.visitType[visitType] = price; if(!charts.deptRev[dept]) charts.deptRev[dept] = 0; charts.deptRev[dept] += price; if(insite) { if(!charts.insite[insite]) charts.insite[insite] = 0; charts.insite[insite] += price; } if(doctor) { if(!charts.doctors[doctor]) charts.doctors[doctor] = 0; charts.doctors[doctor] += price; } if(testName) { if(!charts.tests[testName]) charts.tests[testName] = { count: 0, rev: 0 }; charts.tests[testName].count += 1; charts.tests[testName].rev += price; } if(category) { if(!charts.categories[category]) charts.categories[category] = { count: 0, rev: 0 }; charts.categories[category].count += 1; charts.categories[category].rev += price; } if(!charts.timeSlot[tSlot]) charts.timeSlot[tSlot] = { count: 0, rev: 0, orders: new Set() }; charts.timeSlot[tSlot].rev += price; charts.timeSlot[tSlot].orders.add(orderId); if(!charts.testTypeRev[testType]) charts.testTypeRev[testType] = 0; charts.testTypeRev[testType] += price; } } for (let slot in charts.timeSlot) { charts.timeSlot[slot].count = charts.timeSlot[slot].orders.size; delete charts.timeSlot[slot].orders; } kpis.totalPatients = uniquePatients.size; } var stockSheet = ss.getSheetByName('Stock_Transactions'); if (stockSheet) { var stockData = stockSheet.getDataRange().getValues(); for (var j = 1; j < stockData.length; j++) { var sDate = new Date(stockData[j][0]); if (isNaN(sDate.getTime())) continue; if (sDate >= start && sDate <= end) { var type = stockData[j][3]; if(type === "OUT") { var rName = stockData[j][2]; var qty = Number(stockData[j][4]) || 0; if(!charts.stockUsage[rName]) charts.stockUsage[rName] = 0; charts.stockUsage[rName] += qty; } } } } var invSheet = ss.getSheetByName('Inventory_Lots'); if (invSheet) { var invData = invSheet.getDataRange().getValues(); var today = new Date(); today.setHours(0,0,0,0); for(var k = 1; k < invData.length; k++) { var expDateStr = invData[k][7]; var qtyLeft = Number(invData[k][9]); if (expDateStr && qtyLeft > 0) { var expDate = new Date(expDateStr); var diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24)); if (diffDays < 0) alerts.expired++; else if (diffDays <= 30) alerts.expiringSoon++; } } } return { success: true, kpis: kpis, charts: charts, alerts: alerts }; } catch(e) { return { success: false, message: e.toString() }; } }
+
+function submitTestOrder(data) { 
+  try { 
+    var ss = SpreadsheetApp.getActiveSpreadsheet(); 
+    var sheet = ss.getSheetByName('Test_Orders'); 
+    var orderId = data.existingOrderId; 
+    var isEdit = false; 
+    
+    if(orderId) { 
+      isEdit = true; 
+      var allData = sheet.getDataRange().getValues(); 
+      for (var i = allData.length - 1; i > 0; i--) { 
+        if (allData[i][0] === orderId) { sheet.deleteRow(i + 1); } 
+      } 
+    } else { 
+      var dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd"); 
+      var randomStr = Math.floor(Math.random() * 10000).toString().padStart(4, '0'); 
+      orderId = "ORD-" + dateStr + "-" + randomStr; 
+    } 
+    
+    var rowsToInsert = []; 
+    var cart = data.cart; 
+    for (var i = 0; i < cart.length; i++) { 
+      var item = cart[i]; 
+      var rowData = [ orderId, data.orderDateTime, data.timeSlot, data.visitType, data.insite, data.patientId, data.patientName, data.age, data.gender, data.doctor, data.department, data.testType, item.name, item.price, data.totalPrice, data.totalPrice, data.labDest, data.sender, "Pending", item.category ]; 
+      rowsToInsert.push(rowData); 
+    } 
+    
+    if (rowsToInsert.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rowsToInsert.length, rowsToInsert[0].length).setValues(rowsToInsert); 
+    }
+    logActivity(data.loggedUser, isEdit ? "Edit Order" : "Create Order", orderId, "Total: ₭" + data.totalPrice); 
+
+    // ---- Auto Deduct Reagents (ຕັດສະຕັອກອັດຕະໂນມັດ) ----
+    if (!isEdit) { 
+      try {
+        var mappingSheet = ss.getSheetByName('Test_Reagent_Mapping');
+        if (mappingSheet) {
+          var mappingData = mappingSheet.getDataRange().getValues();
+          var testReagentMap = {};
+          
+          for (var m = 1; m < mappingData.length; m++) {
+            if (mappingData[m][0]) {
+              var tName = String(mappingData[m][0]).trim().toLowerCase();
+              if (!testReagentMap[tName]) testReagentMap[tName] = [];
+              testReagentMap[tName].push({ 
+                id: mappingData[m][1], name: mappingData[m][2], qty: Number(mappingData[m][3]) 
+              });
+            }
+          }
+
+          var groupedDeductions = {};
+          for (var c = 0; c < cart.length; c++) {
+            if (cart[c].name) {
+              var cName = String(cart[c].name).trim().toLowerCase();
+              var reqs = testReagentMap[cName];
+              if (reqs) {
+                for (var r = 0; r < reqs.length; r++) {
+                  var rId = reqs[r].id;
+                  if(!groupedDeductions[rId]) {
+                     groupedDeductions[rId] = {id: rId, name: reqs[r].name, qty: 0};
+                  }
+                  groupedDeductions[rId].qty += reqs[r].qty;
+                }
+              }
+            }
+          }
+
+          for (var key in groupedDeductions) {
+            var dItem = groupedDeductions[key];
+            if(dItem.qty > 0) { recordStockTransaction(dItem.id, dItem.name, "OUT", dItem.qty, "Auto-deduct ຈາກບິນ " + orderId, data.loggedUser); }
+          }
+        }
+      } catch(err) {
+        logActivity("System", "Auto-Deduct Error", orderId, err.toString());
+      }
+    }
+    return { success: true, message: "ບັນທຶກ Order " + orderId + " ສຳເລັດ!" }; 
+  } catch (error) { return { success: false, message: error.toString() }; } 
+}
+
+function deleteOrder(orderId, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Orders'); var data = sheet.getDataRange().getValues(); var cancelledCount = 0; for (var i = 1; i < data.length; i++) { if (data[i][0] === orderId) { sheet.getRange(i + 1, 19).setValue("Cancelled"); cancelledCount++; } } logActivity(user, "Cancel Order", orderId, "ຍົກເລີກບິນ"); if(cancelledCount > 0) return { success: true, message: "ຍົກເລີກບິນສຳເລັດແລ້ວ!" }; else return { success: false, message: "ບໍ່ພົບບິນນີ້ໃນລະບົບ" }; } catch(e) { return { success: false, message: e.toString() }; } }
+function updateOrderStatus(orderId, newStatus, user, note) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Orders'); var data = sheet.getDataRange().getValues(); var timestamp = (newStatus === 'Received' || newStatus === 'Completed') ? new Date() : ""; for (var i = 1; i < data.length; i++) { if (data[i][0] === orderId) { sheet.getRange(i + 1, 19).setValue(newStatus); if (timestamp) { sheet.getRange(i + 1, 21).setValue(timestamp); } if (note !== undefined) { sheet.getRange(i + 1, 22).setValue(note); } } } logActivity(user, "Update Status", orderId, "Status: " + newStatus); return { success: true, message: "ປ່ຽນສະຖານະເປັນ " + newStatus + " ສຳເລັດ!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+function getRecentOrders() { try { var data = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Orders').getDataRange().getValues(); if (data.length <= 1) return []; var orderMap = {}; var orders = []; for (var i = data.length - 1; i > 0; i--) { var row = data[i]; var orderId = row[0]; var status = row[18]; if(status === "Cancelled") continue; if (!orderMap[orderId]) { orderMap[orderId] = { orderId: orderId, dateTime: row[1] ? new Date(row[1]).getTime() : new Date().getTime(), timeSlot: row[2], visitType: row[3], insite: row[4], patientId: row[5], patientName: row[6], age: row[7], gender: row[8], doctor: row[9], department: row[10], testType: row[11], labDest: row[16], sender: row[17], status: status, totalPrice: row[14], tests: [] }; orders.push(orderMap[orderId]); } if(row[12]) orderMap[orderId].tests.push({ name: row[12], price: Number(row[13]) || 0 }); if(orders.length >= 80) break; } return orders; } catch(e) { return []; } }
+function getOutlabOrders() { try { var data = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Orders').getDataRange().getValues(); if (data.length <= 1) return []; var orderMap = {}; var orders = []; for (var i = data.length - 1; i > 0; i--) { var row = data[i]; var orderId = row[0]; var labDest = row[16]; if (labDest && labDest !== "In-house") { if (!orderMap[orderId]) { orderMap[orderId] = { orderId: orderId, dateTime: row[1] ? new Date(row[1]).getTime() : new Date().getTime(), patientId: row[5], patientName: row[6], labDest: labDest, sender: row[17] || "-", status: row[18], receivedDate: row[20] ? new Date(row[20]).getTime() : null, note: row[21] || "", tests: [] }; orders.push(orderMap[orderId]); } if(row[12]) orderMap[orderId].tests.push({ name: row[12], price: Number(row[13]) || 0 }); } } return orders; } catch(e) { return []; } }
+function getSummaryReportData(startDateStr, endDateStr) { try { var ss = SpreadsheetApp.getActiveSpreadsheet(); var data = ss.getSheetByName('Test_Orders').getDataRange().getValues(); var start = startDateStr ? new Date(startDateStr) : new Date(); start.setHours(0,0,0,0); var end = endDateStr ? new Date(endDateStr) : new Date(); end.setHours(23,59,59,999); var reportMap = {}; var kpis = { normalCount: 0, normalRev: 0, packageCount: 0, packageRev: 0 }; for (var i = 1; i < data.length; i++) { var rowDate = new Date(data[i][1]); if (isNaN(rowDate.getTime())) continue; var status = data[i][18]; if (status === "Cancelled") continue; if (rowDate >= start && rowDate <= end) { var testType = data[i][11] || "Normal"; var testName = data[i][12] || "Unknown"; var price = Number(data[i][13]) || 0; var category = data[i][19] || "Other"; if (testType === "Normal") { kpis.normalCount += 1; kpis.normalRev += price; } else { kpis.packageCount += 1; kpis.packageRev += price; } var key = category + "|||" + testName; if (!reportMap[key]) { reportMap[key] = { category: category, testName: testName, normal: 0, package: 0, revenue: 0 }; } if (testType === "Normal") { reportMap[key].normal += 1; } else { reportMap[key].package += 1; } reportMap[key].revenue += price; } } var tableData = Object.values(reportMap).sort(function(a, b) { if (a.category === b.category) { return a.testName.localeCompare(b.testName); } return a.category.localeCompare(b.category); }); return { success: true, tableData: tableData, kpis: kpis }; } catch(e) { return { success: false, message: e.toString() }; } }
+function getTestMaster() { try { var data = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Master').getDataRange().getValues(); var tests = []; for(var i = 1; i < data.length; i++) { if(data[i][0]) tests.push({ id: data[i][0], name: data[i][1], price: data[i][2], category: data[i][3] }); } return tests; } catch(e) { return []; } }
+function saveTestMaster(data) { try { SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Master').appendRow(["TST-" + new Date().getTime().toString().substr(-6), data.name, data.price, data.category]); return { success: true }; } catch(e) { return { success: false }; } }
+function updateTestMaster(id, name, price, category, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Master'); var data = sheet.getDataRange().getValues(); for (var i = 1; i < data.length; i++) { if (data[i][0] === id) { sheet.getRange(i + 1, 2).setValue(name); sheet.getRange(i + 1, 3).setValue(Number(price)); sheet.getRange(i + 1, 4).setValue(category); logActivity(user, "Edit Test Master", id, "ແກ້ໄຂ: " + name); return { success: true, message: "ອັບເດດລາຍການສຳເລັດ!" }; } } return { success: false, message: "ບໍ່ພົບລາຍການນີ້!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+function deleteTestMaster(id) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Master'); var data = sheet.getDataRange().getValues(); for (var i = data.length - 1; i > 0; i--) { if (data[i][0] === id) { sheet.deleteRow(i + 1); return { success: true }; } } } catch(e) { return { success: false }; } }
+function getSettings() { try { var data = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings').getDataRange().getValues(); var settings = { VisitType:[], Insite:[], Doctor:[], Department:[], Sender:[], LabDest:[] }; for(var i = 1; i < data.length; i++) { var type = data[i][0]; var val = data[i][1]; if(settings[type] !== undefined && val) settings[type].push({row: i+1, val: val}); } return settings; } catch(e) { return {}; } }
+function addSetting(type, value) { SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings').appendRow([type, value]); return {success: true}; }
+function deleteSetting(row) { SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings').deleteRow(row); return {success: true}; }
+
+function getTestReagentMapping() { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Reagent_Mapping'); if (!sheet) return []; var data = sheet.getDataRange().getValues(); var mapping = []; for (var i = 1; i < data.length; i++) { if (data[i][0]) { mapping.push({ rowIdx: i + 1, testName: data[i][0], reagentId: data[i][1], reagentName: data[i][2], qty: data[i][3] }); } } return mapping; } catch(e) { return []; } }
+function addTestReagentMapping(testName, reagentId, reagentName, qty, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Reagent_Mapping'); sheet.appendRow([testName, reagentId, reagentName, Number(qty)]); logActivity(user, "Add Mapping", testName, "Mapped " + reagentName + " Qty: " + qty); return { success: true, message: "ເພີ່ມການຕັ້ງຄ່າສຳເລັດ!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+function deleteTestReagentMapping(rowIdx, user) { try { var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Reagent_Mapping'); sheet.deleteRow(rowIdx); logActivity(user, "Delete Mapping", "Row " + rowIdx, ""); return { success: true, message: "ລຶບການຕັ້ງຄ່າສຳເລັດ!" }; } catch(e) { return { success: false, message: e.toString() }; } }
+
+// ==========================================
+// ຟັງຊັນສຳລັບໜ້າຕັ້ງຄ່າ PARAMETERS
+// ==========================================
+function getTestParameters() {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Parameters');
+    if (!sheet) return [];
+    var data = sheet.getDataRange().getValues();
+    var params = [];
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0]) {
+        params.push({
+          rowIdx: i + 1, testName: data[i][0], paramName: data[i][1], inputType: data[i][2], options: data[i][3], unit: data[i][4], min: data[i][5], max: data[i][6]
+        });
+      }
+    }
+    return params;
+  } catch(e) { return []; }
+}
+function saveTestParameter(data, user) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Parameters');
+    sheet.appendRow([data.testName, data.paramName, data.inputType, data.options, data.unit, data.min, data.max]);
+    logActivity(user, "Setup Parameter", data.testName, "ເພີ່ມຄ່າ: " + data.paramName);
+    return { success: true, message: "ບັນທຶກການຕັ້ງຄ່າສຳເລັດ!" };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+function deleteTestParameter(rowIdx, user) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Test_Parameters');
+    sheet.deleteRow(rowIdx); return { success: true, message: "ລຶບການຕັ້ງຄ່າສຳເລັດ!" };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+// ==========================================
+// LAB RESULTS MODULE
+// ==========================================
+// ==========================================
+// LAB RESULTS MODULE (ປ້ອງກັນການຊ້ຳກັນ 100%)
+// ==========================================
+function getParametersForOrder(orderId) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var orderData = ss.getSheetByName('Test_Orders').getDataRange().getValues();
+    var orderedTests = [];
+    for (var i = 1; i < orderData.length; i++) {
+      if (String(orderData[i][0]).trim() === String(orderId).trim() && orderData[i][18] !== 'Cancelled') { 
+        orderedTests.push(String(orderData[i][12]).trim()); 
+      }
+    }
+    
+    // ດຶງຜົນກວດເກົ່າທີ່ເຄີຍບັນທຶກແລ້ວ ມາປຽບທຽບ (ໃຊ້ .trim() ເພື່ອໃຫ້ແນ່ນອນ)
+    var resSheet = ss.getSheetByName('Test_Results');
+    var existingResults = {};
+    if (resSheet) {
+       var resData = resSheet.getDataRange().getValues();
+       for (var r = 1; r < resData.length; r++) {
+          if (String(resData[r][0]).trim() === String(orderId).trim()) {
+             var k = String(resData[r][1]).trim() + "_" + String(resData[r][2]).trim(); 
+             existingResults[k] = resData[r][3]; 
+          }
+       }
+    }
+
+    var paramData = ss.getSheetByName('Test_Parameters').getDataRange().getValues();
+    var formStructure = {};
+    for (var j = 1; j < paramData.length; j++) {
+      var tName = String(paramData[j][0]).trim();
+      if (orderedTests.indexOf(tName) !== -1) {
+        if (!formStructure[tName]) formStructure[tName] = [];
+        
+        var pName = String(paramData[j][1]).trim();
+        var pKey = tName + "_" + pName;
+        var savedVal = existingResults[pKey] !== undefined ? existingResults[pKey] : ""; 
+
+        formStructure[tName].push({
+          paramName: pName, 
+          inputType: paramData[j][2], 
+          options: paramData[j][3], 
+          unit: paramData[j][4], 
+          normalMin: paramData[j][5], 
+          normalMax: paramData[j][6],
+          savedValue: savedVal 
+        });
+      }
+    }
+    return { success: true, orderId: orderId, tests: formStructure };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+function saveLabResults(orderId, results, user) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var resSheet = ss.getSheetByName('Test_Results');
+    var paramData = ss.getSheetByName('Test_Parameters').getDataRange().getValues();
+    var timestamp = new Date();
+    
+    // ສ້າງ Map ເພື່ອກວດສອບຄ່າ Min/Max 
+    var limits = {};
+    for(var p=1; p<paramData.length; p++) {
+       limits[String(paramData[p][0]).trim() + "_" + String(paramData[p][1]).trim()] = {min: paramData[p][5], max: paramData[p][6]};
+    }
+
+    // --- ວິທີໃໝ່: ລຶບຜົນກວດເກົ່າຂອງບິນນີ້ຖິ້ມທັງໝົດ ກ່ອນຈະບັນທຶກໃໝ່ (ປ້ອງກັນຊ້ຳ 100%) ---
+    var resData = resSheet.getDataRange().getValues();
+    var rowsToDelete = [];
+    for (var r = resData.length - 1; r > 0; r--) { // ຕ້ອງລຶບຈາກລຸ່ມຂຶ້ນເທິງ
+       if (String(resData[r][0]).trim() === String(orderId).trim()) {
+          rowsToDelete.push(r + 1);
+       }
+    }
+    for (var d = 0; d < rowsToDelete.length; d++) {
+       resSheet.deleteRow(rowsToDelete[d]);
+    }
+    // --------------------------------------------------------------------
+
+    // ກຽມຂໍ້ມູນໃໝ່ເພື່ອບັນທຶກ
+    var rowsToInsert = [];
+    for (var i = 0; i < results.length; i++) {
+      var tName = String(results[i].testName).trim();
+      var pName = String(results[i].paramName).trim();
+      var val = results[i].value;
+      var flag = "Normal";
+
+      var limit = limits[tName + "_" + pName];
+      if (limit && val !== "") {
+         var numVal = parseFloat(val);
+         if (!isNaN(numVal)) {
+             if (limit.min !== "" && numVal < parseFloat(limit.min)) flag = "L";
+             if (limit.max !== "" && numVal > parseFloat(limit.max)) flag = "H";
+         }
+      }
+      rowsToInsert.push([orderId, tName, pName, val, flag, timestamp, user]);
+    }
+
+    // ບັນທຶກລົງ Sheet ບາດດຽວ (ແຖວໃໝ່ທັງໝົດ)
+    if (rowsToInsert.length > 0) {
+        resSheet.getRange(resSheet.getLastRow() + 1, 1, rowsToInsert.length, rowsToInsert[0].length).setValues(rowsToInsert);
+    }
+
+    // ປ່ຽນສະຖານະບິນເປັນ Completed
+    var orderSheet = ss.getSheetByName('Test_Orders');
+    var orderData = orderSheet.getDataRange().getValues();
+    for (var o = 1; o < orderData.length; o++) {
+      if (String(orderData[o][0]).trim() === String(orderId).trim()) {
+          orderSheet.getRange(o + 1, 19).setValue("Completed");
+          break;
+      }
+    }
+    logActivity(user, "Enter/Edit Result", orderId, "ບັນທຶກ/ແກ້ໄຂ ຜົນກວດສຳເລັດ");
+    return { success: true, message: "ບັນທຶກຜົນກວດສຳເລັດແລ້ວ!" };
+  } catch(e) { return { success: false, message: e.toString() }; }
+}
+
+// ==========================================
+// ດຶງຜົນກວດທີ່ບັນທຶກແລ້ວ ເພື່ອມາສະແດງຜົນ
+// ==========================================
+function getSavedResults(orderId) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var resSheet = ss.getSheetByName('Test_Results');
+    if (!resSheet) return [];
+    var resData = resSheet.getDataRange().getValues();
+
+    var paramSheet = ss.getSheetByName('Test_Parameters');
+    var paramData = paramSheet ? paramSheet.getDataRange().getValues() : [];
+
+    var paramLookup = {};
+    for(var p=1; p<paramData.length; p++) {
+       var key = paramData[p][0] + "_" + paramData[p][1]; 
+       paramLookup[key] = {
+         unit: paramData[p][4],
+         min: paramData[p][5],
+         max: paramData[p][6]
+       };
+    }
+
+    var savedResults = [];
+    for (var i = 1; i < resData.length; i++) {
+      if (resData[i][0] === orderId) {
+        var tName = resData[i][1];
+        var pName = resData[i][2];
+        var lookupKey = tName + "_" + pName;
+        var pInfo = paramLookup[lookupKey] || {unit: '', min: '', max: ''};
+        
+        var nRange = "-";
+        if (pInfo.min !== '' && pInfo.max !== '') {
+            nRange = pInfo.min + " - " + pInfo.max;
+        }
+
+        savedResults.push({
+          testName: tName,
+          paramName: pName,
+          value: resData[i][3],
+          flag: resData[i][4], 
+          unit: pInfo.unit,
+          normalRange: nRange
+        });
+      }
+    }
+    return savedResults;
+  } catch(e) {
+    return [];
+  }
+}

@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LIS Test By No V2</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Lao:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+
+<body>
+
+  <div id="loginScreen">
+    <div class="login-box">
+      <h2 class="mb-2"><i class="bi bi-hospital text-primary"></i> LIS Test By No V2</h2>
+      <p class="text-muted mb-4 small">Laboratory Information System</p>
+      <input type="text" id="loginUser" class="form-control mb-3 py-2 bg-light" placeholder="Username">
+      <input type="password" id="loginPass" class="form-control mb-4 py-2 bg-light" placeholder="Password" onkeyup="if(event.key==='Enter') performLogin()">
+      <button class="btn btn-primary w-100 py-2 fw-bold" onclick="performLogin()" id="btnLogin">ເຂົ້າສູ່ລະບົບ (Login)</button>
+    </div>
+  </div>
+
+  <div id="mainApp">
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+    <div class="sidebar" id="sidebar">
+      <div class="brand-header">
+        <div class="brand-title"><i class="bi bi-hospital text-white me-2"></i> LIS Test By No</div>
+        <button class="toggle-btn d-none d-md-block" onclick="toggleSidebar()"><i class="bi bi-list"></i></button>
+        <button class="toggle-btn d-md-none" onclick="toggleSidebar()"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="user-info">
+        <div class="mb-1">ດຳເນີນການໂດຍ:</div>
+        <span id="displayRole" class="fw-bold text-white fs-6"></span>
+      </div>
+
+      <a class="nav-link active admin-only" onclick="showPage(event, 'dashboard')" title="Dashboard"><i class="bi bi-grid-1x2"></i> <span class="nav-text">ພາບລວມ (Dashboard)</span></a>
+      <a class="nav-link" onclick="showPage(event, 'orderForm')" title="Test Order"><i class="bi bi-file-earmark-medical"></i> <span class="nav-text">ສັ່ງກວດແລັບ (Order)</span></a>
+      <a class="nav-link" onclick="showPage(event, 'historyPage')" title="Order History"><i class="bi bi-clock-history"></i> <span class="nav-text">ປະຫວັດສັ່ງກວດ</span></a>
+      <a class="nav-link admin-only" onclick="showPage(event, 'trackResult')" title="Track Results"><i class="bi bi-truck"></i> <span class="nav-text">ຕິດຕາມສົ່ງນອກ (Outlab)</span></a>
+      <a class="nav-link" onclick="showPage(event, 'inventoryPage')" title="Inventory Lots"><i class="bi bi-boxes"></i> <span class="nav-text">ສາງນ້ຳຢາ (Inventory)</span></a>
+      <a class="nav-link" onclick="showPage(event, 'stockPage')" title="Stock Management"><i class="bi bi-box-arrow-right"></i> <span class="nav-text">ເບີກນ້ຳຢາ (Stock Out)</span></a>
+      <a class="nav-link" onclick="showPage(event, 'maintenancePage')" title="Equipment Maintenance"><i class="bi bi-tools"></i> <span class="nav-text">ບຳລຸງຮັກສາເຄື່ອງຈັກ</span></a>
+      <a class="nav-link admin-only" onclick="showPage(event, 'testSetup')" title="Setup Master"><i class="bi bi-sliders"></i> <span class="nav-text">ຕັ້ງຄ່າລະບົບ (Setup)</span></a>
+      <a class="nav-link admin-only" onclick="showPage(event, 'paramSetupPage')" title="Test Parameters"><i class="bi bi-ui-radios"></i> <span class="nav-text">ຕັ້ງຄ່າຜົນກວດ (Parameters)</span></a>
+
+      <a class="nav-link mt-auto border-top border-secondary" onclick="performLogout()" style="color: #ef4444;" title="Logout"><i class="bi bi-power"></i> <span class="nav-text">ອອກຈາກລະບົບ</span></a>
+    </div>
+
+    <div class="content">
+      <div class="mobile-header d-md-none">
+        <button class="btn btn-light btn-sm border" onclick="toggleSidebar()"><i class="bi bi-list"></i> ເມນູ</button><span class="fw-bold" style="color:var(--primary-dark)">LIS Test By No V2</span>
+      </div>
+
+      <!-- ================= DASHBOARD ================= -->
+      <div id="dashboard" class="page active">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+          <h4 class="fw-bold m-0" style="color: var(--primary-dark)"><i class="bi bi-grid-1x2 me-2 text-primary"></i> Analytics Dashboard</h4>
+          <div class="d-flex align-items-center flex-wrap gap-2">
+            <!-- ປຸ່ມແຈ້ງເຕືອນນ້ຳຢາ - ສັນຍາລັກກະດິງ + ຕົວເລກ -->
+            <button class="btn btn-warning btn-sm shadow-sm position-relative" onclick="showInventoryAlerts()" id="btnInventoryAlert" title="ແຈ້ງເຕືອນນ້ຳຢາ">
+              <i class="bi bi-bell-fill fs-5"></i>
+              <span id="alertCountBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="display: none; font-size: 0.65rem; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">0</span>
+            </button>
+            
+            <div class="btn-group shadow-sm me-2">
+              <button class="btn btn-outline-secondary btn-sm bg-white" onclick="setDashDate('today')">ມື້ນີ້</button>
+              <button class="btn btn-outline-secondary btn-sm bg-white" onclick="setDashDate('week')">ອາທິດນີ້</button>
+              <button class="btn btn-outline-secondary btn-sm bg-white" onclick="setDashDate('month')">ເດືອນນີ້</button>
+              <button class="btn btn-outline-secondary btn-sm bg-white" onclick="setDashDate('year')">ປີນີ້</button>
+            </div>
+            <div class="date-filter-group shadow-sm">
+              <span class="small fw-bold d-none d-sm-inline text-muted">ຈາກ:</span><input type="date" id="dashStartDate" class="form-control form-control-sm border-0 bg-transparent p-0" style="width: auto;">
+              <span class="small fw-bold text-muted">ຫາ:</span><input type="date" id="dashEndDate" class="form-control form-control-sm border-0 bg-transparent p-0" style="width: auto;">
+              <button class="btn btn-primary btn-sm ms-2 px-3" onclick="loadDashboard()"><i class="bi bi-search"></i></button>
+            </div>
+            <button class="btn btn-outline-danger btn-sm shadow-sm fw-bold ms-2" onclick="exportDashboardPDF()" title="ດາວໂຫຼດ Dashboard ເປັນ PDF"><i class="bi bi-file-earmark-pdf-fill"></i> PDF</button>
+          </div>
+        </div>
+
+        <!-- ຕົວກັ່ນຕອງແບບກະແນ່ -->
+        <div class="card border-0 shadow-sm mb-4 bg-light">
+          <div class="card-body py-3">
+            <div class="row g-2 align-items-center">
+              <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1"><i class="bi bi-funnel me-1"></i> ພະແນກ</label>
+                <select class="form-select form-select-sm" id="dashDepartment" onchange="loadDashboard()">
+                  <option value="">ທັງໝົດ</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1"><i class="bi bi-person-badge me-1"></i> ແພດສົ່ງກວດ</label>
+                <select class="form-select form-select-sm" id="dashDoctor" onchange="loadDashboard()">
+                  <option value="">ທັງໝົດ</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold mb-1"><i class="bi bi-file-earmark-medical me-1"></i> ປະເພດການກວດ</label>
+                <select class="form-select form-select-sm" id="dashTestType" onchange="loadDashboard()">
+                  <option value="">ທັງໝົດ</option>
+                  <option value="Normal">Normal</option>
+                  <option value="Package">Package</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1"><i class="bi bi-tags me-1"></i> ໝວດໝູ່ການກວດ</label>
+                <select class="form-select form-select-sm" id="dashCategory" onchange="loadDashboard()">
+                  <option value="">ທັງໝົດ</option>
+                  <option value="Biochemistry">Biochemistry</option>
+                  <option value="Hematology">Hematology</option>
+                  <option value="Immunoserology">Immunoserology</option>
+                  <option value="Stool/Urine">Stool/Urine</option>
+                  <option value="Cardiology">Cardiology</option>
+                  <option value="Hormone">Hormone</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="col-md-1 text-end">
+                <label class="form-label small fw-bold mb-1">&nbsp;</label>
+                <div class="d-flex gap-1">
+                  <button class="btn btn-sm btn-primary w-100" onclick="loadDashboard()" title="ໂຫຼດຂໍ້ມູນ">
+                    <i class="bi bi-arrow-clockwise"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary w-100" onclick="resetDashboardFilters()" title="ລ້າງຕົວກັ່ນຕອງ">
+                    <i class="bi bi-x-circle"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="dashLoader" class="text-center py-5" style="display:none;"><div class="spinner-border" style="color: var(--primary-med); width: 3rem; height: 3rem;"></div></div>
+
+        <div id="dashContent">
+          <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3"><div class="kpi-card bg-kpi-1"><h6><i class="bi bi-people"></i> ຈຳນວນບິນ (Orders)</h6><h2 id="kpiPatients">0</h2></div></div>
+            <div class="col-6 col-md-3"><div class="kpi-card bg-kpi-2"><h6><i class="bi bi-cash-coin"></i> ລາຍຮັບລວມ (₭)</h6><h2 id="kpiRev">0</h2></div></div>
+            <div class="col-6 col-md-3"><div class="kpi-card bg-kpi-3"><h6><i class="bi bi-building"></i> In-Lab (₭)</h6><h2 id="kpiInLab">0</h2></div></div>
+            <div class="col-6 col-md-3"><div class="kpi-card bg-kpi-4"><h6><i class="bi bi-truck"></i> Outsource (₭)</h6><h2 id="kpiOutLab">0</h2></div></div>
+          </div>
+
+          <!-- ລາຍງານຕາມຊ່ວງເວລາ (Time Slot) -->
+          <div class="row mb-4">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <span><i class="bi bi-bar-chart-line me-2 text-primary"></i>ລາຍຮັບ ແລະ ຈຳນວນບິນ ຕາມຊ່ວງເວລາ (Time Slot)</span>
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="loadTimeSlotReport('all')">ທັງໝົດ</button>
+                    <button class="btn btn-outline-success" onclick="loadTimeSlotReport('morning')">ເຊົ້າ (08:00-16:00)</button>
+                    <button class="btn btn-outline-warning" onclick="loadTimeSlotReport('evening')">ແລງ (16:00-21:00)</button>
+                    <button class="btn btn-outline-danger" onclick="loadTimeSlotReport('night')">ກະເດີກ (21:00-08:00)</button>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div class="chart-container" style="height: 300px;">
+                    <canvas id="chartTimeSlot"></canvas>
+                  </div>
+                  <!-- ຕາຕະລາງສະຫຼຸບ Time Slot -->
+                  <div class="table-responsive mt-3">
+                    <table class="table table-sm table-bordered" id="timeSlotSummaryTable">
+                      <thead class="table-light">
+                        <tr>
+                          <th>ຊ່ວງເວລາ</th>
+                          <th class="text-center">ຈຳນວນບິນ</th>
+                          <th class="text-end">ລາຍຮັບ (₭)</th>
+                          <th class="text-end">ສະເລ່ຍ/ບິນ (₭)</th>
+                        </tr>
+                      </thead>
+                      <tbody id="timeSlotSummaryBody"></tbody>
+                      <tfoot id="timeSlotSummaryFoot"></tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-4">
+            <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-header text-center">ເພດຄົນເຈັບ (Gender)</div><div class="card-body"><div class="chart-container"><canvas id="chartGender"></canvas></div></div></div></div>
+            <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-header text-center">OPD vs IPD (Insite)</div><div class="card-body"><div class="chart-container"><canvas id="chartInsite"></canvas></div></div></div></div>
+            <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-header text-center">Visit Type</div><div class="card-body"><div class="chart-container"><canvas id="chartVisitType"></canvas></div></div></div></div>
+            <div class="col-md-6 col-lg-3"><div class="card h-100"><div class="card-header text-center">Normal vs Package</div><div class="card-body"><div class="chart-container"><canvas id="chartTestType"></canvas></div></div></div></div>
+          </div>
+
+          <div class="row g-3 mb-4">
+            <div class="col-md-4"><div class="card h-100"><div class="card-header text-center">In-Lab vs Outsource</div><div class="card-body"><div class="chart-container"><canvas id="chartLabType"></canvas></div></div></div></div>
+            <div class="col-md-4"><div class="card h-100"><div class="card-header"><i class="bi bi-person-stethoscope me-2 text-primary"></i>ລາຍຮັບແຍກຕາມແພດ</div><div class="card-body"><div class="chart-container"><canvas id="chartDoctor"></canvas></div></div></div></div>
+            <div class="col-md-4"><div class="card h-100"><div class="card-header"><i class="bi bi-diagram-3 me-2 text-primary"></i>ລາຍຮັບແຍກຕາມພະແນກ</div><div class="card-body"><div class="chart-container"><canvas id="chartDept"></canvas></div></div></div></div>
+          </div>
+
+          <div class="row g-4 mb-4">
+            <div class="col-md-6"><div class="card h-100 border-top border-info border-3"><div class="card-header"><i class="bi bi-trophy text-info me-2"></i>5 ອັນດັບ ລາຍການກວດ (Top Tests)</div><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th class="ps-3">#</th><th>ຊື່ລາຍການ</th><th class="text-center">ຈຳນວນ</th><th class="text-end pe-3">ລາຍຮັບ</th></tr></thead><tbody id="topTestsBody"></tbody></table></div></div></div></div>
+            <div class="col-md-6"><div class="card h-100 border-top border-warning border-3"><div class="card-header"><i class="bi bi-tags text-warning me-2"></i>5 ອັນດັບ ໝວດໝູ່ (Top Categories)</div><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th class="ps-3">#</th><th>ໝວດໝູ່</th><th class="text-center">ຈຳນວນ</th><th class="text-end pe-3">ລາຍຮັບ</th></tr></thead><tbody id="topCatsBody"></tbody></table></div></div></div></div>
+          </div>
+
+          <div class="row g-4 mb-4"><div class="col-12"><div class="card h-100 border-top border-success border-3"><div class="card-header"><i class="bi bi-droplet-half text-success me-2"></i>ສະຫຼຸບຈຳນວນການເບີກໃຊ້ນ້ຳຢາ (Reagent Usage - Stock OUT)</div><div class="card-body"><div class="chart-container" style="height: 300px;"><canvas id="chartStockUsage"></canvas></div></div></div></div></div>
+
+          <!-- ລາຍງານສະຫຼຸບ (Summary Report Table) -->
+          <div class="row g-4 mb-4">
+            <div class="col-12">
+              <div class="card h-100 border-top border-primary border-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                  <span><i class="bi bi-table me-2 text-primary"></i>ລາຍງານສະຫຼຸບລາຍການກວດ (Summary Report)</span>
+                  <button class="btn btn-sm btn-outline-primary" onclick="toggleSummaryTableDashboard()" id="btnToggleSummaryDash">
+                    <i class="bi bi-eye me-1"></i> <span id="summaryTableTextDash">ສະແດງ</span>
+                  </button>
+                </div>
+                <div class="card-body" id="dashboardSummaryTableContainer" style="display: none;">
+                  <div class="table-responsive">
+                    <table class="table table-hover table-sm" id="dashboardSummaryTable">
+                      <thead class="table-light">
+                        <tr>
+                          <th>ໝວດໝູ່</th>
+                          <th>ລາຍການກວດ</th>
+                          <th class="text-center">Normal</th>
+                          <th class="text-center">Package</th>
+                          <th class="text-end">ລາຍຮັບ (₭)</th>
+                        </tr>
+                      </thead>
+                      <tbody id="dashboardSummaryBody"></tbody>
+                      <tfoot id="dashboardSummaryFoot"></tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= ORDER FORM ================= -->
+      <div id="orderForm" class="page">
+        <div id="editAlert" class="alert alert-warning d-none d-flex justify-content-between align-items-center shadow-sm flex-wrap gap-2">
+          <span><i class="bi bi-pencil-square me-2"></i> <b>ໂໝດແກ້ໄຂ:</b> ກຳລັງແກ້ໄຂບິນ <span id="editOrderIdDisplay" class="text-danger fw-bold"></span></span><button class="btn btn-sm btn-dark" onclick="cancelEdit()">ຍົກເລີກການແກ້ໄຂ</button>
+        </div>
+
+        <div class="row align-items-stretch">
+          <div class="col-lg-8 d-flex flex-column">
+            <div class="card mb-4 border-top border-primary border-3">
+              <div class="card-header"><i class="bi bi-person-vcard me-2 text-primary"></i>1. ຂໍ້ມູນຄົນເຈັບ & ການເຂົ້າຮັບບໍລິການ</div>
+              <div class="card-body">
+                <div class="row g-3 mb-3">
+                  <div class="col-md-3 col-6"><label class="form-label small fw-bold">ວັນທີ & ເວລາ</label><input type="datetime-local" class="form-control form-control-sm bg-light border-0" id="orderDateTime"></div>
+                  <div class="col-md-3 col-6"><label class="form-label small fw-bold">Time Slot</label><select class="form-select form-select-sm bg-light border-0" id="timeSlot"><option value="" selected disabled>-- ເລືອກ --</option><option value="08:00-16:00">08:00-16:00</option><option value="16:00-21:00">16:00-21:00</option><option value="21:00-08:00">21:00-08:00</option></select></div>
+                  <div class="col-md-3 col-6"><label class="form-label small fw-bold">Visit Type</label><select class="form-select form-select-sm bg-light border-0" id="visitType"><option value="" selected disabled>-- ເລືອກ --</option></select></div>
+                  <div class="col-md-3 col-6"><label class="form-label small fw-bold">Insite</label><select class="form-select form-select-sm bg-light border-0" id="insite"><option value="" selected disabled>-- ເລືອກ --</option></select></div>
+                </div>
+                <div class="row g-3 mb-3">
+                  <div class="col-md-3 col-12">
+                    <label class="form-label small fw-bold text-primary required-label">Patient ID</label>
+                    <input type="text" class="form-control form-control-sm required-field" id="patientId" placeholder="HN-XXXX"
+                      list="patientList" autocomplete="off">
+                    <datalist id="patientList"></datalist>
+                  </div>
+                  <div class="col-md-5 col-12"><label class="form-label small fw-bold text-primary required-label">ຊື່ ແລະ ນາມສະກຸນ</label><input type="text" class="form-control form-control-sm required-field" id="patientName" placeholder="Full Name"></div>
+                  <div class="col-md-2 col-6"><label class="form-label small fw-bold text-primary required-label">ອາຍຸ</label><input type="number" class="form-control form-control-sm required-field" id="age" placeholder="ປີ"></div>
+                  <div class="col-md-2 col-6"><label class="form-label small fw-bold">ເພດ</label><select class="form-select form-select-sm bg-light border-0" id="gender"><option value="Male">Male</option><option value="Female">Female</option></select></div>
+                </div>
+                <div class="row g-3">
+                  <div class="col-md-3 col-6"><label class="form-label small fw-bold">Doctor</label><select class="form-select form-select-sm bg-light border-0" id="doctor"><option value="" selected disabled>-- ເລືອກ --</option></select></div>
+                  <div class="col-md-3 col-6"><label class="form-label small fw-bold">Department</label><select class="form-select form-select-sm bg-light border-0" id="department"><option value="" selected disabled>-- ເລືອກ --</option></select></div>
+                  <div class="col-md-3 col-6"><label class="form-label small fw-bold">Sender</label><select class="form-select form-select-sm bg-light border-0" id="sender"><option value="" selected disabled>-- ເລືອກ --</option></select></div>
+                  <div class="col-md-3 col-6">
+                    <div class="form-check mt-md-4 mt-2">
+                      <input class="form-check-input border-danger" type="checkbox" id="isOutlab" onchange="toggleOutlab()"><label class="form-check-label text-danger fw-bold small">ສົ່ງກວດນອກ</label>
+                    </div>
+                  </div>
+                  <div class="col-md-12 mt-2" id="labDestDiv" style="display: none;"><label class="form-label text-danger small fw-bold">Lab Destination</label><select class="form-select form-select-sm border-danger w-auto" id="labDest"><option value="" selected disabled>-- ເລືອກ --</option></select></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card mb-4 mb-lg-0 flex-grow-1 border-top border-secondary border-3">
+              <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2 pb-2">
+                <span><i class="bi bi-ui-checks-grid me-2 text-secondary"></i>2. ລາຍການກວດ (Test Items)</span>
+                <div class="d-flex align-items-center gap-2 test-search-box flex-grow-1 flex-md-grow-0">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="searchTestInput" class="form-control" placeholder="ຄົ້ນຫາລາຍການ..." onkeyup="filterTestItems()">
+                  </div>
+                  <button class="btn btn-sm btn-light border py-1 text-muted text-nowrap" onclick="loadTestCheckboxes()" title="Refresh"><i class="bi bi-arrow-clockwise"></i></button>
+                </div>
+              </div>
+              <div class="test-items-container" id="dynamicTestContainer"></div>
+            </div>
+          </div>
+
+          <div class="col-lg-4 d-flex flex-column mt-4 mt-lg-0">
+            <div class="card h-100 d-flex flex-column shadow-sm" style="border: 2px solid var(--primary-dark);">
+              <div class="card-header text-white py-3 border-0" style="background-color: var(--primary-dark) !important;"><i class="bi bi-receipt me-2"></i>ສະຫຼຸບລາຍການ (Summary)</div>
+              <div class="card-body d-flex flex-column bg-light rounded-bottom">
+                <label class="form-label fw-bold small text-muted">ຮູບແບບລາຄາ (Pricing Type)</label>
+                <select class="form-select form-select-sm mb-3 shadow-sm border-0" id="testType" onchange="calculateCart()"><option value="Normal">Normal (ຄິດໄລ່ຕາມລາຍການ)</option><option value="Package">Package (ເລືອກ Package)</option></select>
+                <div id="packageInputDiv" style="display: none;" class="mb-3 p-3 bg-white rounded border shadow-sm">
+                  <label class="small fw-bold text-muted mb-1">ເລືອກ Package</label>
+                  <select class="form-select form-select-sm mb-2" id="packageSelector" onchange="onPackageSelect()">
+                    <option value="">-- ເລືອກ Package --</option>
+                  </select>
+                  <label class="small fw-bold text-muted">ລາຍການໃນ Package</label>
+                  <ul class="list-group list-group-sm mt-1" id="packageItemsList"></ul>
+                  <label class="small fw-bold text-muted mt-2">ລາຄາ Package (₭)</label><input type="number" class="form-control form-control-sm" id="packagePrice" value="0" readonly>
+                </div>
+                <div class="bg-white border rounded p-2 flex-grow-1 overflow-auto shadow-sm" style="min-height: 200px;">
+                  <ul class="list-group list-group-flush" id="cartList">
+                    <li class="list-group-item text-center text-muted small border-0 mt-4">ຍັງບໍ່ມີລາຍການ</li>
+                  </ul>
+                </div>
+                <div class="mt-auto pt-4">
+                  <div class="d-flex justify-content-between align-items-center mb-3 px-1">
+                    <span class="fs-5 fw-bold text-muted">ຍອດລວມ:</span>
+                    <span class="fs-2 fw-bold" style="color: var(--primary-med);" id="totalPriceDisplay">₭ 0</span>
+                  </div>
+                  <button class="btn btn-primary w-100 fw-bold py-3 shadow fs-5 rounded-3" onclick="submitData()" id="submitBtn"><i class="bi bi-save me-2"></i> ບັນທຶກການສັ່ງກວດ</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= ORDER HISTORY ================= -->
+      <div id="historyPage" class="page">
+        <h4 class="fw-bold mb-4" style="color: var(--primary-dark)"><i class="bi bi-clock-history me-2 text-primary"></i> ປະຫວັດການສັ່ງກວດ (Order History)</h4>
+        <div class="card shadow-sm border-0 mb-3">
+          <div class="card-body rounded d-flex flex-wrap gap-2 align-items-center border">
+            <span class="fw-bold text-muted me-2"><i class="bi bi-search"></i> ກັ່ນຕອງວັນທີ:</span>
+            <input type="date" class="form-control form-control-sm w-auto bg-light border-0" id="searchDate" onchange="filterTable()">
+            <button class="btn btn-outline-primary btn-sm" onclick="loadTable()" title="ລ້າງການກັ່ນຕອງ"><i class="bi bi-arrow-clockwise"></i> ໂຫຼດໃໝ່</button>
+            <div class="btn-group border ms-auto shadow-sm">
+              <button class="btn btn-sm btn-light text-success fw-bold" onclick="exportHistoryData('excel')" title="ດາວໂຫຼດ Excel"><i class="bi bi-file-earmark-excel-fill me-1"></i> Excel</button>
+              <button class="btn btn-sm btn-light text-primary fw-bold" onclick="exportHistoryData('csv')" title="ດາວໂຫຼດ CSV"><i class="bi bi-filetype-csv me-1"></i> CSV</button>
+              <button class="btn btn-sm btn-light text-danger fw-bold" onclick="exportHistoryData('pdf')" title="ດາວໂຫຼດ PDF"><i class="bi bi-file-earmark-pdf-fill me-1"></i> PDF</button>
+            </div>
+          </div>
+        </div>
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-3">
+            <div class="table-responsive mt-3">
+              <table class="table table-hover table-sm align-middle mb-0 w-100" id="orderHistoryTable" style="font-size: 0.85rem;">
+                <thead class="table-dark">
+                  <tr>
+                    <th>1. ວັນເວລາກວດ</th>
+                    <th>2. ລະຫັດຄົນເຈັບ</th>
+                    <th>3. ຊື່ ແລະ ນາມສະກຸນ</th>
+                    <th class="text-center">4. ອາຍຸ</th>
+                    <th class="text-center">5. ເພດ</th>
+                    <th>6. ບ່ອນສົ່ງກວດ</th>
+                    <th class="text-center">7. ປະເພດ</th>
+                    <th class="text-end" style="min-width: 100px;">8. ຍອດລວມ</th>
+                    <th class="text-center" style="min-width: 180px;">9. ຈັດການ</th>
+                  </tr>
+                </thead>
+                <tbody id="orderTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= OUTLAB TRACKING ================= -->
+      <div id="trackResult" class="page">
+        <div class="card shadow-sm border-0 mb-4">
+          <div class="card-body py-3">
+            <div class="row g-2 align-items-center">
+              <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1"><i class="bi bi-calendar3 me-1"></i> ວັນທີເລີ່ມ</label>
+                <input type="date" class="form-control form-control-sm" id="outlabStartDate">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small fw-bold mb-1"><i class="bi bi-calendar3 me-1"></i> ວັນທີສິ້ນສຸດ</label>
+                <input type="date" class="form-control form-control-sm" id="outlabEndDate">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold mb-1">&nbsp;</label>
+                <button class="btn btn-primary btn-sm w-100" onclick="filterOutlabByDate()" title="ຄົ້ນຫາ">
+                  <i class="bi bi-search"></i> ຄົ້ນຫາ
+                </button>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold mb-1">&nbsp;</label>
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="resetOutlabFilter()" title="ລ້າງຕົວກັ່ນຕອງ">
+                  <i class="bi bi-x-circle"></i> ລ້າງ
+                </button>
+              </div>
+              <div class="col-md-2 text-end">
+                <label class="form-label small fw-bold mb-1">&nbsp;</label>
+                <button class="btn btn-primary btn-sm" onclick="loadOutlabTable()" title="ໂຫຼດໃໝ່">
+                  <i class="bi bi-arrow-clockwise"></i> ໂຫຼດໃໝ່
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-3">
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0 w-100" id="outlabTable">
+                <thead class="table-dark">
+                  <tr><th>Order ID</th><th>Date/Time</th><th>Patient</th><th>Lab Dest</th><th>ຜູ້ສົ່ງ</th><th>Tests</th><th>Status</th><th>ເວລາຮັບຜົນ</th><th>ໝາຍເຫດ</th><th>Update</th></tr>
+                </thead>
+                <tbody id="outlabTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= INVENTORY ================= -->
+      <div id="inventoryPage" class="page">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+          <h4 class="fw-bold m-0" style="color: var(--primary-dark)"><i class="bi bi-boxes me-2 text-primary"></i> ລະບົບຈັດການສາງນ້ຳຢາ (Inventory & Lots)</h4>
+          <div class="d-flex gap-2 align-items-center">
+            <div class="btn-group border shadow-sm">
+              <button class="btn btn-sm btn-light text-success fw-bold" onclick="exportInventoryData('excel')" title="ດາວໂຫຼດ Excel"><i class="bi bi-file-earmark-excel-fill me-1"></i> Excel</button>
+              <button class="btn btn-sm btn-light text-primary fw-bold" onclick="exportInventoryData('csv')" title="ດາວໂຫຼດ CSV"><i class="bi bi-filetype-csv me-1"></i> CSV</button>
+              <button class="btn btn-sm btn-light text-danger fw-bold" onclick="exportInventoryData('pdf')" title="ດາວໂຫຼດ PDF"><i class="bi bi-file-earmark-pdf-fill me-1"></i> PDF</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-4"><div class="kpi-card bg-success"><h6><i class="bi bi-check-circle"></i> ລາຍການທັງໝົດ (Total Lots)</h6><h2 id="invTotalLots">0</h2></div></div>
+          <div class="col-md-4"><div class="kpi-card bg-warning text-dark"><h6><i class="bi bi-exclamation-triangle"></i> ໃກ້ໝົດອາຍຸ (Expiring &lt; 30 days)</h6><h2 id="invExpiringSoon">0</h2></div></div>
+          <div class="col-md-4"><div class="kpi-card bg-danger"><h6><i class="bi bi-x-circle"></i> ໝົດອາຍຸ/ໝົດສະຕັອກ</h6><h2 id="invExpired">0</h2></div></div>
+        </div>
+
+        <div class="row g-4 mb-4">
+          <div class="col-12">
+            <div class="card h-100 border-0 shadow-sm">
+              <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-bold"><i class="bi bi-table me-2 text-primary"></i>ລາຍການນ້ຳຢາໃນສາງ (Inventory List)</span>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-primary fw-bold shadow-sm" onclick="openAddLotModal()">
+                    <i class="bi bi-box-arrow-in-down fs-6 align-middle me-1"></i> ຮັບເຂົ້າສາງ
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="loadInventoryTable()" title="ໂຫຼດໃໝ່">
+                    <i class="bi bi-arrow-clockwise"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body p-3">
+                <div class="table-responsive">
+                  <table class="table table-hover align-middle mb-0 w-100" id="inventoryTable">
+                    <thead class="table-light">
+                      <tr><th class="ps-3">Reagent</th><th>Lot No.</th><th>Exp Date</th><th>Location</th><th>Supplier</th><th class="text-center">Qty</th><th class="text-center">Status</th><th class="text-center admin-only">ຈັດການ</th></tr>
+                    </thead>
+                    <tbody id="inventoryTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= STOCK HISTORY ================= -->
+      <div id="stockPage" class="page">
+        <h4 class="fw-bold mb-4" style="color: var(--primary-dark)"><i class="bi bi-clock-history me-2 text-primary"></i> ປະຫວັດການເບີກ-ຮັບນ້ຳຢາ (Stock History)</h4>
+
+        <div class="row g-4 mb-4">
+          <div class="col-12">
+            <div class="card h-100 shadow-sm border-0">
+              <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <span class="fw-bold fs-6"><i class="bi bi-table me-2 text-primary"></i>ລາຍການປະຫວັດລ່າສຸດ</span>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <span class="small fw-bold text-muted"><i class="bi bi-calendar"></i> ວັນທີ:</span>
+                  <input type="date" id="stockSearchDate" class="form-control form-control-sm w-auto bg-light border-0" onchange="filterStockHistory()">
+                  <span class="small fw-bold text-muted ms-2"><i class="bi bi-search"></i> ລາຍການ:</span>
+                  <input type="text" id="stockSearchText" class="form-control form-control-sm w-auto bg-light border-0" placeholder="ຄົ້ນຫາຊື່ນ້ຳຢາ..." onkeyup="filterStockHistory()">
+                  <button class="btn btn-sm btn-outline-primary shadow-sm" onclick="loadStockData()"><i class="bi bi-arrow-clockwise"></i> ໂຫຼດໃໝ່</button>
+                </div>
+              </div>
+              <div class="card-body p-3">
+                <div class="table-responsive mt-3">
+                  <table class="table table-hover table-sm align-middle mb-0 w-100" id="stockHistoryTable" style="font-size: 0.85rem;">
+                    <thead class="table-dark">
+                      <tr>
+                        <th class="ps-3">ວັນທີ-ເວລາ</th>
+                        <th>ລາຍການ</th>
+                        <th>ປະເພດ</th>
+                        <th>ຈຳນວນ</th>
+                        <th>ຜູ້ບັນທຶກ</th>
+                        <th class="text-center admin-only" style="min-width: 90px;">ຈັດການ</th>
+                      </tr>
+                    </thead>
+                    <tbody id="stockHistoryBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= MAINTENANCE ================= -->
+      <div id="maintenancePage" class="page">
+        <h4 class="fw-bold mb-4" style="color: var(--primary-dark)"><i class="bi bi-tools me-2 text-primary"></i> ບັນທຶກບຳລຸງຮັກສາເຄື່ອງຈັກ (Equipment Maintenance)</h4>
+        <div class="row g-4 mb-4">
+          <div class="col-lg-4">
+            <div class="card border-top border-info border-3">
+              <div class="card-header"><i class="bi bi-pencil-square me-2 text-info"></i>ບັນທຶກການບຳລຸງຮັກສາ</div>
+              <div class="card-body bg-light">
+                <label class="form-label small fw-bold">ຊື່ເຄື່ອງຈັກ (Machine Name)</label><input type="text" class="form-control form-control-sm mb-2 bg-white border-0" id="maintMachine" placeholder="ເຊັ່ນ: ເຄື່ອງກວດເລືອດ CBC">
+                <div class="row g-2 mb-2">
+                  <div class="col-6"><label class="form-label small fw-bold">ວັນທີກວດເຊັກ</label><input type="date" class="form-control form-control-sm bg-white border-0" id="maintDate"></div>
+                  <div class="col-6">
+                    <label class="form-label small fw-bold">ປະເພດ (Type)</label><select class="form-select form-select-sm bg-white border-0" id="maintType"><option>Daily (ປະຈຳວັນ)</option><option>Weekly (ປະຈຳອາທິດ)</option><option>Monthly (ປະຈຳເດືອນ)</option><option>Calibration (ປັບທຽບຄ່າ)</option><option>Breakdown (ສ້ອມແປງ)</option></select>
+                  </div>
+                </div>
+                <label class="form-label small fw-bold">ອາການ / ສິ່ງທີ່ພົບ (Issues Found)</label><textarea class="form-control form-control-sm mb-2 bg-white border-0" id="maintIssues" rows="2" placeholder="ປົກກະຕິ / ຫຼື ອະທິບາຍບັນຫາ"></textarea>
+                <label class="form-label small fw-bold">ການແກ້ໄຂ / ບຳລຸງຮັກສາ (Action Taken)</label><textarea class="form-control form-control-sm mb-2 bg-white border-0" id="maintAction" rows="2" placeholder="ລ້າງເຄື່ອງ, ປ່ຽນອາໄຫຼ່..."></textarea>
+                <label class="form-label small fw-bold text-danger">ວັນທີຕ້ອງບຳລຸງຮັກສາຮອບໜ້າ (Next Due Date)</label><input type="date" class="form-control form-control-sm border-danger mb-4 bg-white" id="maintNextDue">
+                <button class="btn btn-info w-100 fw-bold text-white py-2" onclick="submitMaintenance()" id="btnSubmitMaint">ບັນທຶກຂໍ້ມູນ</button>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-8">
+            <div class="card h-100">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-card-list me-2 text-primary"></i>ປະຫວັດການບຳລຸງຮັກສາ (Maintenance Logs)</span><button class="btn btn-sm btn-outline-secondary py-0" onclick="loadMaintenanceTable()"><i class="bi bi-arrow-clockwise"></i></button>
+              </div>
+              <div class="card-body p-3">
+                <div class="table-responsive">
+                  <table class="table table-hover align-middle mb-0 w-100" id="maintenanceTable">
+                    <thead class="table-light">
+                      <tr><th class="ps-3">ວັນທີ</th><th>ຊື່ເຄື່ອງຈັກ</th><th>ປະເພດ</th><th>ການແກ້ໄຂ</th><th>Next Due</th><th>ຜູ້ບັນທຶກ</th><th>ລຶບ</th></tr>
+                    </thead>
+                    <tbody id="maintenanceTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= TEST SETUP ================= -->
+      <div id="testSetup" class="page">
+        <h4 class="fw-bold mb-4" style="color: var(--primary-dark)"><i class="bi bi-sliders me-2 text-primary"></i> ຕັ້ງຄ່າລະບົບ (Setup Master)</h4>
+
+        <div class="card mb-4 border-top border-secondary border-3">
+          <div class="card-header"><i class="bi bi-list-check me-2"></i>ລາຍການກວດ (Laboratory Tests)</div>
+          <div class="card-body bg-light">
+            <div class="row g-2 mb-3"><input type="hidden" id="editTestId">
+              <div class="col-md-3 col-6"><input type="text" id="setupTestName" class="form-control form-control-sm bg-white border-primary" placeholder="ຊື່ລາຍການກວດ"></div>
+              <div class="col-md-2 col-6"><input type="number" id="setupTestPrice" class="form-control form-control-sm bg-white border-primary" placeholder="ລາຄາ (₭)"></div>
+              <div class="col-md-3 col-6">
+                <select id="setupTestCat" class="form-select form-select-sm bg-white border-primary"><option>Hematology</option><option>Biochemistry</option><option>Immunoserology</option><option>Stool/Urine</option><option>ultrasound</option><option>Cardiology</option><option>X-ray</option><option>ENT</option><option>Pathology</option><option>Lab</option><option>Other</option></select>
+              </div>
+              <div class="col-md-4 col-6 d-flex gap-1">
+                <button class="btn btn-success btn-sm w-100 fw-bold" id="btnSaveTest" onclick="saveTestMaster()"><i class="bi bi-plus-circle"></i> ບັນທຶກ</button><button class="btn btn-secondary btn-sm w-100 fw-bold d-none" id="btnCancelTest" onclick="cancelEditTest()">ຍົກເລີກ</button>
+              </div>
+            </div>
+            <div class="table-responsive bg-white border rounded p-2">
+              <table class="table table-sm table-hover mb-0 w-100" id="testMasterTable">
+                <thead class="table-light"><tr><th>ຊື່ລາຍການ</th><th>ໝວດໝູ່</th><th>ລາຄາ</th><th class="text-center">ຈັດການ</th></tr></thead>
+                <tbody id="masterTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <h5 class="fw-bold text-secondary mb-3 mt-4"><i class="bi bi-diagram-3 me-2"></i>ຕັ້ງຄ່າການຕັດນ້ຳຢາອັດຕະໂນມັດ (Auto Deduct Mapping)</h5>
+        <div class="card mb-4 border-top border-primary border-3">
+          <div class="card-body bg-light">
+            <div class="row g-2 mb-3">
+              <div class="col-md-3">
+                <label class="form-label small fw-bold">ລາຍການກວດ (Test Item)</label>
+                <select id="mapTestName" class="form-select form-select-sm bg-white border-primary"></select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small fw-bold">ນ້ຳຢາທີ່ໃຊ້ (Reagent)</label>
+                <select id="mapReagent" class="form-select form-select-sm bg-white border-primary"></select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold">ຈຳນວນທີ່ໃຊ້ / 1 ເທື່ອ</label>
+                <input type="number" id="mapQty" class="form-control form-control-sm bg-white border-primary" placeholder="Qty">
+              </div>
+              <div class="col-md-3 d-flex align-items-end">
+                <button class="btn btn-success btn-sm w-100 fw-bold" onclick="saveMapping()"><i class="bi bi-plus-circle"></i> ເພີ່ມການຕັ້ງຄ່າ</button>
+              </div>
+            </div>
+            <div class="table-responsive bg-white border rounded p-2">
+              <table class="table table-sm table-hover mb-0 w-100" id="mappingTable">
+                <thead class="table-light">
+                  <tr><th>ລາຍການກວດ (Test)</th><th>ຊື່ນ້ຳຢາ (Reagent)</th><th class="text-center">ຈຳນວນຕັດ (Qty)</th><th class="text-center">ຈັດການ</th></tr>
+                </thead>
+                <tbody id="mappingTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TEST PACKAGES ================= -->
+        <h5 class="fw-bold text-primary mb-3 mt-5"><i class="bi bi-box-seam me-2"></i>ຈັດການ Package ການກວດ</h5>
+        <div class="card mb-4 border-top border-primary border-3">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-list-stars me-2"></i>ລາຍການ Package</span>
+            <button class="btn btn-primary btn-sm" onclick="openPackageModal()"><i class="bi bi-plus-circle"></i> ສ້າງ Package ໃໝ່</button>
+          </div>
+          <div class="card-body bg-light">
+            <div class="table-responsive bg-white border rounded p-2">
+              <table class="table table-hover mb-0 w-100" id="packagesTable">
+                <thead class="table-light">
+                  <tr><th>ຊື່ Package</th><th>ຄຳອະທິບາຍ</th><th>ລາຄາ (₭)</th><th>ຈຳນວນລາຍການ</th><th>ສະຖານະ</th><th class="text-center">ຈັດການ</th></tr>
+                </thead>
+                <tbody id="packagesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <h5 class="fw-bold text-secondary mb-3"><i class="bi bi-menu-button-wide me-2"></i>ຕັ້ງຄ່າ Dropdown ຕ່າງໆ</h5>
+        <div class="row g-3">
+          <div class="col-md-4 col-sm-6"><div class="card"><div class="card-header py-1 small">Visit Type</div><div class="card-body p-2"><div class="input-group input-group-sm mb-2"><input type="text" id="addVisitType" class="form-control"><button class="btn btn-secondary" onclick="addSetting('VisitType', 'addVisitType')">+</button></div><ul class="list-group list-group-sm custom-table-scroll" id="listVisitType"></ul></div></div></div>
+          <div class="col-md-4 col-sm-6"><div class="card"><div class="card-header py-1 small">Insite</div><div class="card-body p-2"><div class="input-group input-group-sm mb-2"><input type="text" id="addInsite" class="form-control"><button class="btn btn-secondary" onclick="addSetting('Insite', 'addInsite')">+</button></div><ul class="list-group list-group-sm custom-table-scroll" id="listInsite"></ul></div></div></div>
+          <div class="col-md-4 col-sm-6"><div class="card"><div class="card-header py-1 small">Doctor</div><div class="card-body p-2"><div class="input-group input-group-sm mb-2"><input type="text" id="addDoctor" class="form-control"><button class="btn btn-secondary" onclick="addSetting('Doctor', 'addDoctor')">+</button></div><ul class="list-group list-group-sm custom-table-scroll" id="listDoctor"></ul></div></div></div>
+          <div class="col-md-4 col-sm-6"><div class="card"><div class="card-header py-1 small">Department</div><div class="card-body p-2"><div class="input-group input-group-sm mb-2"><input type="text" id="addDept" class="form-control"><button class="btn btn-secondary" onclick="addSetting('Department', 'addDept')">+</button></div><ul class="list-group list-group-sm custom-table-scroll" id="listDepartment"></ul></div></div></div>
+          <div class="col-md-4 col-sm-6"><div class="card"><div class="card-header py-1 small">Sender</div><div class="card-body p-2"><div class="input-group input-group-sm mb-2"><input type="text" id="addSender" class="form-control"><button class="btn btn-secondary" onclick="addSetting('Sender', 'addSender')">+</button></div><ul class="list-group list-group-sm custom-table-scroll" id="listSender"></ul></div></div></div>
+          <div class="col-md-4 col-sm-6"><div class="card"><div class="card-header py-1 small">Lab Destination</div><div class="card-body p-2"><div class="input-group input-group-sm mb-2"><input type="text" id="addLabDest" class="form-control"><button class="btn btn-secondary" onclick="addSetting('LabDest', 'addLabDest')">+</button></div><ul class="list-group list-group-sm custom-table-scroll" id="listLabDest"></ul></div></div></div>
+        </div>
+      </div>
+
+      <!-- ================= PARAM SETUP ================= -->
+      <div id="paramSetupPage" class="page">
+        <h4 class="fw-bold mb-4" style="color: var(--primary-dark)"><i class="bi bi-ui-radios me-2 text-primary"></i> ຕັ້ງຄ່າຄ່າຜົນກວດ (Test Parameters)</h4>
+
+        <div class="card mb-4 border-top border-primary border-3 shadow-sm">
+          <div class="card-header bg-white"><i class="bi bi-plus-circle-dotted me-2 text-primary"></i> ເພີ່ມຄ່າ Parameter ໃໝ່</div>
+          <div class="card-body bg-light">
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label small fw-bold">ລາຍການກວດ (Test Name)</label>
+                <select id="spTestName" class="form-select form-select-sm border-primary"></select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small fw-bold">ຊື່ຄ່າທີ່ກວດ (Parameter)</label>
+                <input type="text" id="spParamName" class="form-control form-control-sm border-primary" placeholder="ເຊັ່ນ: WBC, RBC, HBsAg">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold">ປະເພດການປ້ອນ (Type)</label>
+                <select id="spInputType" class="form-select form-select-sm border-primary" onchange="toggleParamInputFields()">
+                  <option value="Number">ຕົວເລກ (Number)</option>
+                  <option value="Dropdown">ຕົວເລືອກ (Dropdown)</option>
+                  <option value="Text">ຂໍ້ຄວາມ (Text)</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold">ຫົວໜ່ວຍ (Unit)</label>
+                <input type="text" id="spUnit" class="form-control form-control-sm" placeholder="ເຊັ່ນ: g/dL">
+              </div>
+              <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-success btn-sm w-100 fw-bold" onclick="saveParameter()"><i class="bi bi-save"></i> ບັນທຶກ</button>
+              </div>
+            </div>
+
+            <div class="row g-3 mt-1" id="divNumberSetup">
+              <div class="col-md-3">
+                <label class="form-label small fw-bold text-secondary">ຄ່າປົກກະຕິຕ່ຳສຸດ (Min)</label>
+                <input type="number" id="spMin" class="form-control form-control-sm" placeholder="ເຊັ່ນ: 4.0">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small fw-bold text-secondary">ຄ່າປົກກະຕິສູງສຸດ (Max)</label>
+                <input type="number" id="spMax" class="form-control form-control-sm" placeholder="ເຊັ່ນ: 10.0">
+              </div>
+              <div class="col-md-6 pt-4 text-muted small">
+                <i>* ຖ້າຄົນເຈັບໄດ້ຜົນນ້ອຍກວ່າ Min ລະບົບຈະແຈ້ງເຕືອນ L (Low). ຖ້າຫຼາຍກວ່າ Max ຈະແຈ້ງ H (High).</i>
+              </div>
+            </div>
+
+            <div class="row g-3 mt-1" id="divDropdownSetup" style="display: none;">
+              <div class="col-md-6">
+                <label class="form-label small fw-bold text-secondary">ຕົວເລືອກ (ຂັ້ນດ້ວຍເຄື່ອງໝາຍຈຸດ ,)</label>
+                <input type="text" id="spOptions" class="form-control form-control-sm" placeholder="ເຊັ່ນ: Negative, Positive, Weak Positive">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+          <div class="card-body p-3">
+            <div class="table-responsive">
+              <table class="table table-hover table-sm align-middle mb-0 w-100" id="paramTable" style="font-size: 0.85rem;">
+                <thead class="table-light">
+                  <tr><th>ລາຍການກວດ</th><th>Parameter</th><th>Type</th><th>Options / Range</th><th>Unit</th><th class="text-center">ຈັດການ</th></tr>
+                </thead>
+                <tbody id="paramTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= MODALS ================= -->
+  <div class="modal fade" id="addLotModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold"><i class="bi bi-box-arrow-in-down me-2"></i> ບັນທຶກນ້ຳຢາເຂົ້າສາງ (Add New Lot)</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body bg-light p-4">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">ເລືອກນ້ຳຢາ (ຈາກ Master)</label>
+              <div class="input-group input-group-sm">
+                <select class="form-select bg-white border-0" id="invSelectReagent"></select>
+                <button class="btn btn-outline-primary bg-white admin-only" type="button" onclick="openReagentModal()"><i class="bi bi-plus-circle-fill"></i></button>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">ໝາຍເລກ Lot (Lot No.)</label>
+              <input type="text" class="form-control form-control-sm bg-white border-0" id="invLotNo">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold text-danger">ວັນໝົດອາຍຸ (Exp Date)</label>
+              <input type="date" class="form-control form-control-sm border-danger" id="invExpDate">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">ວັນຮັບເຂົ້າ</label>
+              <input type="date" class="form-control form-control-sm bg-white border-0" id="invReceiveDate">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">ບ່ອນຈັດເກັບ (Location)</label>
+              <input type="text" class="form-control form-control-sm bg-white border-0" id="invLocation">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">ບໍລິສັດຜູ້ສະໜອງ (Supplier)</label>
+              <input type="text" class="form-control form-control-sm bg-white border-0" id="invSupplier">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-bold text-primary">ຈຳນວນຮັບເຂົ້າ (Qty)</label>
+              <input type="number" class="form-control form-control-sm border-primary bg-white" id="invQty" placeholder="0">
+            </div>
+          </div>
+          <div class="mt-4">
+            <button class="btn btn-primary w-100 fw-bold py-2 fs-6" onclick="submitInventoryLot()" id="btnSubmitInv"><i class="bi bi-check-circle me-1"></i> ບັນທຶກເຂົ້າສາງ</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="reagentMasterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold"><i class="bi bi-box-seam me-2"></i> ຈັດການລາຍຊື່ນ້ຳຢາ</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body bg-light">
+          <div class="card shadow-sm border-0 mb-3"><div class="card-body p-3"><div class="row g-2 align-items-end"><input type="hidden" id="editReagentId">
+            <div class="col-md-5"><label class="form-label small fw-bold">ຊື່ນ້ຳຢາ</label><input type="text" class="form-control form-control-sm border-primary" id="newReagentName" placeholder="ຊື່ນ້ຳຢາ..."></div>
+            <div class="col-md-4"><label class="form-label small fw-bold">ຫົວໜ່ວຍ</label><input type="text" class="form-control form-control-sm border-primary" id="newReagentUnit" placeholder="ເຊັ່ນ: ປ໋ອງ, Test"></div>
+            <div class="col-md-3 d-flex gap-1"><button class="btn btn-success btn-sm w-100 fw-bold" id="btnSaveReagent" onclick="saveReagentMaster()">ບັນທຶກ</button><button class="btn btn-secondary btn-sm w-100 fw-bold d-none" id="btnCancelReagent" onclick="cancelEditReagent()">ຍົກເລີກ</button></div>
+          </div></div></div>
+          <div class="card shadow-sm border-0"><div class="card-body p-2"><div class="table-responsive"><table class="table table-hover align-middle mb-0 text-sm w-100" id="reagentMasterTable"><thead class="table-light"><tr><th class="ps-3">ລະຫັດ (ID)</th><th>ຊື່ນ້ຳຢາ (Name)</th><th>ຫົວໜ່ວຍ (Unit)</th><th class="text-center">ຈັດການ</th></tr></thead><tbody id="reagentMasterTableBody"></tbody></table></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="inventoryEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i> ແກ້ໄຂຂໍ້ມູນສາງນ້ຳຢາ</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body bg-light">
+          <input type="hidden" id="editInvLotId">
+          <div class="mb-2"><label class="form-label small fw-bold">ໝາຍເລກ Lot</label><input type="text" class="form-control form-control-sm" id="editInvLotNo"></div>
+          <div class="mb-2"><label class="form-label small fw-bold text-danger">ວັນໝົດອາຍຸ</label><input type="date" class="form-control form-control-sm border-danger" id="editInvExpDate"></div>
+          <div class="mb-2"><label class="form-label small fw-bold">ບ່ອນຈັດເກັບ</label><input type="text" class="form-control form-control-sm" id="editInvLocation"></div>
+          <div class="mb-2"><label class="form-label small fw-bold">ຜູ້ສະໜອງ</label><input type="text" class="form-control form-control-sm" id="editInvSupplier"></div>
+          <div class="mb-3"><label class="form-label small fw-bold text-primary">ຍອດຄົງເຫຼືອ</label><input type="number" class="form-control form-control-sm border-primary" id="editInvQty"></div>
+          <button class="btn btn-warning w-100 fw-bold" onclick="saveInvLotEdit()" id="btnSaveInvEdit">ອັບເດດຂໍ້ມູນ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="stockHistoryEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2"></i> ແກ້ໄຂປະຫວັດເບີກ-ຮັບ</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body bg-light">
+          <div class="alert alert-danger py-2 small border-0"><i class="bi bi-exclamation-triangle-fill"></i> ການແກ້ໄຂ ຫຼື ລຶບປະຫວັດນີ້ <b>ຈະບໍ່ປັບຍອດເງິນໃນສາງຄືນໃຫ້ອັດຕະໂນມັດ</b>! ທ່ານຕ້ອງໄປປັບຍອດໃນສາງເອງ.</div>
+          <input type="hidden" id="editStockRowIdx">
+          <div class="mb-2"><label class="form-label small fw-bold">ຈຳນວນ (Qty)</label><input type="number" class="form-control form-control-sm border-primary" id="editStockQty"></div>
+          <div class="mb-3"><label class="form-label small fw-bold">ໝາຍເຫດ</label><input type="text" class="form-control form-control-sm" id="editStockNote"></div>
+          <button class="btn btn-warning w-100 fw-bold" onclick="saveStockHistoryEdit()" id="btnSaveStockEdit">ອັບເດດປະຫວັດ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="resultEntryModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title fw-bold"><i class="bi bi-clipboard2-pulse me-2"></i> ອັບໂຫຼດຜົນກວດ - ບິນ: <span id="resOrderIdDisplay"></span></h5>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-light text-success fw-bold" onclick="downloadResultTemplate()" title="ດາວໂຫຼດ Template">
+              <i class="bi bi-download"></i> Template
+            </button>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+        </div>
+        <div class="modal-body bg-light p-4">
+          <input type="hidden" id="currentResultOrderId">
+
+          <!-- ພື້ນທີ່ອັບໂຫຼດໄຟລ -->
+          <div class="card border-primary mb-3">
+            <div class="card-header bg-primary text-white fw-bold">
+              <i class="bi bi-cloud-upload"></i> ອັບໂຫຼດໄຟລ໌ຜົນກວດ
+            </div>
+            <div class="card-body">
+              <div class="mb-3">
+                <label class="form-label fw-bold">ເລືອກໄຟລ໌ (ອັບໂຫຼດໄດ້ຫຼາຍໄຟລ໌)</label>
+                <input type="file" class="form-control" id="resultFileInput" accept=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.gif" multiple onchange="handleFileSelect(this)">
+                <div class="form-text">
+                  <i class="bi bi-file-earmark-excel text-success"></i> Excel: .xlsx, .xls, .csv<br>
+                  <i class="bi bi-file-earmark-pdf text-danger"></i> PDF: .pdf<br>
+                  <i class="bi bi-file-earmark-image text-primary"></i> ຮູບພາບ: .png, .jpg, .jpeg, .gif
+                </div>
+              </div>
+
+              <!-- ລາຍການໄຟລ໌ທີ່ອັບໂຫຼດ -->
+              <div id="uploadedFilesList" class="mt-3">
+                <!-- ຈະຖືກເພີ່ມດ້ວຍ JavaScript -->
+              </div>
+            </div>
+          </div>
+
+          <!-- ສະຫຼຸບຜົນກວດ (ສຳລັບ Excel ເທົ່ານັ້ນ) -->
+          <div class="card border-info mb-3" id="resultsSummaryCard" style="display:none;">
+            <div class="card-header bg-info text-white fw-bold d-flex justify-content-between align-items-center">
+              <span><i class="bi bi-table"></i> ສະຫຼຸບຜົນກວດ (Excel)</span>
+              <button class="btn btn-sm btn-light" onclick="toggleSummaryTable()" title="ປິດ/ເປີດຕາຕະລາງ">
+                <i class="bi bi-eye-slash"></i>
+              </button>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                <table class="table table-sm table-bordered mb-0" id="resultsSummaryTable">
+                  <thead class="table-light sticky-top">
+                    <tr>
+                      <th>Test Name</th>
+                      <th>Parameter</th>
+                      <th>Result</th>
+                      <th>Unit</th>
+                      <th>ແກ້ໄຂ</th>
+                    </tr>
+                  </thead>
+                  <tbody id="resultsSummaryBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ຂໍ້ຄວາມເຕືອນເມື່ອບໍ່ມີໄຟລ໌ -->
+          <div id="noFilesMessage" class="text-center py-5 text-muted">
+            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+            <p class="mt-3 mb-0">ຍັງບໍ່ມີໄຟລ໌ຜົນກວດ</p>
+            <small>ກະລຸນາອັບໂຫຼດ Excel, PDF ຫຼື ຮູບພາບ</small>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-0">
+          <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">ຍົກເລີກ</button>
+          <button type="button" class="btn btn-success fw-bold px-4" onclick="submitLabResultsFromFiles()" id="btnSaveResult">
+            <i class="bi bi-check-circle me-1"></i> ບັນທຶກຜົນກວດ
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Package Modal -->
+  <div class="modal fade" id="packageModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold"><i class="bi bi-box-seam me-2"></i> <span id="packageModalTitle">ສ້າງ Package ໃໝ່</span></h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body bg-light p-4">
+          <input type="hidden" id="editPackageId">
+          <div class="card mb-3 border-primary">
+            <div class="card-header bg-white fw-bold">ຂໍ້ມູນ Package</div>
+            <div class="card-body">
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label class="form-label small fw-bold">ຊື່ Package <span class="text-danger">*</span></label>
+                  <input type="text" id="pkgName" class="form-control form-control-sm border-primary" placeholder="ຕົວຢ່າງ: Check Up ພື້ນຖານ">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small fw-bold">ລາຄາ (₭)</label>
+                  <input type="number" id="pkgPrice" class="form-control form-control-sm border-primary" placeholder="0" value="0">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small fw-bold">ສະຖານະ</label>
+                  <select id="pkgActive" class="form-select form-select-sm border-primary">
+                    <option value="true">ໃຊ້ງານ</option>
+                    <option value="false">ບໍ່ໃຊ້ງານ</option>
+                  </select>
+                </div>
+                <div class="col-12">
+                  <label class="form-label small fw-bold">ຄຳອະທິບາຍ</label>
+                  <input type="text" id="pkgDescription" class="form-control form-control-sm" placeholder="ຄຳອະທິບາຍ Package">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card border-success">
+            <div class="card-header bg-white fw-bold d-flex justify-content-between align-items-center">
+              <span><i class="bi bi-list-check me-2"></i>ລາຍການກວດໃນ Package</span>
+              <button class="btn btn-success btn-sm" onclick="addPackageTestItem()"><i class="bi bi-plus-circle"></i> ເພີ່ມລາຍການ</button>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                  <thead class="table-light">
+                    <tr><th>ລາຍການກວດ</th><th>ລາຄາ (₭)</th><th class="text-center">ຈັດການ</th></tr>
+                  </thead>
+                  <tbody id="packageItemsBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-0">
+          <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">ຍົກເລີກ</button>
+          <button type="button" class="btn btn-primary fw-bold px-4" onclick="savePackage()" id="btnSavePackage">
+            <i class="bi bi-check-circle me-1"></i> ບັນທຶກ Package
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,681 @@
+<script>
+    let cartItems = []; let stockCart = []; let finalTotal = 0; let currentEditOrderId = null; let globalOrders = []; let myCharts = {}; let globalStockList = []; 
+    let globalSummaryData = []; let globalInventoryData = []; let globalStockHistory = []; 
+    let reagentModalInstance; let invEditModalInstance; let stockEditModalInstance; let addLotModalInstance; let resultModalInstance;
+    
+    Chart.register(ChartDataLabels);
+    Chart.defaults.set('plugins.datalabels', { color: '#fff', font: { weight: 'bold', size: 11 }, formatter: function(v) { return v > 0 ? v : ''; } });
+
+    function initDT(tableId, scrollHeight = '480px') {
+      if ($.fn.DataTable.isDataTable('#' + tableId)) { $('#' + tableId).DataTable().clear().destroy(); }
+      setTimeout(() => {
+        $('#' + tableId).DataTable({
+            scrollY: scrollHeight, 
+            scrollCollapse: true, 
+            scrollX: true, 
+            pageLength: 15, 
+            order: [], 
+            language: { search: "ຄົ້ນຫາ:", lengthMenu: "ສະແດງ _MENU_ ລາຍການ", info: "ສະແດງ _START_ ຫາ _END_ ຈາກ _TOTAL_ ລາຍການ", paginate: { previous: "ກັບຄືນ", next: "ຕໍ່ໄປ" }, emptyTable: "ບໍ່ມີຂໍ້ມູນ", zeroRecords: "ບໍ່ພົບຂໍ້ມູນ" }
+        });
+      }, 50); 
+    }
+
+    function toggleSidebar() { const sb = document.getElementById('sidebar'); const ov = document.getElementById('sidebarOverlay'); if(window.innerWidth <= 768) { sb.classList.toggle('mobile-open'); ov.classList.toggle('active'); } else { sb.classList.toggle('collapsed'); } }
+    
+    window.onload = function() { 
+      setInterval(() => { if(document.getElementById('dashboard').classList.contains('active')) { setDashDate('today'); } }, 60000);
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = ''); setDefaultDates(); document.getElementById('invReceiveDate').value = new Date().toISOString().split('T')[0]; document.getElementById('maintDate').value = new Date().toISOString().split('T')[0]; checkLogin(); 
+    };
+
+    function setDefaultDates() { const today = new Date(); const firstDay = new Date(today.getFullYear(), today.getMonth(), 1); let tStr = today.toISOString().split('T')[0]; let fStr = firstDay.toISOString().split('T')[0]; document.getElementById('dashEndDate').value = tStr; document.getElementById('dashStartDate').value = fStr; document.getElementById('repEndDate').value = tStr; document.getElementById('repStartDate').value = fStr; }
+    function setDashDate(type) { let dates = calculateDateRange(type); document.getElementById('dashStartDate').value = dates.start; document.getElementById('dashEndDate').value = dates.end; loadDashboard(); }
+    function setReportDate(type) { let dates = calculateDateRange(type); document.getElementById('repStartDate').value = dates.start; document.getElementById('repEndDate').value = dates.end; loadSummaryReport(); }
+    function calculateDateRange(type) { let today = new Date(); let start = new Date(); if(type === 'today') { } else if(type === 'week') { let day = start.getDay() || 7; start.setDate(start.getDate() - (day - 1)); } else if(type === 'month') { start.setDate(1); } else if(type === 'year') { start.setMonth(0, 1); } let startStr = start.getFullYear() + '-' + String(start.getMonth() + 1).padStart(2, '0') + '-' + String(start.getDate()).padStart(2, '0'); let endStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0'); return {start: startStr, end: endStr}; }
+
+    function checkLogin() { 
+      const userRole = sessionStorage.getItem('lis_role'); 
+      if (userRole) { 
+        document.getElementById('loginScreen').style.display = 'none'; 
+        document.getElementById('mainApp').style.display = 'flex'; 
+        document.getElementById('displayRole').innerText = sessionStorage.getItem('lis_username') + " (" + userRole + ")"; 
+        if(userRole !== 'Admin') { document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none'); } 
+        resetForm(); loadSettings(); loadTestCheckboxes(); loadTable(); loadTestMasterTable(); loadOutlabTable(); loadStockData(); loadInventoryTable(); loadMaintenanceTable(); loadSummaryReport(); 
+        
+        loadMappingData(); 
+        loadParamSetupData(); 
+
+        if(userRole === 'Admin') { showPage(null, 'dashboard'); } else { showPage(null, 'orderForm'); } 
+      } else { 
+        document.getElementById('loginScreen').style.display = 'flex'; document.getElementById('mainApp').style.display = 'none'; 
+      } 
+    }
+    
+    function performLogin() { const u = document.getElementById('loginUser').value.trim(); const p = document.getElementById('loginPass').value.trim(); if(!u || !p) { Swal.fire({icon: 'warning', title: 'ແຈ້ງເຕືອນ', text: 'ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບ!'}); return; } let btn = document.getElementById('btnLogin'); btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ກຳລັງກວດສອບ...'; btn.disabled = true; google.script.run.withSuccessHandler(function(res){ if(res.success) { sessionStorage.setItem('lis_role', res.role); sessionStorage.setItem('lis_username', res.username); Swal.fire({icon: 'success', title: 'ສຳເລັດ', text: 'ຍິນດີຕ້ອນຮັບ!', timer: 800, showConfirmButton: false}); setTimeout(()=>{ checkLogin(); }, 800); } else { Swal.fire({icon: 'error', title: 'ຜິດພາດ', text: res.message}); btn.innerHTML = 'ເຂົ້າສູ່ລະບົບ (Login)'; btn.disabled = false; } }).withFailureHandler(function(e){ Swal.fire({icon: 'error', title: 'ເຊື່ອມຕໍ່ລົ້ມເຫຼວ', text: e.message}); btn.innerHTML = 'ເຂົ້າສູ່ລະບົບ (Login)'; btn.disabled = false; }).loginUser(u, p); }
+    function performLogout() { Swal.fire({ title: 'ອອກຈາກລະບົບ?', icon: 'question', showCancelButton: true, confirmButtonText: 'ຢືນຢັນ', cancelButtonText: 'ຍົກເລີກ' }).then((result) => { if (result.isConfirmed) { google.script.run.logActivityFrontend(sessionStorage.getItem('lis_username'), "Logout", "System", ""); sessionStorage.clear(); document.getElementById('mainApp').style.display = 'none'; document.getElementById('loginScreen').style.display = 'flex'; document.getElementById('loginUser').value = ''; document.getElementById('loginPass').value = ''; document.getElementById('btnLogin').innerHTML = 'ເຂົ້າສູ່ລະບົບ (Login)'; document.getElementById('btnLogin').disabled = false; } }); }
+
+    function showPage(event, pageId) { if(event) event.preventDefault(); document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active')); document.getElementById(pageId).classList.add('active'); if(event && event.currentTarget) event.currentTarget.classList.add('active'); else { let links = document.querySelectorAll(`.sidebar a[onclick*="${pageId}"]`); if(links.length > 0) links[0].classList.add('active'); } if(window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('mobile-open'); document.getElementById('sidebarOverlay').classList.remove('active'); } setTimeout(() => { $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust(); }, 200); }
+    function openReagentModal() { if (!reagentModalInstance) { reagentModalInstance = new bootstrap.Modal(document.getElementById('reagentMasterModal')); } cancelEditReagent(); reagentModalInstance.show(); setTimeout(()=> initDT('reagentMasterTable'), 200); }
+    function openAddLotModal() { if (!addLotModalInstance) { addLotModalInstance = new bootstrap.Modal(document.getElementById('addLotModal')); } document.getElementById('invReceiveDate').value = new Date().toISOString().split('T')[0]; addLotModalInstance.show(); }
+
+    function loadSummaryReport() {
+      const sDate = document.getElementById('repStartDate').value; const eDate = document.getElementById('repEndDate').value; 
+      document.getElementById('repContent').style.display = 'none'; document.getElementById('repLoader').style.display = 'block'; 
+      google.script.run.withSuccessHandler(function(res) {
+        document.getElementById('repLoader').style.display = 'none'; 
+        if(res.success) {
+          document.getElementById('repContent').style.display = 'block'; 
+          document.getElementById('repNormalCount').innerText = res.kpis.normalCount.toLocaleString(); document.getElementById('repNormalRev').innerText = '₭ ' + res.kpis.normalRev.toLocaleString(); document.getElementById('repPackageCount').innerText = res.kpis.packageCount.toLocaleString(); document.getElementById('repPackageRev').innerText = '₭ ' + res.kpis.packageRev.toLocaleString();
+          globalSummaryData = res.tableData; 
+          if ($.fn.DataTable.isDataTable('#summaryTable')) { $('#summaryTable').DataTable().clear().destroy(); }
+          let tbody = document.getElementById('summaryTableBody'); let tfoot = document.getElementById('summaryTableFoot'); let html=''; tfoot.innerHTML = '';
+          let sumNormal = 0, sumPackage = 0, sumRev = 0;
+          res.tableData.forEach(d => { sumNormal += d.normal; sumPackage += d.package; sumRev += d.revenue; html += `<tr><td class="ps-4"><span class="badge bg-secondary">${d.category}</span></td><td class="fw-bold text-primary">${d.testName}</td><td class="text-center">${d.normal}</td><td class="text-center">${d.package}</td><td class="text-end pe-4 price-text">₭ ${d.revenue.toLocaleString()}</td></tr>`; });
+          tbody.innerHTML = html;
+          tfoot.innerHTML = `<tr><td colspan="2" class="ps-4 text-end text-primary">ລວມທັງໝົດ (Total):</td><td class="text-center text-danger fs-6">${sumNormal.toLocaleString()}</td><td class="text-center text-danger fs-6">${sumPackage.toLocaleString()}</td><td class="text-end pe-4 text-danger fs-5">₭ ${sumRev.toLocaleString()}</td></tr>`;
+          initDT('summaryTable'); 
+        }
+      }).getSummaryReportData(sDate, eDate);
+    }
+
+    function exportSummaryReportPDF() {
+      const element = document.getElementById('repContent'); window.scrollTo(0,0); Swal.fire({ title: 'ກຳລັງສ້າງ PDF...', text: 'ກະລຸນາລໍຖ້າຈັກໜ່ອຍ', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+      setTimeout(() => { html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#F8FAFC' }).then(canvas => {
+          const imgData = canvas.toDataURL('image/png'); const { jsPDF } = window.jspdf; const pdf = new jsPDF('p', 'mm', 'a4'); const pdfWidth = pdf.internal.pageSize.getWidth(); const pdfHeight = (canvas.height * pdfWidth) / canvas.width; let heightLeft = pdfHeight; let position = 0; const pageHeight = pdf.internal.pageSize.getHeight();
+          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight); heightLeft -= pageHeight;
+          while (heightLeft > 0) { position = heightLeft - pdfHeight; pdf.addPage(); pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight); heightLeft -= pageHeight; }
+          pdf.save("Summary_Report_" + new Date().toISOString().split('T')[0] + ".pdf"); Swal.close();
+        }).catch(err => { console.error(err); Swal.fire('ຜິດພາດ', 'ບໍ່ສາມາດສ້າງ PDF ໄດ້', 'error'); }); }, 500);
+    }
+    function exportSummaryData(type) {
+      if(globalSummaryData.length === 0) { Swal.fire('ແຈ້ງເຕືອນ', 'ບໍ່ມີຂໍ້ມູນສຳລັບດາວໂຫຼດ', 'warning'); return; }
+      let exportArr = globalSummaryData.map(d => ({ "Category": d.category, "Test_Item": d.testName, "Normal_Count": d.normal, "Package_Count": d.package, "Total_Revenue_Kip": d.revenue }));
+      let tNormal = 0, tPackage = 0, tRev = 0; globalSummaryData.forEach(d => { tNormal+=d.normal; tPackage+=d.package; tRev+=d.revenue; });
+      exportArr.push({ "Category": "TOTAL", "Test_Item": "", "Normal_Count": tNormal, "Package_Count": tPackage, "Total_Revenue_Kip": tRev });
+      let fileName = "Summary_Report_" + new Date().toISOString().split('T')[0];
+      if(type === 'excel' || type === 'csv') { const ws = XLSX.utils.json_to_sheet(exportArr); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Report"); XLSX.writeFile(wb, fileName + (type === 'excel' ? '.xlsx' : '.csv')); } 
+    }
+
+    function exportDashboardPDF() {
+      const dashboardElement = document.getElementById('dashContent'); Swal.fire({ title: 'ກຳລັງສ້າງ PDF...', text: 'ກະລຸນາລໍຖ້າຈັກໜ່ອຍ', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+      setTimeout(() => { html2canvas(dashboardElement, { scale: 2, useCORS: true, backgroundColor: '#F8FAFC' }).then(canvas => {
+          const imgData = canvas.toDataURL('image/png'); const { jsPDF } = window.jspdf; const pdf = new jsPDF('p', 'mm', 'a4'); const pdfWidth = pdf.internal.pageSize.getWidth(); const pdfHeight = (canvas.height * pdfWidth) / canvas.width; let heightLeft = pdfHeight; let position = 0; const pageHeight = pdf.internal.pageSize.getHeight();
+          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight); heightLeft -= pageHeight;
+          while (heightLeft > 0) { position = heightLeft - pdfHeight; pdf.addPage(); pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight); heightLeft -= pageHeight; }
+          pdf.save("Dashboard_Report_" + new Date().toISOString().split('T')[0] + ".pdf"); Swal.close();
+        }).catch(err => { console.error(err); Swal.fire('ຜິດພາດ', 'ບໍ່ສາມາດສ້າງ PDF ໄດ້', 'error'); }); }, 500);
+    }
+
+    function loadDashboard() { 
+      const sDate = document.getElementById('dashStartDate').value; const eDate = document.getElementById('dashEndDate').value; 
+      document.getElementById('dashContent').style.display = 'none'; document.getElementById('dashLoader').style.display = 'block'; 
+      google.script.run.withSuccessHandler(function(res) { 
+        document.getElementById('dashLoader').style.display = 'none'; 
+        if(res.success) { 
+          document.getElementById('dashContent').style.display = 'block'; 
+          document.getElementById('kpiPatients').innerText = res.kpis.totalPatients.toLocaleString(); document.getElementById('kpiRev').innerText = '₭ ' + res.kpis.totalRevenue.toLocaleString(); document.getElementById('kpiInLab').innerText = '₭ ' + res.kpis.inlabRev.toLocaleString(); document.getElementById('kpiOutLab').innerText = '₭ ' + res.kpis.outlabRev.toLocaleString(); 
+          let alertHtml = ''; if(res.alerts.expired > 0) alertHtml += `<div class="alert alert-danger shadow-sm border-danger py-2 mb-3 alert-box-animated"><i class="bi bi-exclamation-octagon-fill me-2"></i> <b>ເຕືອນໄພ:</b> ມີນ້ຳຢາໝົດອາຍຸແລ້ວຈຳນວນ <b>${res.alerts.expired}</b> ລາຍການ! ກະລຸນາກວດສອບໃນໜ້າ ຈັດການສາງ.</div>`; if(res.alerts.expiringSoon > 0) alertHtml += `<div class="alert alert-warning shadow-sm border-warning py-2 mb-3 alert-box-animated"><i class="bi bi-exclamation-triangle-fill me-2"></i> <b>ແຈ້ງເຕືອນ:</b> ມີນ້ຳຢາໃກ້ຈະໝົດອາຍຸ (ພາຍໃນ 30 ມື້) ຈຳນວນ <b>${res.alerts.expiringSoon}</b> ລາຍການ.</div>`; document.getElementById('dashAlerts').innerHTML = alertHtml;
+          setTimeout(() => {
+            const safeRenderChart = (id, type, labels, data, colors, isMoney) => { try { renderChart(id, type, labels, data, colors, isMoney); } catch(e) { console.error("Error rendering " + id, e); } }
+            safeRenderChart('chartGender', 'pie', Object.keys(res.charts.gender), Object.values(res.charts.gender), ['#3B82F6', '#EC4899']);
+            safeRenderChart('chartInsite', 'doughnut', Object.keys(res.charts.insite), Object.values(res.charts.insite), ['#0EA5E9', '#F59E0B']); 
+            safeRenderChart('chartVisitType', 'pie', Object.keys(res.charts.visitType), Object.values(res.charts.visitType), ['#1E3A8A', '#10B981', '#D97706']); 
+            safeRenderChart('chartLabType', 'pie', Object.keys(res.charts.labType), Object.values(res.charts.labType), ['#10B981', '#EF4444']); 
+            safeRenderChart('chartTestType', 'doughnut', Object.keys(res.charts.testTypeRev), Object.values(res.charts.testTypeRev), ['#0284C7', '#F59E0B']); 
+            safeRenderChart('chartDept', 'bar', Object.keys(res.charts.deptRev), Object.values(res.charts.deptRev), ['#0EA5E9', '#6366F1'], true); 
+            safeRenderChart('chartDoctor', 'bar', Object.keys(res.charts.doctors), Object.values(res.charts.doctors), ['#3B82F6'], true); 
+            try { renderTimeSlotChart(res.charts.timeSlot); } catch(e) { console.error("Error rendering TimeSlot", e); }
+            try { renderTopTable('topTestsBody', res.charts.tests); renderTopTable('topCatsBody', res.charts.categories); } catch(e) { console.error("Error rendering Top Tables", e); }
+            safeRenderChart('chartStockUsage', 'bar', Object.keys(res.charts.stockUsage), Object.values(res.charts.stockUsage), ['#10B981'], false); 
+          }, 150);
+        } else { document.getElementById('dashContent').style.display = 'block'; document.getElementById('dashAlerts').innerHTML = `<div class="alert alert-danger"><b>Error:</b> ${res.message}</div>`; }
+      }).withFailureHandler(function(err){ document.getElementById('dashLoader').style.display = 'none'; document.getElementById('dashAlerts').innerHTML = `<div class="alert alert-danger"><b>Server Error:</b> ${err.message}</div>`; }).getDashboardData(sDate, eDate); 
+    }
+    
+    function renderTopTable(tbodyId, dataObj) { let tbody = document.getElementById(tbodyId); if(!tbody)return; tbody.innerHTML = ''; let arr = Object.entries(dataObj).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5); if(arr.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">ບໍ່ມີຂໍ້ມູນ</td></tr>'; return; } arr.forEach((item, index) => { tbody.innerHTML += `<tr><td class="ps-3"><span class="badge bg-secondary">${index + 1}</span></td><td><b>${item[0]}</b></td><td class="text-center">${item[1].count}</td><td class="text-end price-text pe-3">₭ ${item[1].rev.toLocaleString()}</td></tr>`; }); }
+    function renderChart(canvasId, type, labels, data, colors, isMoney = false) { if(!document.getElementById(canvasId)) return; if(myCharts[canvasId]) myCharts[canvasId].destroy(); const ctx = document.getElementById(canvasId).getContext('2d'); myCharts[canvasId] = new Chart(ctx, { type: type, data: { labels: labels, datasets: [{ data: data, backgroundColor: colors, borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type !== 'bar', position: 'bottom' }, datalabels: { formatter: function(value) { if(value===0) return ''; return isMoney ? '₭ ' + value.toLocaleString() : value; }, anchor: type === 'bar' ? 'end' : 'center', align: type === 'bar' ? 'bottom' : 'center', color: '#fff' } } } }); }
+    function renderTimeSlotChart(timeSlotData) { if(!document.getElementById('chartTimeSlot')) return; if(myCharts['chartTimeSlot']) myCharts['chartTimeSlot'].destroy(); const order = ["08:00-16:00", "16:00-21:00", "21:00-08:00"]; let labels = []; let counts = []; let revenues = []; order.forEach(slot => { labels.push(slot); counts.push(timeSlotData[slot] ? timeSlotData[slot].count : 0); revenues.push(timeSlotData[slot] ? timeSlotData[slot].rev : 0); }); const ctx = document.getElementById('chartTimeSlot').getContext('2d'); myCharts['chartTimeSlot'] = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: [ { label: 'ລາຍຮັບ (₭)', type: 'line', data: revenues, borderColor: '#EF4444', backgroundColor: '#EF4444', borderWidth: 3, tension: 0.3, yAxisID: 'y1', datalabels: { align: 'top', anchor: 'end', color: '#EF4444', formatter: function(v){ return v>0?'₭ '+v.toLocaleString():''; }, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: 4} }, { label: 'ຈຳນວນບິນ', type: 'bar', data: counts, backgroundColor: '#3B82F6', yAxisID: 'y', datalabels: { align: 'center', anchor: 'center', color: '#fff', formatter: function(v){ return v>0?v+' ບິນ':''; } } } ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { y: { type: 'linear', display: true, position: 'left', title: {display: true, text: 'ຈຳນວນບິນ'} }, y1: { type: 'linear', display: true, position: 'right', title: {display: true, text: 'ລາຍຮັບ (₭)'}, grid: {drawOnChartArea: false} } } } }); }
+
+    function submitMaintenance() { const machine = document.getElementById('maintMachine').value.trim(); const date = document.getElementById('maintDate').value; const type = document.getElementById('maintType').value; const issues = document.getElementById('maintIssues').value.trim(); const action = document.getElementById('maintAction').value.trim(); const nextDue = document.getElementById('maintNextDue').value; if(!machine || !date) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນຊື່ເຄື່ອງຈັກ ແລະ ວັນທີ!', 'warning'); return; } let btn = document.getElementById('btnSubmitMaint'); btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ກຳລັງບັນທຶກ...'; btn.disabled = true; const payload = { machine: machine, date: date, type: type, issues: issues, action: action, nextDue: nextDue }; google.script.run.withSuccessHandler(function(res){ document.getElementById('maintMachine').value = ''; document.getElementById('maintIssues').value = ''; document.getElementById('maintAction').value = ''; document.getElementById('maintNextDue').value = ''; btn.innerHTML = 'ບັນທຶກຂໍ້ມູນ'; btn.disabled = false; Swal.fire('ສຳເລັດ', res.message, 'success'); loadMaintenanceTable(); }).saveMaintenanceLog(payload, sessionStorage.getItem('lis_username')); }
+    function loadMaintenanceTable() { google.script.run.withSuccessHandler(function(logs){ if ($.fn.DataTable.isDataTable('#maintenanceTable')) { $('#maintenanceTable').DataTable().clear().destroy(); } let tbody = document.getElementById('maintenanceTableBody'); tbody.innerHTML = ''; logs.forEach(l => { let dateStr = l.date ? new Date(l.date).toLocaleDateString('en-GB') : '-'; let nextDueStr = l.nextDue ? new Date(l.nextDue).toLocaleDateString('en-GB') : '-'; let nextDueClass = ''; if(l.nextDue) { let daysLeft = Math.ceil((new Date(l.nextDue) - new Date()) / (1000 * 60 * 60 * 24)); if(daysLeft < 0) nextDueClass = 'text-danger fw-bold'; else if(daysLeft <= 7) nextDueClass = 'text-warning fw-bold'; } tbody.innerHTML += `<tr><td class="ps-3"><small>${dateStr}</small></td><td><b>${l.machine}</b></td><td><span class="badge bg-secondary">${l.type}</span></td><td><small>${l.action || '-'}</small></td><td class="${nextDueClass}">${nextDueStr}</td><td><small class="text-muted">${l.user}</small></td><td class="text-center"><button class="btn btn-sm btn-outline-danger py-0" onclick="deleteMaintenance('${l.id}')" title="ລຶບ"><i class="bi bi-trash"></i></button></td></tr>`; }); initDT('maintenanceTable'); }).getMaintenanceLogs(); }
+    function deleteMaintenance(id) { Swal.fire({ title: 'ຢືນຢັນການລຶບ?', text: "ລຶບປະຫວັດນີ້ຖິ້ມ?", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((result) => { if(result.isConfirmed) { google.script.run.withSuccessHandler(function(res){ loadMaintenanceTable(); }).deleteMaintenanceLog(id, sessionStorage.getItem('lis_username')); } }); }
+
+    function submitInventoryLot() { 
+      const rId = document.getElementById('invSelectReagent').value; 
+      const lotNo = document.getElementById('invLotNo').value.trim(); 
+      const expDate = document.getElementById('invExpDate').value; 
+      const recDate = document.getElementById('invReceiveDate').value; 
+      const loc = document.getElementById('invLocation').value.trim(); 
+      const sup = document.getElementById('invSupplier').value.trim(); 
+      const qty = document.getElementById('invQty').value; 
+      
+      if(!rId || !lotNo || !expDate || !qty) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນຂໍ້ມູນສຳຄັນໃຫ້ຄົບ (Lot, Exp Date, Qty)!', 'warning'); return; } 
+      
+      let rName = globalStockList.find(x => x.id === rId).name; 
+      let btn = document.getElementById('btnSubmitInv'); 
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ກຳລັງບັນທຶກ...'; btn.disabled = true; 
+      
+      const payload = { reagentId: rId, reagentName: rName, lotNo: lotNo, expDate: expDate, receiveDate: recDate, location: loc, supplier: sup, qty: qty }; 
+      
+      google.script.run.withSuccessHandler(function(res){ 
+        document.getElementById('invLotNo').value = ''; document.getElementById('invExpDate').value = ''; document.getElementById('invQty').value = ''; 
+        btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> ບັນທຶກເຂົ້າສາງ'; btn.disabled = false; 
+        if(addLotModalInstance) addLotModalInstance.hide();
+        Swal.fire('ສຳເລັດ', res.message, 'success'); 
+        loadInventoryTable(); loadStockData(); 
+      }).saveInventoryLot(payload, sessionStorage.getItem('lis_username')); 
+    }
+
+    function loadInventoryTable() { let select = document.getElementById('invSelectReagent'); if(select.options.length <= 1 && globalStockList.length > 0) { select.innerHTML = '<option value="" selected disabled>-- ເລືອກນ້ຳຢາ --</option>'; globalStockList.forEach(s => { select.innerHTML += `<option value="${s.id}">${s.name}</option>`; }); } google.script.run.withSuccessHandler(function(res){ if(!res.success) return; document.getElementById('invTotalLots').innerText = res.data.length; document.getElementById('invExpiringSoon').innerText = res.alerts.expiringSoon; document.getElementById('invExpired').innerText = res.alerts.expired + res.alerts.outOfStock; if ($.fn.DataTable.isDataTable('#inventoryTable')) { $('#inventoryTable').DataTable().clear().destroy(); } let tbody = document.getElementById('inventoryTableBody'); tbody.innerHTML = ''; let isAdmin = sessionStorage.getItem('lis_role') === 'Admin'; res.data.forEach(d => { let expD = d.expDate ? new Date(d.expDate) : null; let expDateStr = expD ? expD.toLocaleDateString('en-GB') : '-'; let expDateInputVal = expD ? (expD.getFullYear() + '-' + String(expD.getMonth()+1).padStart(2,'0') + '-' + String(expD.getDate()).padStart(2,'0')) : ''; let statusBadge = ''; let expClass = ''; if(d.status === 'Empty') { statusBadge = '<span class="badge bg-secondary">Empty</span>'; expClass = 'text-muted'; } else if(d.status === 'Expired') { statusBadge = '<span class="badge bg-danger">Expired</span>'; expClass = 'text-danger fw-bold'; } else if(d.status === 'Expiring Soon') { statusBadge = '<span class="badge bg-warning text-dark">Expiring Soon</span>'; expClass = 'text-warning fw-bold'; } else { statusBadge = '<span class="badge bg-success">Active</span>'; expClass = 'text-success'; } let actionBtns = isAdmin ? `<div class="d-flex justify-content-center gap-1 flex-nowrap"><button class="btn btn-sm btn-outline-warning py-0" onclick="editInvLot('${d.id}', '${d.lotNo}', '${expDateInputVal}', '${d.location}', '${d.supplier}', '${d.qty}')" title="ແກ້ໄຂ"><i class="bi bi-pencil-square"></i></button><button class="btn btn-sm btn-outline-danger py-0" onclick="deleteInvLot('${d.id}')" title="ລຶບ"><i class="bi bi-trash"></i></button></div>` : '-'; tbody.innerHTML += `<tr><td class="ps-3"><b>${d.name}</b><br><small class="text-muted">${d.id}</small></td><td><span class="badge bg-light border text-dark">${d.lotNo}</span></td><td class="${expClass}">${expDateStr}<br><small>(${d.daysLeft > 0 ? d.daysLeft + ' days left' : 'Expired'})</small></td><td><small>${d.location || '-'}</small></td><td><small>${d.supplier || '-'}</small></td><td class="text-center fw-bold fs-6">${d.qty}</td><td class="text-center">${statusBadge}</td><td class="text-center admin-only">${actionBtns}</td></tr>`; }); initDT('inventoryTable'); }).getInventoryData(); }
+    function exportInventoryData(type) {
+      if(globalInventoryData.length === 0) { Swal.fire('ແຈ້ງເຕືອນ', 'ບໍ່ມີຂໍ້ມູນສຳລັບດາວໂຫຼດ', 'warning'); return; }
+      let exportArr = globalInventoryData.map(d => ({ "Reagent_ID": d.reagentId, "Reagent_Name": d.name, "Lot_No": d.lotNo, "Exp_Date": d.expDate ? new Date(d.expDate).toLocaleDateString('en-GB') : '-', "Location": d.location, "Supplier": d.supplier, "Current_Qty": d.qty, "Status": d.status }));
+      let fileName = "Inventory_List_" + new Date().toISOString().split('T')[0];
+      if(type === 'excel' || type === 'csv') { const ws = XLSX.utils.json_to_sheet(exportArr); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Inventory"); XLSX.writeFile(wb, fileName + (type === 'excel' ? '.xlsx' : '.csv')); } 
+      else if (type === 'pdf') { const { jsPDF } = window.jspdf; const doc = new jsPDF('landscape'); let cols = ["ID", "Name", "Lot No", "Exp Date", "Location", "Supplier", "Qty", "Status"]; let rows = globalInventoryData.map(d => [ d.reagentId, d.name, d.lotNo, d.expDate ? new Date(d.expDate).toLocaleDateString('en-GB') : '-', d.location, d.supplier, d.qty.toString(), d.status ]); doc.text("Inventory List", 14, 15); doc.autoTable({ head: [cols], body: rows, startY: 20 }); doc.save(fileName + ".pdf"); }
+    }
+    function editInvLot(id, lotNo, expDate, loc, sup, qty) { if (!invEditModalInstance) { invEditModalInstance = new bootstrap.Modal(document.getElementById('inventoryEditModal')); } document.getElementById('editInvLotId').value = id; document.getElementById('editInvLotNo').value = lotNo; document.getElementById('editInvExpDate').value = expDate; document.getElementById('editInvLocation').value = loc !== 'undefined' ? loc : ''; document.getElementById('editInvSupplier').value = sup !== 'undefined' ? sup : ''; document.getElementById('editInvQty').value = qty; invEditModalInstance.show(); }
+    function saveInvLotEdit() { const id = document.getElementById('editInvLotId').value; const lotNo = document.getElementById('editInvLotNo').value.trim(); const expDate = document.getElementById('editInvExpDate').value; const loc = document.getElementById('editInvLocation').value.trim(); const sup = document.getElementById('editInvSupplier').value.trim(); const qty = document.getElementById('editInvQty').value; let btn = document.getElementById('btnSaveInvEdit'); btn.innerHTML = "ກຳລັງອັບເດດ..."; btn.disabled = true; google.script.run.withSuccessHandler(res => { btn.innerHTML = "ອັບເດດຂໍ້ມູນ"; btn.disabled = false; invEditModalInstance.hide(); Swal.fire('ສຳເລັດ', res.message, 'success'); loadInventoryTable(); loadStockData(); }).updateInventoryLot(id, lotNo, expDate, loc, sup, qty, sessionStorage.getItem('lis_username')); }
+    function deleteInvLot(id) { Swal.fire({ title: 'ລຶບ Lot ນີ້ຖິ້ມ?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((result) => { if(result.isConfirmed) { google.script.run.withSuccessHandler(function(res){ Swal.fire('ສຳເລັດ!', res.message, 'success'); loadInventoryTable(); }).deleteInventoryLot(id, sessionStorage.getItem('lis_username')); } }); }
+
+    function loadStockData() { 
+      google.script.run.withSuccessHandler(function(data){ 
+        globalStockList = data; 
+        let invSelect = document.getElementById('invSelectReagent'); 
+        let mapReagent = document.getElementById('mapReagent'); 
+        
+        if(invSelect) invSelect.innerHTML = '<option value="" selected disabled>-- ເລືອກນ້ຳຢາ --</option>'; 
+        if(mapReagent) mapReagent.innerHTML = '<option value="" selected disabled>-- ເລືອກນ້ຳຢາ --</option>'; 
+        
+        if ($.fn.DataTable.isDataTable('#reagentMasterTable')) { $('#reagentMasterTable').DataTable().clear().destroy(); } 
+        let masterTbody = document.getElementById('reagentMasterTableBody'); let htmlMaster=''; 
+        
+        data.forEach(s => { 
+          if(invSelect) invSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`; 
+          if(mapReagent) mapReagent.innerHTML += `<option value="${s.id}">${s.name} (${s.unit})</option>`; 
+          
+          if(masterTbody) { htmlMaster += `<tr><td class="ps-3 text-muted"><small>${s.id}</small></td><td class="fw-bold text-primary">${s.name}</td><td>${s.unit}</td><td class="text-center"><div class="d-flex justify-content-center gap-1 flex-nowrap"><button class="btn btn-sm btn-outline-warning py-0 me-1" onclick="editReagent('${s.id}', '${s.name}', '${s.unit}')" title="ແກ້ໄຂ"><i class="bi bi-pencil-square"></i></button><button class="btn btn-sm btn-outline-danger py-0" onclick="deleteReagent('${s.id}')" title="ລຶບ"><i class="bi bi-trash"></i></button></div></td></tr>`; } 
+        }); 
+        if(masterTbody) masterTbody.innerHTML = htmlMaster;
+      }).getStockMaster(); 
+      
+      google.script.run.withSuccessHandler(function(history){ 
+        globalStockHistory = history;
+        if(document.getElementById('stockSearchDate')) document.getElementById('stockSearchDate').value = ''; 
+        if(document.getElementById('stockSearchText')) document.getElementById('stockSearchText').value = '';
+        renderStockHistory(history); 
+      }).getStockHistory(); 
+    }
+
+    function renderStockHistory(historyData) {
+      if ($.fn.DataTable.isDataTable('#stockHistoryTable')) { $('#stockHistoryTable').DataTable().clear().destroy(); } 
+      let tbody = document.getElementById('stockHistoryBody'); 
+      let htmlHist=''; 
+      let isAdmin = sessionStorage.getItem('lis_role') === 'Admin';
+      
+      historyData.sort(function(a, b) { return b.date - a.date; });
+
+      historyData.forEach(h => { 
+        let typeBadge = h.type === 'IN' ? '<span class="badge bg-success">IN</span>' : '<span class="badge bg-danger">OUT</span>'; 
+        let qtyColor = h.type === 'IN' ? 'text-success' : 'text-danger'; 
+        let qtySign = h.type === 'IN' ? '+' : '-'; 
+        let actBtn = isAdmin ? `<div class="d-flex justify-content-center gap-1 flex-nowrap"><button class="btn btn-sm btn-outline-warning py-0" onclick="editStockHistory(${h.rowIdx}, '${h.qty}', '${h.note}')" title="ແກ້ໄຂ"><i class="bi bi-pencil-square"></i></button><button class="btn btn-sm btn-outline-danger py-0" onclick="deleteStockHistory(${h.rowIdx})" title="ລຶບ"><i class="bi bi-trash"></i></button></div>` : '-';
+        
+        htmlHist += `<tr><td class="ps-3"><small>${new Date(h.date).toLocaleString('en-GB')}</small></td><td><b>${h.name}</b><br><small class="text-muted">${h.note}</small></td><td>${typeBadge}</td><td class="fw-bold ${qtyColor}">${qtySign}${h.qty}</td><td><small class="text-muted">${h.user}</small></td><td class="text-center admin-only">${actBtn}</td></tr>`; 
+      }); 
+      
+      tbody.innerHTML = htmlHist;
+      initDT('stockHistoryTable'); 
+    }
+
+    function filterStockHistory() {
+      let dateVal = document.getElementById('stockSearchDate').value;
+      let textVal = document.getElementById('stockSearchText').value.toLowerCase();
+      
+      let filtered = globalStockHistory.filter(h => {
+        let matchDate = true;
+        if (dateVal) {
+          let hDateIso = new Date(h.date - (new Date().getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+          matchDate = (hDateIso === dateVal);
+        }
+        let matchText = true;
+        if (textVal) {
+          matchText = h.name.toLowerCase().includes(textVal) || (h.note && h.note.toLowerCase().includes(textVal));
+        }
+        return matchDate && matchText;
+      });
+      renderStockHistory(filtered);
+    }
+
+    function editStockHistory(rowIdx, qty, note) { if (!stockEditModalInstance) { stockEditModalInstance = new bootstrap.Modal(document.getElementById('stockHistoryEditModal')); } document.getElementById('editStockRowIdx').value = rowIdx; document.getElementById('editStockQty').value = qty; document.getElementById('editStockNote').value = note !== 'undefined' ? note : ''; stockEditModalInstance.show(); }
+    function saveStockHistoryEdit() { const rIdx = document.getElementById('editStockRowIdx').value; const qty = document.getElementById('editStockQty').value; const note = document.getElementById('editStockNote').value.trim(); let btn = document.getElementById('btnSaveStockEdit'); btn.innerHTML = "ກຳລັງອັບເດດ..."; btn.disabled = true; google.script.run.withSuccessHandler(res => { btn.innerHTML = "ອັບເດດປະຫວັດ"; btn.disabled = false; stockEditModalInstance.hide(); Swal.fire('ສຳເລັດ', res.message, 'success'); loadStockData(); }).updateStockTransaction(rIdx, qty, note, sessionStorage.getItem('lis_username')); }
+    function deleteStockHistory(rowIdx) { Swal.fire({ title: 'ຢືນຢັນການລຶບ?', text: "ການລຶບປະຫວັດນີ້ ຈະບໍ່ຄືນຍອດໃນສາງໃຫ້ອັດຕະໂນມັດ!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((result) => { if(result.isConfirmed) { google.script.run.withSuccessHandler(function(res){ Swal.fire('ສຳເລັດ!', res.message, 'success'); loadStockData(); }).deleteStockTransaction(rowIdx, sessionStorage.getItem('lis_username')); } }); }
+
+    function saveReagentMaster() { const id = document.getElementById('editReagentId').value; const name = document.getElementById('newReagentName').value.trim(); const unit = document.getElementById('newReagentUnit').value.trim(); if(!name || !unit) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນຊື່ ແລະ ຫົວໜ່ວຍ!', 'warning'); return; } let btn = document.getElementById('btnSaveReagent'); btn.innerHTML = '...'; btn.disabled = true; if(id) { google.script.run.withSuccessHandler(function(res){ cancelEditReagent(); Swal.fire('ສຳເລັດ', res.message, 'success'); loadStockData(); loadInventoryTable(); }).updateReagentMaster(id, name, unit, sessionStorage.getItem('lis_username')); } else { google.script.run.withSuccessHandler(function(res){ document.getElementById('newReagentName').value = ''; document.getElementById('newReagentUnit').value = ''; btn.innerHTML = '<i class="bi bi-plus-circle"></i> ບັນທຶກ'; btn.disabled = false; Swal.fire('ສຳເລັດ', res.message, 'success'); loadStockData(); loadInventoryTable(); }).addNewReagent(name, unit); } }
+    function editReagent(id, name, unit) { document.getElementById('editReagentId').value = id; document.getElementById('newReagentName').value = name; document.getElementById('newReagentUnit').value = unit; document.getElementById('btnSaveReagent').innerHTML = '<i class="bi bi-check-lg"></i> ອັບເດດ'; document.getElementById('btnSaveReagent').classList.replace('btn-success', 'btn-warning'); document.getElementById('btnCancelReagent').classList.remove('d-none'); }
+    function cancelEditReagent() { document.getElementById('editReagentId').value = ''; document.getElementById('newReagentName').value = ''; document.getElementById('newReagentUnit').value = ''; document.getElementById('btnSaveReagent').innerHTML = '<i class="bi bi-plus-circle"></i> ບັນທຶກ'; document.getElementById('btnSaveReagent').classList.replace('btn-warning', 'btn-success'); document.getElementById('btnSaveReagent').disabled = false; document.getElementById('btnCancelReagent').classList.add('d-none'); }
+    function deleteReagent(id) { Swal.fire({ title: 'ລຶບລາຍຊື່ນ້ຳຢານີ້?', text: "ຂໍ້ມູນຈະຖືກລຶບອອກຈາກ Master!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((result) => { if(result.isConfirmed) { google.script.run.withSuccessHandler(function(res){ if(res.success) { Swal.fire('ສຳເລັດ!', res.message, 'success'); loadStockData(); } else { Swal.fire('ຜິດພາດ!', res.message, 'error'); } }).deleteReagentMaster(id, sessionStorage.getItem('lis_username')); } }); }
+
+    function loadTestCheckboxes(){ 
+      let container = document.getElementById('dynamicTestContainer'); container.innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-primary"></div></div>'; 
+      google.script.run.withSuccessHandler(tests => { 
+        container.innerHTML = ''; if(tests.length === 0) return; let grouped = {}; 
+        tests.forEach(t => { let cat = t.category || 'Other'; if(!grouped[cat]) grouped[cat] = []; grouped[cat].push(t); }); 
+        const catOrder = ["Hematology", "Biochemistry", "Immunoserology", "Stool/Urine", "ultrasound", "Cardiology", "X-ray", "ENT", "Pathology", "Lab", "Other"]; 
+        let sortedCats = Object.keys(grouped).sort((a, b) => { let ia = catOrder.indexOf(a); if(ia === -1) ia = 99; let ib = catOrder.indexOf(b); if(ib === -1) ib = 99; return ia - ib; }); 
+        sortedCats.forEach(cat => { 
+          let html = `<div class="col-12 test-category-group" data-category="${cat.toLowerCase()}"><h6 class="fw-bold category-header"><i class="bi bi-tag-fill me-2"></i>${cat}</h6><div class="row g-2">`; 
+          grouped[cat].forEach(x => { html += `<div class="col-xl-3 col-lg-4 col-md-4 col-sm-6 col-6 test-item-wrapper" data-name="${x.name.toLowerCase()}"><div class="test-item-card"><input class="form-check-input test-item border-primary shadow-none m-0" type="checkbox" data-name="${x.name}" data-cat="${x.category}" value="${x.price}" id="chk_${x.id}"><label class="form-check-label test-item-label text-truncate" for="chk_${x.id}" title="${x.name}">${x.name} <br><span class="test-price">₭ ${x.price.toLocaleString()}</span></label></div></div>`; }); html += `</div></div>`; container.innerHTML += html; 
+        }); 
+        document.querySelectorAll('.test-item').forEach(b => b.addEventListener('change', calculateCart)); if(document.getElementById('searchTestInput')) document.getElementById('searchTestInput').value = '';
+      }).getTestMaster();
+    }
+    function filterTestItems() { let input = document.getElementById('searchTestInput').value.toLowerCase(); let wrappers = document.querySelectorAll('.test-item-wrapper'); let groups = document.querySelectorAll('.test-category-group'); wrappers.forEach(w => { let name = w.getAttribute('data-name'); if (name.includes(input)) { w.style.display = ''; } else { w.style.display = 'none'; } }); groups.forEach(g => { let visibleItems = g.querySelectorAll('.test-item-wrapper[style=""]:not([style*="display: none"])'); if (visibleItems.length === 0 && input !== '') { g.style.display = 'none'; } else { g.style.display = ''; } }); }
+    function calculateCart(){ const isP=document.getElementById('testType').value==='Package'; document.getElementById('packageInputDiv').style.display=isP?'block':'none'; const cList=document.getElementById('cartList'); cList.innerHTML=''; cartItems=[]; let sum=0; document.querySelectorAll('.test-item').forEach(b=>{ if(b.checked){ const p=isP?0:parseInt(b.value); sum+=p; cartItems.push({name:b.getAttribute('data-name'),price:p,category:b.getAttribute('data-cat')}); cList.innerHTML+=`<li class="list-group-item d-flex justify-content-between py-1 small bg-transparent"><span>${b.getAttribute('data-name')}</span> <span class="price-text">₭ ${p.toLocaleString()}</span></li>`; }}); if(cartItems.length===0)cList.innerHTML='<li class="list-group-item text-center text-muted small border-0 mt-4 bg-transparent">ຍັງບໍ່ມີລາຍການ</li>'; if(isP){ finalTotal=parseInt(document.getElementById('packagePrice').value)||0; if(document.getElementById('packageName').value)cartItems.push({name:document.getElementById('packageName').value,price:finalTotal,category:"Package"}); }else{ finalTotal=sum; } document.getElementById('totalPriceDisplay').innerText= "₭ " + finalTotal.toLocaleString(); }
+    
+    function submitData() { 
+      if(!document.getElementById('patientId').value.trim()) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນ Patient ID!', 'warning'); return; } 
+      if(!document.getElementById('patientName').value.trim()) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນຊື່ ແລະ ນາມສະກຸນ!', 'warning'); return; } 
+      if(!document.getElementById('age').value.trim()) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນອາຍຸ!', 'warning'); return; } 
+      if(cartItems.length === 0) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາເລືອກລາຍການກວດ!', 'warning'); return; } 
+      
+      const payload = { 
+        loggedUser: sessionStorage.getItem('lis_username'), 
+        existingOrderId: currentEditOrderId, 
+        orderDateTime: document.getElementById('orderDateTime').value, 
+        timeSlot: document.getElementById('timeSlot').value, 
+        visitType: document.getElementById('visitType').value, 
+        insite: document.getElementById('insite').value, 
+        patientId: document.getElementById('patientId').value, 
+        patientName: document.getElementById('patientName').value, 
+        age: document.getElementById('age').value, 
+        gender: document.getElementById('gender').value, 
+        doctor: document.getElementById('doctor').value, 
+        department: document.getElementById('department').value, 
+        testType: document.getElementById('testType').value, 
+        labDest: document.getElementById('isOutlab').checked ? document.getElementById('labDest').value : "In-house", 
+        sender: document.getElementById('sender').value, 
+        cart: cartItems, 
+        totalPrice: finalTotal 
+      }; 
+      
+      document.getElementById('submitBtn').innerHTML = '<span class="spinner-border spinner-border-sm"></span> ກຳລັງບັນທຶກ...'; 
+      
+      google.script.run.withSuccessHandler(function(res) { 
+        if(res.success) { 
+          Swal.fire('ສຳເລັດ!', res.message, 'success'); 
+          cancelEdit(); 
+          loadTable(); 
+          loadStockData(); 
+          loadInventoryTable(); 
+          if(sessionStorage.getItem('lis_role')==='Admin') loadDashboard(); 
+        } else { 
+          Swal.fire('ຜິດພາດ!', res.message, 'error'); 
+        } 
+        document.getElementById('submitBtn').innerHTML = '<i class="bi bi-save me-2"></i> ບັນທຶກການສັ່ງກວດ'; 
+      }).submitTestOrder(payload); 
+    }
+    function toggleOutlab() { document.getElementById('labDestDiv').style.display = document.getElementById('isOutlab').checked ? 'block' : 'none'; }
+    function resetForm() { document.getElementById('orderDateTime').value = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0,16); document.getElementById('patientId').value = ''; document.getElementById('patientName').value = ''; document.getElementById('age').value = ''; document.getElementById('packageName').value = ''; document.getElementById('packagePrice').value = '0'; document.getElementById('isOutlab').checked = false; toggleOutlab(); document.querySelectorAll('.test-item').forEach(b => b.checked = false); calculateCart(); document.getElementById('timeSlot').value=''; document.getElementById('visitType').value=''; document.getElementById('insite').value=''; document.getElementById('doctor').value=''; document.getElementById('department').value=''; document.getElementById('sender').value=''; document.getElementById('labDest').value=''; }
+    
+    function loadTable() { google.script.run.withSuccessHandler(function(orders) { globalOrders = orders; renderTable(orders); }).getRecentOrders(); }
+    
+function renderTable(orders) { 
+      if ($.fn.DataTable.isDataTable('#orderHistoryTable')) { $('#orderHistoryTable').DataTable().clear().destroy(); }
+      let tbody = document.getElementById('orderTableBody'); if(!tbody) return; let html=''; 
+      
+      // ຈັດລຽງບິນໃໝ່ລ່າສຸດໄວ້ເທິງ
+      orders.sort(function(a, b) { return b.dateTime - a.dateTime; });
+
+      orders.forEach(order => { 
+        let dateStr = new Date(order.dateTime).toLocaleString('en-GB'); 
+        let labBadge = (!order.labDest || order.labDest === 'In-house') ? `<span class="badge bg-success">In-house</span>` : `<span class="badge bg-danger">${order.labDest}</span>`; 
+        
+        let resultEntryBtn = '';
+        let viewResultBtn = '';
+
+        // ກວດສອບສະຖານະ ເພື່ອປ່ຽນຮູບແບບປຸ່ມ
+        if (order.status === 'Completed') {
+            // ຖ້າເຄີຍປ້ອນແລ້ວ: ສະແດງປຸ່ມ "ແກ້ໄຂຜົນ" (ສີເຫຼືອງ) ແລະ ປຸ່ມ "ພິມ"
+            resultEntryBtn = `<button class="btn btn-sm btn-warning py-0 text-dark fw-bold shadow-sm" onclick="openResultModal('${order.orderId}')" title="ແກ້ໄຂຜົນກວດ"><i class="bi bi-pencil-square"></i></button>`;
+            viewResultBtn = `<button class="btn btn-sm btn-primary py-0 shadow-sm" onclick="viewLabResults('${order.orderId}')" title="ເບິ່ງ/ພິມ ຜົນກວດ"><i class="bi bi-printer"></i></button>`;
+        } else {
+            // ຖ້າຍັງບໍ່ປ້ອນ: ສະແດງປຸ່ມ "ປ້ອນຜົນ" (ສີຂຽວ)
+            resultEntryBtn = `<button class="btn btn-sm btn-success py-0 fw-bold shadow-sm" onclick="openResultModal('${order.orderId}')" title="ປ້ອນຜົນກວດໃໝ່"><i class="bi bi-clipboard2-pulse"></i></button>`;
+            viewResultBtn = `<button class="btn btn-sm btn-secondary py-0 opacity-50" disabled title="ຍັງບໍ່ມີຜົນກວດໃຫ້ພິມ"><i class="bi bi-printer"></i></button>`;
+        }
+
+        html += `<tr>
+          <td><small class="text-muted">${dateStr}</small></td>
+          <td><span class="fw-bold" style="color:var(--primary-med);">${order.patientId}</span><br><small class="text-muted" style="font-size: 0.7rem;">${order.orderId}</small></td>
+          <td><span class="fw-bold">${order.patientName}</span></td>
+          <td class="text-center">${order.age}</td>
+          <td class="text-center">${order.gender}</td>
+          <td>${labBadge}</td>
+          <td class="text-end price-text text-danger">₭ ${order.totalPrice.toLocaleString()}</td>
+          <td class="text-center">
+            <div class="d-flex justify-content-center gap-1 flex-nowrap">
+              ${resultEntryBtn}
+              ${viewResultBtn}
+              <button class="btn btn-sm btn-outline-info py-0" onclick="viewOrder('${order.orderId}')" title="ເບິ່ງລາຍລະອຽດບິນ/ລາຄາ"><i class="bi bi-eye"></i></button>
+              <button class="btn btn-sm btn-outline-dark py-0" onclick="editOrder('${order.orderId}')" title="ແກ້ໄຂຂໍ້ມູນບິນ"><i class="bi bi-gear"></i></button>
+              <button class="btn btn-sm btn-outline-danger py-0" onclick="deleteOrder('${order.orderId}')" title="ຍົກເລີກບິນ"><i class="bi bi-trash"></i></button>
+            </div>
+          </td>
+        </tr>`; 
+      }); 
+      tbody.innerHTML = html;
+      initDT('orderHistoryTable', '550px');
+    }
+
+    function viewOrder(orderId) { 
+      let order = globalOrders.find(o => o.orderId === orderId); 
+      if(!order) return; 
+      let testList = '<ul class="list-group list-group-flush border rounded mb-0">'; 
+      order.tests.forEach(t => { testList += `<li class="list-group-item d-flex justify-content-between align-items-center py-1 px-2"><span class="small">${t.name}</span> <span class="fw-bold price-text small">₭ ${t.price.toLocaleString()}</span></li>`; }); 
+      testList += '</ul>'; 
+      let labDestHtml = (!order.labDest || order.labDest === 'In-house') ? `<span class="badge bg-success">In-house</span>` : `<span class="badge bg-danger">${order.labDest}</span>`; 
+      let html = `<div class="text-start mt-3"><table class="table table-bordered table-sm"><tr><th class="bg-light w-25">ລະຫັດບິນ (ID):</th><td><b>${order.orderId}</b></td></tr><tr><th class="bg-light">ເວລາ:</th><td>${new Date(order.dateTime).toLocaleString('en-GB')}</td></tr><tr><th class="bg-light">ຄົນເຈັບ:</th><td><span class="text-primary fw-bold">${order.patientId}</span> - ${order.patientName} (${order.gender}, ${order.age} ປີ)</td></tr><tr><th class="bg-light">ແພດ / ພະແນກ:</th><td>${order.doctor} / ${order.department}</td></tr><tr><th class="bg-light">ສະຖານະ:</th><td>${labDestHtml} (ຜູ້ສົ່ງ: ${order.sender})</td></tr><tr><th class="bg-light">ລາຍການກວດ:</th><td class="p-2">${testList}</td></tr><tr><th class="bg-light align-middle">ຍອດລວມ:</th><td><h3 class="price-text m-0">₭ ${order.totalPrice.toLocaleString()}</h3></td></tr></table></div>`; 
+      Swal.fire({ title: '<i class="bi bi-file-earmark-medical text-primary"></i> ຂໍ້ມູນໃບສັ່ງກວດ', html: html, width: 600, showCloseButton: true, showConfirmButton: false }); 
+    }
+
+    function viewLabResults(orderId) {
+        let order = globalOrders.find(o => o.orderId === orderId); 
+        if(!order) return; 
+
+        Swal.fire({ title: 'ກຳລັງໂຫຼດຜົນກວດ...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+        google.script.run.withSuccessHandler(function(savedResults) {
+            let labDestHtml = (!order.labDest || order.labDest === 'In-house') ? `<span class="badge bg-success">In-house</span>` : `<span class="badge bg-danger">${order.labDest}</span>`; 
+            
+            let html = `<div class="text-start mt-3">
+              <table class="table table-bordered table-sm mb-3">
+                <tr><th class="bg-light w-25">ລະຫັດບິນ:</th><td><b>${order.orderId}</b></td></tr>
+                <tr><th class="bg-light">ຄົນເຈັບ:</th><td><span class="text-primary fw-bold">${order.patientId}</span> - ${order.patientName} (${order.gender}, ${order.age} ປີ)</td></tr>
+                <tr><th class="bg-light">ສະຖານະ:</th><td>${labDestHtml} <span class="badge ${order.status === 'Completed' ? 'bg-success' : 'bg-secondary'}">${order.status}</span></td></tr>
+              </table>`; 
+
+            if (savedResults && savedResults.length > 0) {
+                html += `<h6 class="fw-bold text-success border-bottom pb-1"><i class="bi bi-clipboard2-check"></i> ຜົນການກວດ (Lab Results)</h6>`;
+                html += `<div class="table-responsive"><table class="table table-sm table-bordered text-center align-middle" style="font-size:0.85rem;">
+                          <thead class="table-light">
+                            <tr><th>Test</th><th class="text-start">Parameter</th><th>Result</th><th>Flag</th><th>Unit</th><th>Reference</th></tr>
+                          </thead>
+                          <tbody>`;
+                
+                savedResults.forEach(r => {
+                  let flagHtml = ''; let valClass = '';
+                  if (r.flag === 'H') { flagHtml = '<span class="badge bg-danger">H</span>'; valClass = 'text-danger fw-bold'; } 
+                  else if (r.flag === 'L') { flagHtml = '<span class="badge bg-warning text-dark">L</span>'; valClass = 'text-warning fw-bold'; } 
+                  else if (r.flag === 'Normal' && r.value !== '') { flagHtml = '<span class="text-success" style="font-size:0.7rem;">Normal</span>'; }
+
+                  html += `<tr>
+                    <td class="text-secondary">${r.testName}</td>
+                    <td class="text-start fw-bold">${r.paramName}</td>
+                    <td class="${valClass} fs-6">${r.value}</td>
+                    <td>${flagHtml}</td>
+                    <td><small class="text-muted">${r.unit}</small></td>
+                    <td><small class="text-muted">${r.normalRange}</small></td>
+                  </tr>`;
+                });
+                html += `</tbody></table></div>`;
+            } else {
+                html += `<div class="alert alert-warning small"><i class="bi bi-info-circle"></i> ຍັງບໍ່ທັນໄດ້ປ້ອນຜົນກວດສຳລັບບິນນີ້. <br> ກະລຸນາກົດປຸ່ມສີຂຽວເພື່ອປ້ອນຜົນກວດກ່ອນ.</div>`;
+            }
+            html += `</div>`; 
+
+            Swal.fire({ 
+              title: '<i class="bi bi-file-earmark-medical text-primary"></i> ໃບລາຍງານຜົນກວດ (Lab Report)', 
+              html: html, 
+              width: 750, 
+              showCloseButton: true, 
+              showConfirmButton: savedResults && savedResults.length > 0, 
+              confirmButtonText: '<i class="bi bi-printer"></i> ພິມໃບຜົນກວດ (Print)',
+              confirmButtonColor: '#2563EB'
+            }).then((res) => {
+                if(res.isConfirmed) {
+                    Swal.fire('Printing...', 'ລະບົບພິມໃບຜົນກວດ ກຳລັງພັດທະນາໃນຂັ້ນຕອນຕໍ່ໄປ', 'info');
+                }
+            }); 
+        }).getSavedResults(orderId);
+    }
+
+    function filterTable() { let d = document.getElementById('searchDate').value; let filtered = globalOrders.filter(o => { let mDate = d ? new Date(o.dateTime).toISOString().startsWith(d) : true; return mDate; }); renderTable(filtered); }
+    function deleteOrder(orderId) { Swal.fire({ title: 'ຢືນຢັນຍົກເລີກບິນ?', text: "ປ່ຽນສະຖານະບິນ " + orderId + " ເປັນຍົກເລີກ (Cancelled)?", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((result) => { if(result.isConfirmed) { google.script.run.withSuccessHandler(function(res){ Swal.fire('ສຳເລັດ!', res.message, 'success'); loadTable(); }).deleteOrder(orderId, sessionStorage.getItem('lis_username')); } }); }
+    function editOrder(orderId) { let order = globalOrders.find(o => o.orderId === orderId); if(!order) return; currentEditOrderId = order.orderId; showPage(null, 'orderForm'); document.getElementById('editAlert').classList.remove('d-none'); document.getElementById('editOrderIdDisplay').innerText = order.orderId; document.getElementById('submitBtn').innerHTML = '<i class="bi bi-arrow-repeat me-2"></i> ອັບເດດບິນ'; document.getElementById('submitBtn').classList.replace('btn-primary', 'btn-warning'); document.getElementById('orderDateTime').value = new Date(order.dateTime - (new Date()).getTimezoneOffset() * 60000).toISOString().slice(0,16); document.getElementById('timeSlot').value = order.timeSlot; document.getElementById('visitType').value = order.visitType; document.getElementById('insite').value = order.insite; document.getElementById('patientId').value = order.patientId; document.getElementById('patientName').value = order.patientName; document.getElementById('age').value = order.age; document.getElementById('gender').value = order.gender; document.getElementById('doctor').value = order.doctor; document.getElementById('department').value = order.department; document.getElementById('sender').value = order.sender; document.getElementById('testType').value = order.testType; if(order.labDest && order.labDest !== "In-house") { document.getElementById('isOutlab').checked = true; toggleOutlab(); document.getElementById('labDest').value = order.labDest; } else { document.getElementById('isOutlab').checked = false; toggleOutlab(); } document.querySelectorAll('.test-item').forEach(b => b.checked = false); order.tests.forEach(t => { let box = document.querySelector(`.test-item[data-name="${t.name}"]`); if(box) box.checked = true; }); calculateCart(); window.scrollTo(0, 0); }
+    function cancelEdit() { currentEditOrderId = null; document.getElementById('editAlert').classList.add('d-none'); document.getElementById('submitBtn').innerHTML = '<i class="bi bi-save me-2"></i> ບັນທຶກການສັ່ງກວດ'; document.getElementById('submitBtn').classList.replace('btn-warning', 'btn-primary'); resetForm(); }
+
+    function exportHistoryData(type) {
+      let d = document.getElementById('searchDate').value;
+      let filtered = globalOrders.filter(o => { let mDate = d ? new Date(o.dateTime).toISOString().startsWith(d) : true; return mDate; });
+      if(filtered.length === 0) { Swal.fire('ແຈ້ງເຕືອນ', 'ບໍ່ມີຂໍ້ມູນສຳລັບດາວໂຫຼດ', 'warning'); return; }
+      let exportArr = filtered.map(o => ({ "Order_ID": o.orderId, "Date_Time": new Date(o.dateTime).toLocaleString('en-GB'), "Patient_ID": o.patientId, "Patient_Name": o.patientName, "Lab_Destination": o.labDest || 'In-house', "Tests": o.tests.map(t=>t.name).join(', '), "Total_Kip": o.totalPrice, "Status": o.status }));
+      let fileName = "Order_History_" + new Date().toISOString().split('T')[0];
+      if(type === 'excel' || type === 'csv') { const ws = XLSX.utils.json_to_sheet(exportArr); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "History"); XLSX.writeFile(wb, fileName + (type === 'excel' ? '.xlsx' : '.csv')); } 
+      else if (type === 'pdf') { const { jsPDF } = window.jspdf; const doc = new jsPDF('landscape'); let cols = ["Order ID", "Date", "Patient ID", "Name", "Lab", "Tests", "Total (Kip)", "Status"]; let rows = filtered.map(o => [ o.orderId, new Date(o.dateTime).toLocaleString('en-GB'), o.patientId, o.patientName, o.labDest || 'In-house', o.tests.map(t=>t.name).join(', '), o.totalPrice.toLocaleString(), o.status ]); doc.text("Order History List", 14, 15); doc.autoTable({ head: [cols], body: rows, startY: 20, styles: { fontSize: 8 } }); doc.save(fileName + ".pdf"); }
+    }
+
+    function loadOutlabTable() { google.script.run.withSuccessHandler(function(orders){ if ($.fn.DataTable.isDataTable('#outlabTable')) { $('#outlabTable').DataTable().clear().destroy(); } let tbody = document.getElementById('outlabTableBody'); let html=''; orders.forEach(o => { let badgeColor = o.status === 'Received' ? 'bg-success' : 'bg-warning text-dark'; let recDateStr = o.receivedDate ? new Date(o.receivedDate).toLocaleString('en-GB') : '-'; let noteHtml = o.note ? `<small class="text-info"><i class="bi bi-chat-text"></i> ${o.note}</small>` : '-'; let testsString = o.tests.map(t => t.name).join(', '); html += `<tr><td><span class="badge border text-dark">${o.orderId}</span></td><td><small>${new Date(o.dateTime).toLocaleString('en-GB')}</small></td><td><b class="text-primary">${o.patientId}</b><br><small>${o.patientName}</small></td><td><span class="badge bg-danger">${o.labDest}</span></td><td><small class="fw-bold">${o.sender}</small></td><td><small>${testsString}</small></td><td><span class="badge ${badgeColor}">${o.status || 'Pending'}</span></td><td><small class="text-success fw-bold">${recDateStr}</small></td><td>${noteHtml}</td><td><select class="form-select form-select-sm" onchange="updateStatus('${o.orderId}', this.value)"><option value="" disabled selected>ປ່ຽນສະຖານະ</option><option value="Pending">Pending</option><option value="Received">Received</option></select></td></tr>`; }); tbody.innerHTML = html; initDT('outlabTable'); }).getOutlabOrders(); }
+    function updateStatus(orderId, status) { if(!status) return; if(status === 'Received') { Swal.fire({ title: 'ຢືນຢັນການຮັບຜົນ', text: 'ທ່ານຕ້ອງການເພີ່ມໝາຍເຫດບໍ່?', input: 'text', inputPlaceholder: 'ປ້ອນໝາຍເຫດ (ຖ້າມີ)...', showCancelButton: true, confirmButtonText: 'ບັນທຶກສະຖານະ', cancelButtonText: 'ຍົກເລີກ', confirmButtonColor: '#10b981' }).then((result) => { if (result.isConfirmed) { let note = result.value || ""; google.script.run.withSuccessHandler(function(res){ Swal.fire('ອັບເດດແລ້ວ', res.message, 'success'); loadOutlabTable(); }).updateOrderStatus(orderId, status, sessionStorage.getItem('lis_username'), note); } else { loadOutlabTable(); } }); } else { google.script.run.withSuccessHandler(function(res){ Swal.fire('ອັບເດດແລ້ວ', res.message, 'success'); loadOutlabTable(); }).updateOrderStatus(orderId, status, sessionStorage.getItem('lis_username'), ""); } }
+
+    function loadSettings() { google.script.run.withSuccessHandler(d=>{ const pop=(t,sId,lId)=>{ let sel=document.getElementById(sId),lst=document.getElementById(lId); if(sel)sel.innerHTML='<option value="" selected disabled>-- ເລືອກ --</option>'; if(lst)lst.innerHTML=''; if(d[t]){d[t].forEach(i=>{ if(sel)sel.innerHTML+=`<option value="${i.val}">${i.val}</option>`; if(lst)lst.innerHTML+=`<li class="list-group-item d-flex justify-content-between p-1 small bg-transparent">${i.val} <button class="btn btn-sm text-danger py-0" onclick="deleteSetting(${i.row})"><i class="bi bi-x"></i></button></li>`; });} }; pop('VisitType','visitType','listVisitType'); pop('Insite','insite','listInsite'); pop('Doctor','doctor','listDoctor'); pop('Department','department','listDepartment'); pop('Sender','sender','listSender'); pop('LabDest','labDest','listLabDest'); }).getSettings(); }
+    function addSetting(t,i) { let v=document.getElementById(i).value; if(!v)return; document.getElementById(i).value=''; google.script.run.withSuccessHandler(loadSettings).addSetting(t,v); }
+    function deleteSetting(r) { Swal.fire({title:'ລຶບ?',icon:'warning',showCancelButton:true}).then(res=>{if(res.isConfirmed)google.script.run.withSuccessHandler(loadSettings).deleteSetting(r);}); }
+    
+    function loadTestMasterTable() { 
+      google.script.run.withSuccessHandler(t=>{ 
+        if ($.fn.DataTable.isDataTable('#testMasterTable')) { $('#testMasterTable').DataTable().clear().destroy(); } 
+        let tb=document.getElementById('masterTableBody'); let html=''; 
+        t.forEach(x=>{ html+=`<tr><td><small>${x.name}</small></td><td><span class="badge bg-secondary">${x.category}</span></td><td class="price-text small">₭ ${x.price.toLocaleString()}</td><td class="text-center"><div class="d-flex justify-content-center gap-1 flex-nowrap"><button class="btn btn-sm btn-outline-warning py-0" onclick="editTest('${x.id}', '${x.name}', '${x.price}', '${x.category}')" title="ແກ້ໄຂ"><i class="bi bi-pencil-square"></i></button><button class="btn btn-sm btn-outline-danger py-0" onclick="deleteTestMaster('${x.id}')" title="ລຶບ"><i class="bi bi-trash"></i></button></div></td></tr>`; }); 
+        tb.innerHTML = html; initDT('testMasterTable'); 
+      }).getTestMaster(); 
+    }
+
+    function editTest(id, name, price, cat) { document.getElementById('editTestId').value = id; document.getElementById('setupTestName').value = name; document.getElementById('setupTestPrice').value = price; document.getElementById('setupTestCat').value = cat; let btn = document.getElementById('btnSaveTest'); btn.innerHTML = '<i class="bi bi-check-lg"></i> ອັບເດດ'; btn.classList.replace('btn-success', 'btn-warning'); document.getElementById('btnCancelTest').classList.remove('d-none'); }
+    function cancelEditTest() { document.getElementById('editTestId').value = ''; document.getElementById('setupTestName').value = ''; document.getElementById('setupTestPrice').value = ''; document.getElementById('setupTestCat').selectedIndex = 0; let btn = document.getElementById('btnSaveTest'); btn.innerHTML = '<i class="bi bi-plus-circle"></i> ບັນທຶກ'; btn.classList.replace('btn-warning', 'btn-success'); document.getElementById('btnCancelTest').classList.add('d-none'); }
+    function saveTestMaster() { let id = document.getElementById('editTestId').value; let name = document.getElementById('setupTestName').value.trim(); let price = document.getElementById('setupTestPrice').value.trim(); let cat = document.getElementById('setupTestCat').value; if(!name || !price) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບ!', 'warning'); return; } let btn = document.getElementById('btnSaveTest'); btn.innerHTML = 'ກຳລັງບັນທຶກ...'; btn.disabled = true; if(id) { google.script.run.withSuccessHandler((res)=>{ btn.disabled = false; if(res.success) { cancelEditTest(); loadTestMasterTable(); loadTestCheckboxes(); loadMappingData(); Swal.fire('ສຳເລັດ', res.message, 'success'); } else { Swal.fire('ຜິດພາດ', res.message, 'error'); cancelEditTest(); } }).updateTestMaster(id, name, price, cat, sessionStorage.getItem('lis_username')); } else { google.script.run.withSuccessHandler((res)=>{ btn.disabled = false; if(res.success) { cancelEditTest(); loadTestMasterTable(); loadTestCheckboxes(); loadMappingData(); Swal.fire('ສຳເລັດ', 'ເພີ່ມລາຍການແລ້ວ', 'success'); } else { Swal.fire('ຜິດພາດ', 'ເກີດຂໍ້ຜິດພາດ', 'error'); } }).saveTestMaster({name: name, price: price, category: cat}); } }
+    function deleteTestMaster(id) { Swal.fire({title:'ລຶບລາຍການນີ້?',icon:'warning',showCancelButton:true, confirmButtonColor: '#d33'}).then(res=>{if(res.isConfirmed)google.script.run.withSuccessHandler(()=>{ Swal.fire('ສຳເລັດ', 'ລຶບແລ້ວ!', 'success'); loadTestMasterTable();loadTestCheckboxes(); loadMappingData(); }).deleteTestMaster(id);}); }
+
+    function loadMappingData() {
+        google.script.run.withSuccessHandler(tests => {
+            let selTest = document.getElementById('mapTestName');
+            let spTest = document.getElementById('spTestName');
+            if(selTest) { selTest.innerHTML = '<option value="" selected disabled>-- ເລືອກລາຍການກວດ --</option>'; tests.forEach(t => { selTest.innerHTML += `<option value="${t.name}">${t.name}</option>`; }); }
+            if(spTest) { spTest.innerHTML = '<option value="" selected disabled>-- ເລືອກລາຍການກວດ --</option>'; tests.forEach(t => { spTest.innerHTML += `<option value="${t.name}">${t.name}</option>`; }); }
+        }).getTestMaster();
+
+        google.script.run.withSuccessHandler(mappings => {
+            if ($.fn.DataTable.isDataTable('#mappingTable')) { $('#mappingTable').DataTable().clear().destroy(); }
+            let tbody = document.getElementById('mappingTableBody'); if(!tbody) return;
+            tbody.innerHTML = '';
+            mappings.forEach(m => {
+                tbody.innerHTML += `<tr>
+                    <td class="fw-bold text-primary">${m.testName}</td><td>${m.reagentName}</td><td class="text-center fw-bold">${m.qty}</td>
+                    <td class="text-center"><button class="btn btn-sm btn-outline-danger py-0" onclick="deleteMapping(${m.rowIdx})" title="ລຶບ"><i class="bi bi-trash"></i></button></td>
+                </tr>`;
+            });
+            initDT('mappingTable');
+        }).getTestReagentMapping();
+    }
+
+    function saveMapping() {
+        const testName = document.getElementById('mapTestName').value; const reagentId = document.getElementById('mapReagent').value; const qty = document.getElementById('mapQty').value;
+        if(!testName || !reagentId || !qty) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນຂໍ້ມູນໃຫ້ຄົບທຸກຊ່ອງ!', 'warning'); return; }
+        const reagentName = globalStockList.find(r => r.id === reagentId).name;
+        google.script.run.withSuccessHandler(res => {
+            if(res.success) { Swal.fire('ສຳເລັດ', res.message, 'success'); document.getElementById('mapQty').value = ''; loadMappingData(); } 
+            else { Swal.fire('ຜິດພາດ', res.message, 'error'); }
+        }).addTestReagentMapping(testName, reagentId, reagentName, qty, sessionStorage.getItem('lis_username'));
+    }
+
+    function deleteMapping(rowIdx) {
+        Swal.fire({ title: 'ລຶບການຕັ້ງຄ່ານີ້?', text: 'ຫາກລຶບແລ້ວ ລະບົບຈະບໍ່ຕັດນ້ຳຢາສຳລັບລາຍການນີ້.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((result) => {
+            if (result.isConfirmed) {
+                google.script.run.withSuccessHandler(res => {
+                    if (res.success) { Swal.fire('ສຳເລັດ', res.message, 'success'); loadMappingData(); } else { Swal.fire('ຜິດພາດ', res.message, 'error'); }
+                }).deleteTestReagentMapping(rowIdx, sessionStorage.getItem('lis_username'));
+            }
+        });
+    }
+
+    // ==========================================
+    // TEST PARAMETERS SETUP SCRIPT
+    // ==========================================
+    function loadParamSetupData() {
+      google.script.run.withSuccessHandler(params => {
+          if ($.fn.DataTable.isDataTable('#paramTable')) { $('#paramTable').DataTable().clear().destroy(); }
+          let tbody = document.getElementById('paramTableBody'); if(!tbody) return;
+          tbody.innerHTML = '';
+          params.forEach(p => {
+              let rangeText = '-';
+              if(p.inputType === 'Number') { rangeText = `${p.min || 0} - ${p.max || 0}`; } 
+              else if(p.inputType === 'Dropdown') { rangeText = `<small class="text-muted">${p.options}</small>`; }
+              let typeBadge = p.inputType === 'Number' ? '<span class="badge bg-info text-dark">Number</span>' : (p.inputType === 'Dropdown' ? '<span class="badge bg-warning text-dark">Dropdown</span>' : '<span class="badge bg-secondary">Text</span>');
+              tbody.innerHTML += `<tr>
+                  <td class="fw-bold text-primary">${p.testName}</td><td class="fw-bold">${p.paramName}</td><td>${typeBadge}</td><td>${rangeText}</td><td>${p.unit || '-'}</td>
+                  <td class="text-center"><button class="btn btn-sm btn-outline-danger py-0" onclick="deleteParameter(${p.rowIdx})" title="ລຶບ"><i class="bi bi-trash"></i></button></td>
+              </tr>`;
+          });
+          initDT('paramTable', '450px');
+      }).getTestParameters();
+    }
+
+    function toggleParamInputFields() {
+      const type = document.getElementById('spInputType').value;
+      document.getElementById('divNumberSetup').style.display = (type === 'Number') ? 'flex' : 'none';
+      document.getElementById('divDropdownSetup').style.display = (type === 'Dropdown') ? 'flex' : 'none';
+    }
+
+    function saveParameter() {
+      const tName = document.getElementById('spTestName').value; const pName = document.getElementById('spParamName').value.trim();
+      const iType = document.getElementById('spInputType').value; const pUnit = document.getElementById('spUnit').value.trim();
+      let pMin = "", pMax = "", pOpt = "";
+      if(!tName || !pName) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາເລືອກລາຍການກວດ ແລະ ໃສ່ຊື່ Parameter!', 'warning'); return; }
+      if (iType === 'Number') { pMin = document.getElementById('spMin').value; pMax = document.getElementById('spMax').value; } 
+      else if (iType === 'Dropdown') { pOpt = document.getElementById('spOptions').value.trim(); if(!pOpt) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນຕົວເລືອກ (Options)!', 'warning'); return; } }
+
+      const payload = { testName: tName, paramName: pName, inputType: iType, unit: pUnit, min: pMin, max: pMax, options: pOpt };
+      google.script.run.withSuccessHandler(res => {
+          if(res.success) {
+              Swal.fire('ສຳເລັດ', res.message, 'success');
+              document.getElementById('spParamName').value = ''; document.getElementById('spMin').value = ''; document.getElementById('spMax').value = ''; document.getElementById('spOptions').value = '';
+              loadParamSetupData();
+          } else { Swal.fire('ຜິດພາດ', res.message, 'error'); }
+      }).saveTestParameter(payload, sessionStorage.getItem('lis_username'));
+    }
+
+    function deleteParameter(rowIdx) {
+      Swal.fire({ title: 'ລຶບການຕັ້ງຄ່ານີ້?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then((result) => {
+          if (result.isConfirmed) {
+              google.script.run.withSuccessHandler(res => { Swal.fire('ສຳເລັດ', res.message, 'success'); loadParamSetupData(); }).deleteTestParameter(rowIdx, sessionStorage.getItem('lis_username'));
+          }
+      });
+    }
+
+    // ==========================================
+    // LAB RESULT ENTRY SCRIPT
+    // ==========================================
+    function applyFastEntry(testName, inputEl) {
+        let values = inputEl.value.trim().split(/[\s,]+/);
+        let inputs = document.querySelectorAll(`.result-input[data-test="${testName}"]`);
+        let valIdx = 0;
+        inputs.forEach(inp => {
+            if (valIdx < values.length && inp.tagName === 'INPUT') { 
+                inp.value = values[valIdx];
+                valIdx++;
+            }
+        });
+        inputEl.value = ''; 
+    }
+
+    function openResultModal(orderId) {
+        if (!resultModalInstance) { resultModalInstance = new bootstrap.Modal(document.getElementById('resultEntryModal')); }
+        document.getElementById('resOrderIdDisplay').innerText = orderId;
+        document.getElementById('currentResultOrderId').value = orderId;
+        let container = document.getElementById('resultFormContainer');
+        container.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-success"></div> ກຳລັງໂຫຼດຟອມ...</div>';
+        resultModalInstance.show();
+
+        google.script.run.withSuccessHandler(res => {
+            if(!res.success) { container.innerHTML = `<div class="alert alert-danger">${res.message}</div>`; return; }
+            let tests = res.tests;
+            if(Object.keys(tests).length === 0) {
+                container.innerHTML = `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> ຍັງບໍ່ໄດ້ຕັ້ງຄ່າ Parameter ສຳລັບລາຍການກວດໃນບິນນີ້. <br>ກະລຸນາໄປທີ່ເມນູ <b>"ຕັ້ງຄ່າຜົນກວດ (Parameters)"</b>.</div>`;
+                return;
+            }
+
+            let html = '';
+            for (let testName in tests) {
+                html += `<div class="mb-4 border rounded p-3 bg-white shadow-sm">`;
+                html += `<div class="d-flex flex-wrap justify-content-between align-items-center border-bottom pb-2 mb-3 gap-2">
+                            <h6 class="fw-bold text-primary m-0"><i class="bi bi-droplet-half me-2"></i>${testName}</h6>
+                            <input type="text" class="form-control form-control-sm border-info" style="width:250px;" placeholder="Fast Entry (ພິມລວດດຽວແລ້ວຍະຫວ່າງ)" onkeyup="if(event.key==='Enter') applyFastEntry('${testName}', this)">
+                         </div>`;
+                html += `<div class="row g-2">`;
+                
+                let params = tests[testName];
+                params.forEach(p => {
+                    html += `<div class="col-md-6 d-flex align-items-center mb-2">`;
+                    html += `<label class="form-label mb-0 fw-bold small text-muted" style="width: 140px;">${p.paramName}</label>`;
+                    
+                    let currentVal = p.savedValue !== undefined ? p.savedValue : '';
+
+                    if (p.inputType === 'Dropdown') {
+                        let opts = p.options ? p.options.split(',') : [];
+                        html += `<select class="form-select form-select-sm border-primary result-input" data-test="${testName}" data-param="${p.paramName}">`;
+                        html += `<option value="" disabled ${currentVal === '' ? 'selected' : ''}>-- ເລືອກ --</option>`;
+                        opts.forEach(opt => { 
+                            let isSelected = (opt.trim() == currentVal.toString().trim()) ? 'selected' : '';
+                            html += `<option value="${opt.trim()}" ${isSelected}>${opt.trim()}</option>`; 
+                        });
+                        html += `</select>`;
+                    } else {
+                        html += `<input type="text" class="form-control form-control-sm border-primary result-input" data-test="${testName}" data-param="${p.paramName}" placeholder="ປ້ອນຜົນ..." value="${currentVal}">`;
+                    }
+
+                    let normalTxt = '-';
+                    if (p.inputType === 'Number') { if(p.normalMin !== "" && p.normalMax !== "") normalTxt = `${p.normalMin} - ${p.normalMax}`; }
+
+                    html += `<span class="ms-2 small text-muted w-50 text-truncate" title="${normalTxt}">${p.unit || ''} <br><span style="font-size:0.7rem;">(${normalTxt})</span></span>`;
+                    html += `</div>`;
+                });
+                html += `</div></div>`;
+            }
+            container.innerHTML = html;
+        }).getParametersForOrder(orderId);
+    }
+
+    function submitLabResults() {
+        let orderId = document.getElementById('currentResultOrderId').value;
+        let inputs = document.querySelectorAll('.result-input');
+        let results = [];
+        let hasEmpty = false;
+
+        inputs.forEach(input => {
+            let val = input.value.trim();
+            if (!val) hasEmpty = true;
+            results.push({ testName: input.getAttribute('data-test'), paramName: input.getAttribute('data-param'), value: val });
+        });
+
+        if (results.length === 0) return;
+        if (hasEmpty) {
+            Swal.fire({ title: 'ມີບາງຊ່ອງຍັງບໍ່ໄດ້ປ້ອນ', text: "ທ່ານຕ້ອງການບັນທຶກຜົນເທົ່າທີ່ມີກ່ອນບໍ່?", icon: 'warning', showCancelButton: true, confirmButtonText: 'ບັນທຶກເລີຍ', cancelButtonText: 'ກັບໄປປ້ອນຕໍ່' })
+                .then((result) => { if (result.isConfirmed) { executeSaveResult(orderId, results); } });
+        } else {
+            executeSaveResult(orderId, results);
+        }
+    }
+
+    function executeSaveResult(orderId, results) {
+        let btn = document.getElementById('btnSaveResult');
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ບັນທຶກ...'; btn.disabled = true;
+
+        google.script.run.withSuccessHandler(res => {
+            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> ບັນທຶກຜົນກວດ'; btn.disabled = false;
+            if(res.success) {
+                Swal.fire('ສຳເລັດ', res.message, 'success');
+                resultModalInstance.hide();
+                loadTable(); 
+            } else { Swal.fire('ຜິດພາດ', res.message, 'error'); }
+        }).saveLabResults(orderId, results, sessionStorage.getItem('lis_username'));
+    }
+</script>
