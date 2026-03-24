@@ -1524,10 +1524,41 @@ window.calculateCart = function() {
 }
 
 window.submitData = async function() {
-  if (!document.getElementById('patientId').value.trim()) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນ Patient ID!', 'warning'); return }
-  if (!document.getElementById('patientName').value.trim()) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນຊື່ ແລະ ນາມສະກຸນ!', 'warning'); return }
-  if (!document.getElementById('age').value.trim()) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນອາຍຸ!', 'warning'); return }
-  if (cartItems.length === 0) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາເລືອກລາຍການກວດ!', 'warning'); return }
+  if (!document.getElementById('patientId').value.trim()) { 
+    Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນ Patient ID!', 'warning'); 
+    return 
+  }
+  if (!document.getElementById('patientName').value.trim()) { 
+    Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນຊື່ ແລະ ນາມສະກຸນ!', 'warning'); 
+    return 
+  }
+  if (!document.getElementById('age').value.trim()) { 
+    Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນອາຍຸ!', 'warning'); 
+    return 
+  }
+  
+  const testType = document.getElementById('testType').value
+  const packageSelector = document.getElementById('packageSelector')
+  
+  // ກວດສອບວ່າເລືອກ Package ຫຼື ບໍ່
+  if (testType === 'Package') {
+    if (!packageSelector || !packageSelector.value) {
+      Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາເລືອກ Package!', 'warning'); 
+      return 
+    }
+    // ຖ້າເລືອກ Package ແລ້ວ ແຕ່ cartItems ຍັງເປົ່າ (ກຳລັງໂຫຼດ)
+    if (cartItems.length === 0) {
+      Swal.fire('ແຈ້ງເຕືອນ', 'ກຳລັງໂຫຼດຂໍ້ມູນ Package... ກະລຸນາລໍຖ້າຊົ່ວຄູ້!', 'warning'); 
+      return 
+    }
+  } else {
+    // Normal mode - ຕ້ອງເລືອກລາຍການກວດ
+    if (cartItems.length === 0) { 
+      Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາເລືອກລາຍການກວດ!', 'warning'); 
+      return 
+    }
+  }
+  
   const payload = {
     loggedUser: sessionStorage.getItem('lis_username'), existingOrderId: currentEditOrderId,
     orderDateTime: document.getElementById('orderDateTime').value, timeSlot: document.getElementById('timeSlot').value,
@@ -2775,21 +2806,25 @@ const originalCalculateCart = window.calculateCart
 window.calculateCart = async function() {
   const testType = document.getElementById('testType').value
   const packageDiv = document.getElementById('packageInputDiv')
+  const packageSelector = document.getElementById('packageSelector')
 
   if (testType === 'Package') {
     packageDiv.style.display = 'block'
 
     // Load package selector if not already loaded
-    loadPackageSelector()
+    if (!packageSelector || packageSelector.options.length <= 1) {
+      console.log('📦 Loading package selector...')
+      await loadPackageSelector()
+    }
 
     // When Package is selected, auto-add items to cart
-    const selector = document.getElementById('packageSelector')
-    const pkgId = selector.value
+    const pkgId = packageSelector ? packageSelector.value : ''
     const packagePriceEl = document.getElementById('packagePrice')
 
     if (pkgId) {
+      console.log('🔄 Loading package items for ID:', pkgId)
       const items = await api.getPackageItems(pkgId)
-      const selectedOption = selector.options[selector.selectedIndex]
+      const selectedOption = packageSelector.options[packageSelector.selectedIndex]
       // ໃຊ້ລາຄາຈາກ package ໂດຍກົງ (ຈາກ database)
       const pkgPrice = parseFloat(selectedOption.dataset.price) || 0
 
