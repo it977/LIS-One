@@ -108,6 +108,40 @@ export async function deleteTestMaster(id) {
   } catch (e) { return { success: false } }
 }
 
+// Import Test Master from CSV
+export async function importTestMasterFromCSV(csvData, user) {
+  try {
+    // csvData should be array of objects: [{ name, price, category }, ...]
+    if (!csvData || csvData.length === 0) {
+      return { success: false, message: 'No data to import' }
+    }
+
+    // Clear existing data first
+    await supabase.from('lis_test_master').delete().neq('id', 0)
+
+    // Insert new data
+    const records = csvData.map(item => ({
+      name: item.name?.trim() || '',
+      price: Number(item.price) || 0,
+      category: item.category?.trim() || 'Other',
+      created_at: new Date().toISOString()
+    })).filter(item => item.name !== '')
+
+    if (records.length === 0) {
+      return { success: false, message: 'No valid records found' }
+    }
+
+    const { error } = await supabase.from('lis_test_master').insert(records)
+    if (error) throw error
+
+    await logActivity(user, 'Import Test Master', 'CSV Import', `Imported ${records.length} records`)
+    return { success: true, message: `Imported ${records.length} records successfully` }
+  } catch (e) {
+    console.error('Import error:', e)
+    return { success: false, message: e.message }
+  }
+}
+
 // ==========================================
 // TEST PACKAGES
 // ==========================================
@@ -454,19 +488,52 @@ export async function recordStockTransaction(reagentId, reagentName, type, qty, 
   } catch (e) { return { success: false, message: e.message } }
 }
 
-export async function getStockHistory() {
+export async function getStockHistory(startDate, endDate, typeFilter = '') {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('lis_stock_transactions')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(100)
+
+    // ກອງຕາມຊ່ວງວັນທີ
+    if (startDate && endDate) {
+      query = query.gte('created_at', startDate).lte('created_at', endDate)
+    }
+
+    // ກອງຕາມປະເພດ (IN/OUT)
+    if (typeFilter && typeFilter !== 'all') {
+      query = query.eq('type', typeFilter)
+    }
+
+    const { data, error } = await query
     if (error) throw error
     return data.map((d, i) => ({
       rowIdx: d.id, date: new Date(d.created_at).getTime(),
       reagentId: d.reagent_id, name: d.reagent_name, type: d.type, qty: d.qty, note: d.note, user: d.user_name
     }))
   } catch (e) { return [] }
+}
+
+// ດຶງຂໍ້ມູນສະຫຼຸບຍອດຮັບເຂົ້າ/ເບີກອອກ
+export async function getStockSummary(startDate, endDate) {
+  try {
+    const { data, error } = await supabase
+      .from('lis_stock_transactions')
+      .select('type, qty')
+      .gte('created_at', startDate)
+      .lte('created_at', endDate)
+    if (error) throw error
+
+    let totalIn = 0
+    let totalOut = 0
+
+    data.forEach(d => {
+      if (d.type === 'IN') totalIn += Number(d.qty) || 0
+      else if (d.type === 'OUT') totalOut += Number(d.qty) || 0
+    })
+
+    return { success: true, totalIn, totalOut }
+  } catch (e) { return { success: false, totalIn: 0, totalOut: 0 } }
 }
 
 export async function updateStockTransaction(id, qty, note, user) {
@@ -488,6 +555,96 @@ export async function deleteStockTransaction(id, user) {
 // ==========================================
 // INVENTORY LOTS
 // ==========================================
+// ດຶງຂໍ້ມູນ Inventory ພ້ອມ IN/OUT ຕາມຊ່ວງວັນທີ
+export async function getInventoryDataWithDate(startDate, endDate) {
+  try {
+    // ດຶງຂໍ້ມູນ Inventory Lots
+    const { data: lotsData, error: lotsErr } = await supabase
+      .from('lis_inventory_lots')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (lotsErr) throw lotsErr
+
+    // ດຶງຂໍ້ມູນ Transactions ຕາມຊ່ວງວັນທີ
+    let query = supabase
+      .from('lis_stock_transactions')
+      .select('reagent_id, type, qty')
+
+    // ຖ້າມີວັນທີ ແລະ ບໍ່ເປົ່າ ໃຫ້ກອງຕາມວັນທີ
+    if (startDate && endDate && startDate !== '' && endDate !== '') {
+      query = query.gte('created_at', startDate).lte('created_at', endDate)
+    }
+    // ຖ້າບໍ່ມີວັນທີ ບໍ່ກອງ (ດຶງທັງໝົດ)
+
+    const { data: transData, error: transErr } = await query
+    if (transErr) throw transErr
+
+    // ສ້າງ Map ສຳລັບ IN/OUT ແຕ່ລະ reagent
+    const summaryMap = {}
+    transData.forEach(t => {
+      if (!summaryMap[t.reagent_id]) {
+        summaryMap[t.reagent_id] = { in: 0, out: 0 }
+      }
+      if (t.type === 'IN') summaryMap[t.reagent_id].in += Number(t.qty) || 0
+      else if (t.type === 'OUT') summaryMap[t.reagent_id].out += Number(t.qty) || 0
+    })
+
+    // ຄິດໄລ່ຍອດລວມ
+    let totalIn = 0
+    let totalOut = 0
+    Object.values(summaryMap).forEach(s => {
+      totalIn += s.in
+      totalOut += s.out
+    })
+
+    // ປະມວນຜົນ Lots
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const alerts = { expired: 0, expiringSoon: 0, outOfStock: 0 }
+
+    const lots = lotsData.map(d => {
+      const qty = Number(d.qty_remaining)
+      let status = 'Normal'; let diffDays = 0
+
+      if (d.exp_date) {
+        const expDate = new Date(d.exp_date)
+        diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24))
+        if (qty <= 0) { status = 'Empty'; alerts.outOfStock++ }
+        else if (diffDays < 0) { status = 'Expired'; alerts.expired++ }
+        else if (diffDays <= 30) { status = 'Expiring Soon'; alerts.expiringSoon++ }
+      }
+
+      const transSummary = summaryMap[d.reagent_id] || { in: 0, out: 0 }
+
+      return {
+        id: d.lot_id,
+        reagentId: d.reagent_id,
+        name: d.reagent_name,
+        lotNo: d.lot_no,
+        supplier: d.supplier,
+        location: d.location,
+        receiveDate: d.receive_date ? new Date(d.receive_date).getTime() : null,
+        expDate: d.exp_date ? new Date(d.exp_date).getTime() : null,
+        qty,
+        status,
+        daysLeft: diffDays,
+        totalIn: transSummary.in,
+        totalOut: transSummary.out
+      }
+    })
+
+    return {
+      success: true,
+      data: lots,
+      alerts,
+      summary: { totalIn, totalOut }
+    }
+  } catch (e) {
+    console.error('Error getInventoryDataWithDate:', e)
+    return { success: false, data: [], alerts: { expired: 0, expiringSoon: 0, outOfStock: 0 }, summary: { totalIn: 0, totalOut: 0 } }
+  }
+}
+
 export async function saveInventoryLot(data, user) {
   try {
     const lotId = 'INV-' + Date.now().toString().slice(-6)
@@ -644,7 +801,7 @@ export async function getRecentOrders() {
       .select('*')
       .neq('status', 'Cancelled')
       .order('order_datetime', { ascending: false })
-      .limit(500)
+      .limit(5000)
     if (error) throw error
     const orderMap = {}
     const orders = []
@@ -662,9 +819,10 @@ export async function getRecentOrders() {
       }
       if (row.test_name) orderMap[row.order_id].tests.push({ name: row.test_name, price: Number(row.price) || 0 })
     })
-    return orders.slice(0, 80)
+    return orders.slice(0, 500)
   } catch (e) { return [] }
 }
+
 
 export async function getOutlabOrders() {
   try {
@@ -769,7 +927,7 @@ export async function saveLabResults(orderId, results, user, attachments = []) {
         file_name: att.name,
         file_type: att.type,
         file_size: att.size,
-        file_data: att.data  // Base64 àº«àº¼àº· URL
+        file_url: att.data  // ເກັບເປັນ URL ຫຼື Base64
       }))
       await supabase.from('lis_order_attachments').insert(attachmentsToInsert)
     }
@@ -932,7 +1090,7 @@ export async function getDashboardData(startDateStr, endDateStr, filters = {}) {
     // àº”àº¶àº‡ Summary Data
     const summaryData = await getDashboardSummaryData(startDateStr, endDateStr, filters)
 
-    return { success: true, kpis, charts, alerts, summaryData }
+    return { success: true, kpis, charts, alerts, summaryData, orders: orders || [] }
   } catch (e) { return { success: false, message: e.message } }
 }
 
