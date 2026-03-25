@@ -840,29 +840,55 @@ function renderAgeGroupsSummaryTable(ageGroupsData) {
 }
 
 window.exportDashboardPDF = function() {
-  const el = document.getElementById('dashContent'); window.scrollTo(0, 0)
-  Swal.fire({ title: 'ກຳລັງສ້າງ PDF...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } })
+  const el = document.getElementById('dashContent');
+  window.scrollTo(0, 0);
+  
+  // Save original styles
+  const originalWidth = el.style.width;
+  const originalMaxWidth = el.style.maxWidth;
+  
+  // Force a desktop layout to prevent squishing on smaller windows
+  el.style.width = '1280px';
+  el.style.maxWidth = '1280px';
+  
+  Swal.fire({ title: 'ກຳລັງສ້າງ PDF...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
+  
   setTimeout(() => {
     html2canvas(el, { 
-      scale: 1,  // ຫຼຸດ scale ລົງເພື່ອຫຼຸດຂະໜາດ
+      scale: 2,  // Increase scale for sharper image
       useCORS: true, 
       backgroundColor: '#F8FAFC',
       imageTimeout: 0,
       removeContainer: true,
       logging: false,
-      width: el.offsetWidth,
-      height: el.offsetHeight
+      windowWidth: 1280
     }).then(canvas => {
-      // ໃຊ້ JPEG ແທນ PNG ເພື່ອຫຼຸດຂະໜາດ
-      const imgData = canvas.toDataURL('image/jpeg', 0.8)  // 0.8 = 80% quality
-      const { jsPDF } = window.jspdf; const pdf = new jsPDF('p', 'mm', 'a4')
-      const pdfWidth = pdf.internal.pageSize.getWidth(); const pdfHeight = (canvas.height * pdfWidth) / canvas.width
-      let heightLeft = pdfHeight, position = 0; const pageHeight = pdf.internal.pageSize.getHeight()
-      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight, undefined, 'FAST'); heightLeft -= pageHeight
-      while (heightLeft > 0) { position = heightLeft - pdfHeight; pdf.addPage(); pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight, undefined, 'FAST'); heightLeft -= pageHeight }
-      pdf.save('Dashboard_Report_' + new Date().toISOString().split('T')[0] + '.pdf'); Swal.close()
-    }).catch(() => Swal.fire('ຜິດພາດ', 'ບໍ່ສາມາດສ້າງ PDF ໄດ້', 'error'))
-  }, 500)
+      // Restore original styles
+      el.style.width = originalWidth;
+      el.style.maxWidth = originalMaxWidth;
+      
+      const imgData = canvas.toDataURL('image/jpeg', 0.9);
+      const { jsPDF } = window.jspdf;
+      
+      // Calculate exact dimensions for a single continuous page
+      const pdfWidth = 1280;
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      // Create a single custom-sized page (p: portrait, pt: points, exact width/height)
+      const pdf = new jsPDF('p', 'pt', [pdfWidth, pdfHeight]); 
+      
+      // Draw image perfectly fitting the single page
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      
+      pdf.save('Dashboard_Report_' + new Date().toISOString().split('T')[0] + '.pdf');
+      Swal.close();
+    }).catch((err) => {
+      console.error(err);
+      el.style.width = originalWidth;
+      el.style.maxWidth = originalMaxWidth;
+      Swal.fire('ຜິດພາດ', 'ບໍ່ສາມາດສ້າງ PDF ໄດ້', 'error');
+    });
+  }, 800);
 }
 
 // ================== MAINTENANCE ==================
