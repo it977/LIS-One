@@ -278,19 +278,27 @@ window.deleteSetting = function(r) { Swal.fire({ title: 'ລຶບ?', icon: 'war
 window.loadDashboard = async function() {
   const sDate = document.getElementById('dashStartDate').value
   const eDate = document.getElementById('dashEndDate').value
-  
-  // ດຶງຄ່າຈາກ Filters
+
+  // ດງຄ່າຈາກ Filters
   const department = document.getElementById('dashDepartment').value
   const doctor = document.getElementById('dashDoctor').value
   const testType = document.getElementById('dashTestType').value
   const category = document.getElementById('dashCategory').value
-  
+
+  console.log('🔍 Dashboard Filters:', { sDate, eDate, department, doctor, testType, category })
+
   document.getElementById('dashContent').style.display = 'none'
   document.getElementById('dashLoader').style.display = 'block'
-  
+
   // ສົ່ງ Filters ໄປ API
   const res = await api.getDashboardData(sDate, eDate, { department, doctor, testType, category })
-  
+
+  console.log('📊 Dashboard Response:', { 
+    totalOrders: res.orders?.length, 
+    kpis: res.kpis,
+    timeSlotData: res.charts?.timeSlot
+  })
+
   document.getElementById('dashLoader').style.display = 'none'
   if (res.success) {
     document.getElementById('dashContent').style.display = 'block'
@@ -322,10 +330,12 @@ window.loadDashboard = async function() {
       safe('chartInsite', 'doughnut', Object.keys(res.charts.insite), Object.values(res.charts.insite), ['#0EA5E9', '#F59E0B'])
       safe('chartVisitType', 'pie', Object.keys(res.charts.visitType), Object.values(res.charts.visitType), ['#1E3A8A', '#10B981', '#D97706'])
       safe('chartLabType', 'pie', Object.keys(res.charts.labType), Object.values(res.charts.labType), ['#10B981', '#EF4444'])
-      safe('chartTestType', 'doughnut', Object.keys(res.charts.testTypeRev), Object.values(res.charts.testTypeRev), ['#0284C7', '#F59E0B'])
+      safe('chartTestType', 'doughnut', Object.keys(res.charts.testType), Object.values(res.charts.testType), ['#0284C7', '#F59E0B'])
       safe('chartDept', 'bar', Object.keys(res.charts.deptRev), Object.values(res.charts.deptRev), ['#0EA5E9', '#6366F1'], true)
       safe('chartDoctor', 'bar', Object.keys(res.charts.doctors), Object.values(res.charts.doctors), ['#3B82F6'], true)
-      try { renderTimeSlotChart(res.charts.timeSlot) } catch (e) { console.error(e) }
+      
+      console.log('🎨 Rendering Time Slot Chart with data:', res.charts.timeSlot)
+      try { renderTimeSlotChart(res.charts.timeSlot) } catch (e) { console.error('Time Slot Chart error:', e) }
       
       // Render Age Groups Chart (calculate from orders data)
       try {
@@ -522,11 +532,25 @@ function renderChart(canvasId, type, labels, data, colors, isMoney = false) {
 }
 
 function renderTimeSlotChart(timeSlotData) {
-  if (!document.getElementById('chartTimeSlot')) return
+  if (!document.getElementById('chartTimeSlot')) {
+    console.error('❌ chartTimeSlot element not found')
+    return
+  }
   if (myCharts['chartTimeSlot']) myCharts['chartTimeSlot'].destroy()
   const order = ['08:00-16:00', '16:00-21:00', '21:00-08:00']
   const labels = [], counts = [], revenues = []
-  order.forEach(slot => { labels.push(slot); counts.push(timeSlotData[slot] ? timeSlotData[slot].count : 0); revenues.push(timeSlotData[slot] ? timeSlotData[slot].rev : 0) })
+  
+  console.log('📥 Raw Time Slot Data from API:', timeSlotData)
+  
+  order.forEach(slot => { 
+    labels.push(slot)
+    const slotData = timeSlotData[slot] || { count: 0, rev: 0 }
+    counts.push(slotData.count || 0)
+    revenues.push(slotData.rev || 0)
+  })
+  
+  console.log('📊 Time Slot Chart Data:', { labels, counts, revenues })
+  
   const ctx = document.getElementById('chartTimeSlot').getContext('2d')
 
   // Chart font configuration
@@ -590,23 +614,33 @@ function renderTimeSlotChart(timeSlotData) {
           type: 'linear',
           display: true,
           position: 'left',
+          beginAtZero: true,
           title: {
             display: true,
             text: 'ຈຳນວນບິນ',
             font: { family: chartFont, size: 11, weight: 'bold' }
           },
-          ticks: { font: { family: chartFont, size: 10 } }
+          ticks: {
+            font: { family: chartFont, size: 10 },
+            stepSize: 1
+          }
         },
         y1: {
           type: 'linear',
           display: true,
           position: 'right',
+          beginAtZero: true,
           title: {
             display: true,
             text: 'ລາຍຮັບ (₭)',
             font: { family: chartFont, size: 11, weight: 'bold' }
           },
-          ticks: { font: { family: chartFont, size: 10 } },
+          ticks: {
+            font: { family: chartFont, size: 10 },
+            callback: function(value) {
+              return '₭ ' + value.toLocaleString()
+            }
+          },
           grid: { drawOnChartArea: false }
         },
         x: {
@@ -620,32 +654,44 @@ function renderTimeSlotChart(timeSlotData) {
 // Calculate Age Groups from orders data
 function calculateAgeGroups(orders) {
   const ageGroups = {
-    '0-15': { count: 0, rev: 0 },
-    '16-35': { count: 0, rev: 0 },
-    '36-55': { count: 0, rev: 0 },
-    '56+': { count: 0, rev: 0 }
+    '0-15': { count: 0, rev: 0, patients: new Set() },
+    '16-35': { count: 0, rev: 0, patients: new Set() },
+    '36-55': { count: 0, rev: 0, patients: new Set() },
+    '56+': { count: 0, rev: 0, patients: new Set() }
   }
 
   orders.forEach(order => {
     const age = parseInt(order.age) || 0
     const price = Number(order.price) || 0
+    const patientId = order.patient_id
 
+    let ageGroup
     if (age <= 15) {
-      ageGroups['0-15'].count++
-      ageGroups['0-15'].rev += price
+      ageGroup = '0-15'
     } else if (age >= 16 && age <= 35) {
-      ageGroups['16-35'].count++
-      ageGroups['16-35'].rev += price
+      ageGroup = '16-35'
     } else if (age >= 36 && age <= 55) {
-      ageGroups['36-55'].count++
-      ageGroups['36-55'].rev += price
+      ageGroup = '36-55'
     } else if (age > 55) {
-      ageGroups['56+'].count++
-      ageGroups['56+'].rev += price
+      ageGroup = '56+'
+    }
+
+    if (ageGroup) {
+      ageGroups[ageGroup].patients.add(patientId)
+      ageGroups[ageGroup].rev += price
     }
   })
 
-  return ageGroups
+  // Convert patient sets to counts
+  const result = {}
+  Object.keys(ageGroups).forEach(key => {
+    result[key] = {
+      count: ageGroups[key].patients.size,
+      rev: ageGroups[key].rev
+    }
+  })
+
+  return result
 }
 
 // Render Age Groups Chart
@@ -807,35 +853,31 @@ function renderAgeGroupsSummaryTable(ageGroupsData) {
   const tbody = document.getElementById('ageGroupsSummaryBody')
   const tfoot = document.getElementById('ageGroupsSummaryFoot')
   if (!tbody || !tfoot) return
-  
+
   const ageLabels = ['0-15', '16-35', '36-55', '56+']
   const ageLabelsLao = ['0-15 ປີ', '16-35 ປີ', '36-55 ປີ', '56+ ປີ']
-  
+
   let html = ''
   let totalCount = 0
   let totalRev = 0
-  
+
   ageLabels.forEach((age, index) => {
     const data = ageGroupsData[age] || { count: 0, rev: 0 }
-    const avg = data.count > 0 ? Math.round(data.rev / data.count) : 0
     totalCount += data.count
     totalRev += data.rev
-    
+
     html += `<tr>
       <td class="text-center fw-bold">${ageLabelsLao[index]}</td>
       <td class="text-center">${data.count}</td>
       <td class="text-end">₭ ${data.rev.toLocaleString()}</td>
-      <td class="text-end text-muted">₭ ${avg.toLocaleString()}</td>
     </tr>`
   })
-  
+
   tbody.innerHTML = html
-  const grandAvg = totalCount > 0 ? Math.round(totalRev / totalCount) : 0
   tfoot.innerHTML = `<tr class="table-light fw-bold">
     <td class="text-end">ລວມທັງໝົດ:</td>
     <td class="text-center text-danger">${totalCount}</td>
     <td class="text-end text-danger">₭ ${totalRev.toLocaleString()}</td>
-    <td class="text-end text-muted">₭ ${grandAvg.toLocaleString()}</td>
   </tr>`
 }
 
@@ -976,19 +1018,21 @@ window.loadInventoryDataWithDate = async function(startDate, endDate) {
   // ຖ້າບໍ່ມີ parameter ໃຫ້ອ່ານຄ່າຈາກ input
   let useStartDate = startDate
   let useEndDate = endDate
-  
+
   if (!useStartDate && document.getElementById('invStartDate')) {
     useStartDate = document.getElementById('invStartDate').value
   }
   if (!useEndDate && document.getElementById('invEndDate')) {
     useEndDate = document.getElementById('invEndDate').value
   }
-  
+
   // ຖ້າບໍ່ມີວັນທີ ໃຫ້ສົ່ງຄ່າເປົ່າ (ຈະດຶງຂໍ້ມູນທັງໝົດ)
   useStartDate = useStartDate || ''
   useEndDate = useEndDate || ''
 
-  console.log('📊 Loading inventory data from', useStartDate, 'to', useEndDate)
+  console.log('🔍 loadInventoryDataWithDate called')
+  console.log('📅 Start Date:', useStartDate, 'End Date:', useEndDate)
+  console.log('📅 Start Date type:', typeof useStartDate, 'End Date type:', typeof useEndDate)
 
   const res = await api.getInventoryDataWithDate(useStartDate, useEndDate)
   if (!res.success) return
@@ -1006,7 +1050,95 @@ window.loadInventoryDataWithDate = async function(startDate, endDate) {
   const tbody = document.getElementById('inventoryTableBody'); tbody.innerHTML = ''
   const isAdmin = sessionStorage.getItem('lis_role') === 'Admin'
 
-  res.data.forEach(d => {
+  // ລງລຳດັບຕາມ Custom Order ໂດຍອັດຕະໂນມັດ
+  const customOrder = [
+    'Diluent',
+    'Lyse solution',
+    'Probe cleanser',
+    'Anti A',
+    'Anti B',
+    'Anti D',
+    'Glucose',
+    'Urea',
+    'BUN',
+    'Urea/BUN',
+    'Creatinine',
+    'Cholesterol',
+    'Triglyceride',
+    'Triglycerid',
+    'AST',
+    'GOT',
+    'AST/GOT',
+    'ALT',
+    'GPT',
+    'ALT/GPT',
+    'HDL',
+    'LDL',
+    'Total Protein',
+    'Bilirubin Total',
+    'Bilirubin Direct',
+    'Alkaline Phosphatase',
+    'Uric Acid',
+    'Calcium',
+    'Albumin',
+    'GGT',
+    'Gamma GGT',
+    'HBS Ag',
+    'HBS Ab',
+    'HCV Ab',
+    'HIV',
+    'Typhoid',
+    'VDRL',
+    'Rikettsia',
+    'Infeuza',
+    'RSV',
+    'Covid19',
+    'Infeuza,RSV,Covid19',
+    'H.Pyloric',
+    'HAV',
+    'DengueNS1gMgG',
+    'Dengue',
+    'Tuberculosis',
+    'TB',
+    'Tuberculosis(TB)',
+    'CEA',
+    'AFP',
+    'PSA',
+    'HbA1C',
+    'HbA1c',
+    'T3',
+    'T4',
+    'TSH',
+    'Urine Test',
+    'Occult Blood',
+    'ກ່ອງຍ່ຽວ',
+    'ກ່ອງອາຈົມ',
+    'ແຜ່ນ slide',
+    'ແຜ່ນ Cover',
+    'Wash concentreate',
+    'Gram stain',
+    'ຫຼອດມ້ວງ EDTA',
+    'ຫຼອດເຫຼືອງ ລືອດກ້າມ',
+    'Amphetamine',
+    'Ts Tc',
+    'Gonorrhea',
+    'Chamydia'
+  ]
+
+  // ລງຂໍ້ມນຕາມ Custom Order
+  const sortedData = [...res.data].sort((a, b) => {
+    const idxA = customOrder.findIndex(name => name.toLowerCase() === a.name?.toLowerCase() || a.name?.toLowerCase().includes(name.toLowerCase()))
+    const idxB = customOrder.findIndex(name => name.toLowerCase() === b.name?.toLowerCase() || b.name?.toLowerCase().includes(name.toLowerCase()))
+
+    // ຖ້າບໍ່ພົບໃນ Custom Order ໃຫ້ໄວ້ທ້າຍ
+    if (idxA === -1 && idxB === -1) return 0
+    if (idxA === -1) return 1
+    if (idxB === -1) return -1
+
+    return idxA - idxB
+  })
+
+  sortedData.forEach(d => {
     const expD = d.expDate ? new Date(d.expDate) : null
     const expDateStr = expD ? expD.toLocaleDateString('en-GB') : '-'
     const expDateInputVal = expD ? (expD.getFullYear() + '-' + String(expD.getMonth() + 1).padStart(2, '0') + '-' + String(expD.getDate()).padStart(2, '0')) : ''
@@ -1045,7 +1177,7 @@ window.loadInventoryDataWithDate = async function(startDate, endDate) {
 
 // ລຽງລຳດັບຂໍ້ມູນ Inventory
 window.sortInventoryData = function() {
-  const sortOrder = document.getElementById('inventorySortOrder')?.value || 'default'
+  const sortOrder = document.getElementById('inventorySortOrder')?.value || 'custom'
   
   if (!globalInventoryData || globalInventoryData.length === 0) return
 
@@ -1128,16 +1260,17 @@ window.sortInventoryData = function() {
 
   switch (sortOrder) {
     case 'custom':
-      // ລຽງຕາມ Custom Order ຈາກ Excel
+    case 'default':
+      // ລຽງຕາມ Custom Order ຈາກ Excel (ເປັນຄ່າເລີ່ມ)
       sortedData.sort((a, b) => {
-        const idxA = customOrder.findIndex(name => name.toLowerCase().includes(a.name?.toLowerCase() || ''))
-        const idxB = customOrder.findIndex(name => name.toLowerCase().includes(b.name?.toLowerCase() || ''))
-        
+        const idxA = customOrder.findIndex(name => name.toLowerCase() === a.name?.toLowerCase() || a.name?.toLowerCase().includes(name.toLowerCase()))
+        const idxB = customOrder.findIndex(name => name.toLowerCase() === b.name?.toLowerCase() || b.name?.toLowerCase().includes(name.toLowerCase()))
+
         // ຖ້າບໍ່ພົບໃນ Custom Order ໃຫ້ໄວ້ທ້າຍ
         if (idxA === -1 && idxB === -1) return 0
         if (idxA === -1) return 1
         if (idxB === -1) return -1
-        
+
         return idxA - idxB
       })
       break

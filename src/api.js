@@ -573,12 +573,24 @@ export async function getInventoryDataWithDate(startDate, endDate) {
 
     // ຖ້າມີວັນທີ ແລະ ບໍ່ເປົ່າ ໃຫ້ກອງຕາມວັນທີ
     if (startDate && endDate && startDate !== '' && endDate !== '') {
-      query = query.gte('created_at', startDate).lte('created_at', endDate)
+      // ແປງວັນທີເປັນ ISO format ທີ່ຖືກຕ້ອງ
+      const startISO = new Date(startDate).toISOString()
+      const endISO = new Date(endDate + 'T23:59:59.999').toISOString()
+      
+      console.log('🔍 Date filter - Start:', startISO, 'End:', endISO)
+      
+      query = query.gte('created_at', startISO).lte('created_at', endISO)
     }
     // ຖ້າບໍ່ມີວັນທີ ບໍ່ກອງ (ດຶງທັງໝົດ)
 
     const { data: transData, error: transErr } = await query
     if (transErr) throw transErr
+
+    console.log('📊 Transactions fetched:', transData.length, 'records')
+    console.log('📊 Date range:', startDate, 'to', endDate)
+    if (transData.length > 0) {
+      console.log('📊 Sample transaction:', transData[0])
+    }
 
     // ສ້າງ Map ສຳລັບ IN/OUT ແຕ່ລະ reagent
     const summaryMap = {}
@@ -589,6 +601,8 @@ export async function getInventoryDataWithDate(startDate, endDate) {
       if (t.type === 'IN') summaryMap[t.reagent_id].in += Number(t.qty) || 0
       else if (t.type === 'OUT') summaryMap[t.reagent_id].out += Number(t.qty) || 0
     })
+
+    console.log('📊 Summary Map:', summaryMap)
 
     // ຄິດໄລ່ຍອດລວມ
     let totalIn = 0
@@ -615,6 +629,8 @@ export async function getInventoryDataWithDate(startDate, endDate) {
       }
 
       const transSummary = summaryMap[d.reagent_id] || { in: 0, out: 0 }
+
+      console.log(`📦 Lot ${d.lot_id} (${d.reagent_name}): reagent_id=${d.reagent_id}, IN=${transSummary.in}, OUT=${transSummary.out}`)
 
       return {
         id: d.lot_id,
