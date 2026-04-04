@@ -97,10 +97,10 @@
             <!-- Date Range Picker -->
             <div class="date-filter-group">
               <label class="form-label">ຈາກ</label>
-              <input type="date" id="dashStartDate" class="form-control form-control-sm">
+              <input type="date" id="dashStartDate" class="form-control form-control-sm" onchange="loadDashboard()">
               <label class="form-label">ຫາ</label>
-              <input type="date" id="dashEndDate" class="form-control form-control-sm">
-              <button class="btn btn-primary btn-sm" onclick="loadDashboard()">
+              <input type="date" id="dashEndDate" class="form-control form-control-sm" onchange="loadDashboard()">
+              <button type="button" class="btn btn-primary btn-sm" onclick="loadDashboard()">
                 <i class="bi bi-search"></i>
               </button>
             </div>
@@ -165,6 +165,7 @@
         </div>
 
         <div id="dashLoader" class="text-center py-5" style="display:none;"><div class="spinner-border" style="color: var(--primary); width: 3rem; height: 3rem;"></div></div>
+        <div id="dashAlerts" class="px-3 mb-3"></div>
 
         <div id="dashContent">
           <!-- KPI Cards -->

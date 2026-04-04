@@ -16,6 +16,93 @@ let globalInventoryData = []
 let globalStockHistory = []
 let reagentModalInstance, invEditModalInstance, stockEditModalInstance, addLotModalInstance, resultModalInstance
 
+const inventoryCustomOrder = [
+  'Diluent',
+  'Lyse solution',
+  'Probe cleanser',
+  'Anti A',
+  'Anti B',
+  'Anti D',
+  'Glucose',
+  'Urea',
+  'BUN',
+  'Urea/BUN',
+  'Creatinine',
+  'Cholesterol',
+  'Triglyceride',
+  'Triglycerid',
+  'AST',
+  'GOT',
+  'AST/GOT',
+  'ALT',
+  'GPT',
+  'ALT/GPT',
+  'HDL',
+  'LDL',
+  'Total Protein',
+  'Bilirubin Total',
+  'Bilirubin Direct',
+  'Alkaline Phosphatase',
+  'Uric Acid',
+  'Calcium',
+  'Albumin',
+  'GGT',
+  'Gamma GGT',
+  'HBS Ag',
+  'HBS Ab',
+  'HCV Ab',
+  'HIV',
+  'Typhoid',
+  'VDRL',
+  'Rikettsia',
+  'Infeuza,RSV,Covid19',
+  'Infeuza',
+  'RSV',
+  'Covid19',
+  'H.Pyloric',
+  'HAV',
+  'DengueNS1gMgG',
+  'Dengue',
+  'Tuberculosis(TB)',
+  'Tuberculosis',
+  'TB',
+  'CEA',
+  'AFP',
+  'PSA',
+  'HbA1C',
+  'T3',
+  'T4',
+  'TSH',
+  'Urine Test',
+  'Occult Blood',
+  'ກ່ອງຍ່ຽວ',
+  'ກ່ອງອາຈົມ',
+  'ແຜ່ນ slide',
+  'ແຜ່ນ Cover',
+  'Wash concentrate',
+  'Wash concentreate',
+  'Gram stain',
+  'ຫຼອດມ້ວງ EDTA',
+  'ຫຼອດເຫຼືອງ ເລືອດກ້າມ',
+  'Amphetamine',
+  'Ts Tc',
+  'Gonorrhea',
+  'Chamydia'
+]
+
+function normalizeInventoryName(name) {
+  return (name || '').toString().trim().toLowerCase().replace(/[^a-z0-9ก-๙]/g, '')
+}
+
+function getInventorySortIndex(name) {
+  const normalized = normalizeInventoryName(name)
+  if (!normalized) return -1
+  return inventoryCustomOrder.findIndex(item => {
+    const normalizedItem = normalizeInventoryName(item)
+    return normalized === normalizedItem || normalized.includes(normalizedItem) || normalizedItem.includes(normalized)
+  })
+}
+
 // ================== CHART.JS SETUP ==================
 Chart.register(ChartDataLabels)
 
@@ -99,7 +186,12 @@ function checkLogin() {
     loadOutlabTable(); loadStockData(); loadInventoryTable(); loadMaintenanceTable()
     loadSummaryReport(); loadMappingData(); loadParamSetupData(); loadPackagesTable()
     // loadPatientAutocomplete() - ປິດແລ້ວ ໃຊ້ debounce ແທນ
-    if (userRole === 'Admin') { showPage(null, 'dashboard') } else { showPage(null, 'orderForm') }
+    if (userRole === 'Admin') {
+      showPage(null, 'dashboard')
+      loadDashboard()
+    } else {
+      showPage(null, 'orderForm')
+    }
   } else {
     document.getElementById('loginScreen').style.display = 'flex'
     document.getElementById('mainApp').style.display = 'none'
@@ -287,6 +379,8 @@ window.loadDashboard = async function() {
 
   console.log('🔍 Dashboard Filters:', { sDate, eDate, department, doctor, testType, category })
 
+  const dashAlerts = document.getElementById('dashAlerts')
+  if (dashAlerts) dashAlerts.innerHTML = ''
   document.getElementById('dashContent').style.display = 'none'
   document.getElementById('dashLoader').style.display = 'block'
 
@@ -302,17 +396,34 @@ window.loadDashboard = async function() {
   document.getElementById('dashLoader').style.display = 'none'
   if (res.success) {
     document.getElementById('dashContent').style.display = 'block'
-    document.getElementById('kpiPatients').innerText = res.kpis.totalPatients.toLocaleString()
-    document.getElementById('kpiRev').innerText = '₭ ' + res.kpis.totalRevenue.toLocaleString()
-    document.getElementById('kpiInLab').innerText = '₭ ' + res.kpis.inlabRev.toLocaleString()
-    document.getElementById('kpiOutLab').innerText = '₭ ' + res.kpis.outlabRev.toLocaleString()
+    const dashAlerts = document.getElementById('dashAlerts')
+    if (dashAlerts) dashAlerts.innerHTML = ''
+    const charts = res.charts || {}
+    const normalizeCharts = {
+      gender: (charts.gender && typeof charts.gender === 'object') ? { ...charts.gender } : { Male: 0, Female: 0 },
+      insite: (charts.insite && typeof charts.insite === 'object') ? { ...charts.insite } : {},
+      visitType: (charts.visitType && typeof charts.visitType === 'object') ? { ...charts.visitType } : {},
+      labType: (charts.labType && typeof charts.labType === 'object') ? { ...charts.labType } : { InHouse: 0, Outsource: 0 },
+      testType: (charts.testType && typeof charts.testType === 'object') ? { ...charts.testType } : { Normal: 0, Package: 0 },
+      deptRev: (charts.deptRev && typeof charts.deptRev === 'object') ? { ...charts.deptRev } : {},
+      doctors: (charts.doctors && typeof charts.doctors === 'object') ? { ...charts.doctors } : {},
+      tests: (charts.tests && typeof charts.tests === 'object') ? { ...charts.tests } : {},
+      categories: (charts.categories && typeof charts.categories === 'object') ? { ...charts.categories } : {},
+      timeSlot: (charts.timeSlot && typeof charts.timeSlot === 'object') ? { ...charts.timeSlot } : {}
+    }
+    const kpis = res.kpis || { totalPatients: 0, totalRevenue: 0, inlabRev: 0, outlabRev: 0 }
+    const alerts = res.alerts || { expired: 0, expiringSoon: 0 }
+    document.getElementById('kpiPatients').innerText = kpis.totalPatients.toLocaleString()
+    document.getElementById('kpiRev').innerText = '₭ ' + kpis.totalRevenue.toLocaleString()
+    document.getElementById('kpiInLab').innerText = '₭ ' + kpis.inlabRev.toLocaleString()
+    document.getElementById('kpiOutLab').innerText = '₭ ' + kpis.outlabRev.toLocaleString()
     
     let alertCount = 0
-    if (res.alerts.expired > 0) {
-      alertCount += res.alerts.expired
+    if (alerts.expired > 0) {
+      alertCount += alerts.expired
     }
-    if (res.alerts.expiringSoon > 0) {
-      alertCount += res.alerts.expiringSoon
+    if (alerts.expiringSoon > 0) {
+      alertCount += alerts.expiringSoon
     }
     
     // ສະແດງ Badge ກໍຕໍ່ເມື່ອມີແຈ້ງເຕືອນ
@@ -326,16 +437,20 @@ window.loadDashboard = async function() {
     
     setTimeout(() => {
       const safe = (id, type, labels, data, colors, isMoney) => { try { renderChart(id, type, labels, data, colors, isMoney) } catch (e) { console.error('Chart error:', id, e) } }
-      safe('chartGender', 'pie', Object.keys(res.charts.gender), Object.values(res.charts.gender), ['#3B82F6', '#EC4899'])
-      safe('chartInsite', 'doughnut', Object.keys(res.charts.insite), Object.values(res.charts.insite), ['#0EA5E9', '#F59E0B'])
-      safe('chartVisitType', 'pie', Object.keys(res.charts.visitType), Object.values(res.charts.visitType), ['#1E3A8A', '#10B981', '#D97706'])
-      safe('chartLabType', 'pie', Object.keys(res.charts.labType), Object.values(res.charts.labType), ['#10B981', '#EF4444'])
-      safe('chartTestType', 'doughnut', Object.keys(res.charts.testType), Object.values(res.charts.testType), ['#0284C7', '#F59E0B'])
-      safe('chartDept', 'bar', Object.keys(res.charts.deptRev), Object.values(res.charts.deptRev), ['#0EA5E9', '#6366F1'], true)
-      safe('chartDoctor', 'bar', Object.keys(res.charts.doctors), Object.values(res.charts.doctors), ['#3B82F6'], true)
+      try { renderGenderChart(normalizeCharts.gender || {}) } catch (e) { console.error('Gender Chart error:', e) }
+      safe('chartInsite', 'doughnut', Object.keys(normalizeCharts.insite || {}), Object.values(normalizeCharts.insite || {}), ['#0EA5E9', '#F59E0B'])
+      safe('chartVisitType', 'pie', Object.keys(normalizeCharts.visitType || {}), Object.values(normalizeCharts.visitType || {}), ['#1E3A8A', '#10B981', '#D97706'])
+      safe('chartLabType', 'pie', Object.keys(normalizeCharts.labType || {}), Object.values(normalizeCharts.labType || {}), ['#10B981', '#EF4444'])
+      safe('chartTestType', 'doughnut', Object.keys(normalizeCharts.testType || {}), Object.values(normalizeCharts.testType || {}), ['#0284C7', '#F59E0B'])
+      safe('chartDept', 'bar', Object.keys(normalizeCharts.deptRev || {}), Object.values(normalizeCharts.deptRev || {}), ['#0EA5E9', '#6366F1'], true)
+      safe('chartDoctor', 'bar', Object.keys(normalizeCharts.doctors || {}), Object.values(normalizeCharts.doctors || {}), ['#3B82F6'], true)
       
-      console.log('🎨 Rendering Time Slot Chart with data:', res.charts.timeSlot)
-      try { renderTimeSlotChart(res.charts.timeSlot) } catch (e) { console.error('Time Slot Chart error:', e) }
+      console.log('🎨 Rendering Time Slot Chart with data:', normalizeCharts.timeSlot)
+      try { renderTimeSlotChart(normalizeCharts.timeSlot) } catch (e) { console.error('Time Slot Chart error:', e) }
+      
+      setTimeout(() => {
+        try { loadTimeSlotReport('all') } catch (e) { console.error('Time Slot report init error:', e) }
+      }, 200)
       
       // Render Age Groups Chart (calculate from orders data)
       try {
@@ -343,7 +458,7 @@ window.loadDashboard = async function() {
         renderAgeGroupsChart(ageGroupsData)
       } catch (e) { console.error('Age groups chart error:', e) }
       
-      try { renderTopTable('topTestsBody', res.charts.tests); renderTopTable('topCatsBody', res.charts.categories) } catch (e) { console.error(e) }
+      try { renderTopTable('topTestsBody', normalizeCharts.tests); renderTopTable('topCatsBody', normalizeCharts.categories) } catch (e) { console.error(e) }
 
       // ໂຫຼດ Summary Table
       if (res.summaryData) {
@@ -465,16 +580,23 @@ function renderTimeSlotSummaryTable(timeSlotData, slotType) {
   const tbody = document.getElementById('timeSlotSummaryBody')
   const tfoot = document.getElementById('timeSlotSummaryFoot')
   
+  if (!tbody || !tfoot) {
+    console.error('❌ timeSlotSummaryBody or timeSlotSummaryFoot element not found')
+    return
+  }
+  
   const slotLabels = {
     '08:00-16:00': 'ເຊົ້າ (08:00-16:00)',
     '16:00-21:00': 'ແລງ (16:00-21:00)',
-    '21:00-08:00': 'ກະເດີກ (21:00-08:00)'
+    '21:00-08:00': 'ກະເດີກ (21:00-08:00)',
+    'Other': 'ບໍ່ໄດ້ກຳນົດ'
   }
   
   const slotColors = {
     '08:00-16:00': 'success',
     '16:00-21:00': 'warning',
-    '21:00-08:00': 'danger'
+    '21:00-08:00': 'danger',
+    'Other': 'secondary'
   }
   
   let html = ''
@@ -486,27 +608,58 @@ function renderTimeSlotSummaryTable(timeSlotData, slotType) {
     : slotType === 'evening' ? ['16:00-21:00']
     : ['21:00-08:00']
   
-  slots.forEach(slot => {
-    const dataset = timeSlotData.datasets.find(d => d.label === 'ຈຳນວນບິນ')
-    const revDataset = timeSlotData.datasets.find(d => d.label === 'ລາຍຮັບ (₭)')
-    const idx = timeSlotData.labels.indexOf(slot)
-    
-    if (idx !== -1) {
-      const count = dataset.data[idx] || 0
-      const rev = revDataset.data[idx] || 0
-      const avg = count > 0 ? rev / count : 0
-      
-      totalCount += count
-      totalRev += rev
-      
-      html += `<tr class="table-${slotColors[slot]}">
-        <td><span class="badge bg-${slotColors[slot]}">${slotLabels[slot]}</span></td>
-        <td class="text-center fw-bold">${count}</td>
-        <td class="text-end">₭ ${rev.toLocaleString()}</td>
-        <td class="text-end text-muted">₭ ${avg.toLocaleString()}</td>
-      </tr>`
-    }
+  const dataset = timeSlotData.datasets?.find(d => d.label === 'ຈຳນວນບິນ')
+  const revDataset = timeSlotData.datasets?.find(d => d.label === 'ລາຍຮັບ (₭)')
+  
+  console.log('📊 renderTimeSlotSummaryTable debugging:', {
+    hasDataset: !!dataset,
+    hasRevDataset: !!revDataset,
+    timeSlotDataLabels: timeSlotData.labels,
+    labelsLength: timeSlotData.labels?.length,
+    datasetDataLength: dataset?.data?.length,
+    revDatasetDataLength: revDataset?.data?.length
   })
+  
+  if (!dataset || !revDataset || !Array.isArray(timeSlotData.labels)) {
+    console.error('❌ Missing chart data:', { dataset: !!dataset, revDataset: !!revDataset, labels: timeSlotData.labels })
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">ຍັງບໍ່ມີຂໍ້ມູນ Time Slot</td></tr>'
+    tfoot.innerHTML = ''
+    return
+  }
+  
+  // Use chart labels directly instead of hardcoded slots
+  const chartLabels = timeSlotData.labels || slots
+  
+  chartLabels.forEach((label, idx) => {
+    // Normalize label for matching
+    const normalizedLabel = label ? label.trim() : ''
+    
+    let count = 0, rev = 0
+    if (idx !== -1 && idx < dataset.data.length && idx < revDataset.data.length) {
+      count = dataset.data[idx] || 0
+      rev = revDataset.data[idx] || 0
+    }
+    
+    const avg = count > 0 ? rev / count : 0
+    totalCount += count
+    totalRev += rev
+    
+    // Find matching slot key
+    let slotKey = normalizedLabel
+    const slotColor = slotColors[slotKey] || 'secondary'
+    const slotLabel = slotLabels[slotKey] || normalizedLabel
+    
+    console.log(`📝 Chart Label ${idx}: "${label}" -> slotKey="${slotKey}", count=${count}, rev=${rev}`)
+    
+    html += `<tr class="table-${slotColor}">
+      <td><span class="badge bg-${slotColor}">${slotLabel}</span></td>
+      <td class="text-center fw-bold">${count}</td>
+      <td class="text-end">₭ ${rev.toLocaleString()}</td>
+      <td class="text-end text-muted">₭ ${avg.toLocaleString()}</td>
+    </tr>`
+  })
+  
+  console.log('📋 Summary Table HTML generated:', { totalCount, totalRev, htmlLength: html.length })
   
   tbody.innerHTML = html
   tfoot.innerHTML = `<tr class="table-light fw-bold">
@@ -518,17 +671,138 @@ function renderTimeSlotSummaryTable(timeSlotData, slotType) {
 }
 
 function renderTopTable(tbodyId, dataObj) {
-  const tbody = document.getElementById(tbodyId); if (!tbody) return; tbody.innerHTML = ''
-  const arr = Object.entries(dataObj).sort((a, b) => b[1].rev - a[1].rev).slice(0, 5)
-  if (arr.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">ບໍ່ມີຂໍ້ມູນ</td></tr>'; return }
-  arr.forEach((item, index) => { tbody.innerHTML += `<tr><td class="ps-3"><span class="badge bg-secondary">${index + 1}</span></td><td><b>${item[0]}</b></td><td class="text-center">${item[1].count}</td><td class="text-end price-text pe-3">₭ ${item[1].rev.toLocaleString()}</td></tr>` })
+  const tbody = document.getElementById(tbodyId)
+  if (!tbody || !dataObj) return
+  tbody.innerHTML = ''
+  
+  try {
+    const arr = Object.entries(dataObj)
+      .map(([name, val]) => [name, val && typeof val === 'object' ? { rev: val.rev || 0, count: val.count || 0 } : { rev: 0, count: 0 }])
+      .sort((a, b) => (b[1]?.rev || 0) - (a[1]?.rev || 0))
+      .slice(0, 5)
+    
+    if (arr.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">ບໍ່ມີຂໍ້ມູນ</td></tr>'
+      return
+    }
+    arr.forEach((item, index) => {
+      tbody.innerHTML += `<tr><td class="ps-3"><span class="badge bg-secondary">${index + 1}</span></td><td><b>${item[0]}</b></td><td class="text-center">${item[1]?.count || 0}</td><td class="text-end price-text pe-3">₭ ${(item[1]?.rev || 0).toLocaleString()}</td></tr>`
+    })
+  } catch (e) {
+    console.error('renderTopTable error:', e)
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error loading data</td></tr>'
+  }
 }
 
 function renderChart(canvasId, type, labels, data, colors, isMoney = false) {
   if (!document.getElementById(canvasId)) return
   if (myCharts[canvasId]) myCharts[canvasId].destroy()
+  
+  // Ensure labels and data are arrays
+  const safeLabels = Array.isArray(labels) ? labels : []
+  const safeData = Array.isArray(data) ? data : []
+  const safeColors = Array.isArray(colors) ? colors : ['#3B82F6']
+  
+  if (safeLabels.length === 0) {
+    // Empty chart
+    const ctx = document.getElementById(canvasId).getContext('2d')
+    myCharts[canvasId] = new Chart(ctx, {
+      type,
+      data: {
+        labels: ['No data'],
+        datasets: [{ data: [1], backgroundColor: ['#E5E7EB'], borderWidth: 0 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, datalabels: { display: false } }
+      }
+    })
+    return
+  }
+  
   const ctx = document.getElementById(canvasId).getContext('2d')
-  myCharts[canvasId] = new Chart(ctx, { type, data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type !== 'bar', position: 'bottom' }, datalabels: { formatter: v => { if (v === 0) return ''; return isMoney ? '₭ ' + v.toLocaleString() : v }, anchor: type === 'bar' ? 'end' : 'center', align: type === 'bar' ? 'bottom' : 'center', color: '#fff' } } } })
+  myCharts[canvasId] = new Chart(ctx, {
+    type,
+    data: {
+      labels: safeLabels,
+      datasets: [{ data: safeData, backgroundColor: safeColors, borderWidth: 1 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: type !== 'bar', position: 'bottom' },
+        datalabels: {
+          formatter: v => { if (v === 0) return ''; return isMoney ? '₭ ' + v.toLocaleString() : v },
+          anchor: type === 'bar' ? 'end' : 'center',
+          align: type === 'bar' ? 'bottom' : 'center',
+          color: '#fff'
+        }
+      }
+    }
+  })
+}
+
+function renderGenderChart(genderData) {
+  if (!document.getElementById('chartGender')) {
+    console.error('❌ chartGender element not found')
+    return
+  }
+  if (myCharts['chartGender']) myCharts['chartGender'].destroy()
+
+  const labels = Object.keys(genderData || {})
+  const data = Object.values(genderData || {})
+  
+  if (labels.length === 0) {
+    const ctx = document.getElementById('chartGender').getContext('2d')
+    myCharts['chartGender'] = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: ['No data'],
+        datasets: [{ data: [1], backgroundColor: ['#E5E7EB'], borderWidth: 0 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, datalabels: { display: false } }
+      }
+    })
+    return
+  }
+
+  const total = data.reduce((a, b) => a + b, 0)
+  const colors = ['#3B82F6', '#EC4899', '#8B5CF6', '#F59E0B']
+  
+  const ctx = document.getElementById('chartGender').getContext('2d')
+  myCharts['chartGender'] = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: labels,
+      datasets: [{ 
+        data: data, 
+        backgroundColor: colors.slice(0, labels.length),
+        borderWidth: 1 
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'bottom' },
+        datalabels: {
+          formatter: (v, context) => {
+            const percent = ((v / total) * 100).toFixed(0)
+            return `${v}\n(${percent}%)`
+          },
+          anchor: 'center',
+          align: 'center',
+          color: '#fff',
+          font: { weight: 'bold', size: 12 }
+        }
+      }
+    }
+  })
 }
 
 function renderTimeSlotChart(timeSlotData) {
@@ -537,14 +811,23 @@ function renderTimeSlotChart(timeSlotData) {
     return
   }
   if (myCharts['chartTimeSlot']) myCharts['chartTimeSlot'].destroy()
+
+  const normalizedTimeSlotData = normalizeTimeSlotData(timeSlotData)
   const order = ['08:00-16:00', '16:00-21:00', '21:00-08:00']
+  
+  // Add 'Other' slot if it has data
+  if (normalizedTimeSlotData['Other']) {
+    order.push('Other')
+  }
+  
   const labels = [], counts = [], revenues = []
   
   console.log('📥 Raw Time Slot Data from API:', timeSlotData)
+  console.log('📥 Normalized Time Slot Data:', normalizedTimeSlotData)
   
-  order.forEach(slot => { 
+  order.forEach(slot => {
     labels.push(slot)
-    const slotData = timeSlotData[slot] || { count: 0, rev: 0 }
+    const slotData = normalizedTimeSlotData[slot] || { count: 0, rev: 0 }
     counts.push(slotData.count || 0)
     revenues.push(slotData.rev || 0)
   })
@@ -649,6 +932,35 @@ function renderTimeSlotChart(timeSlotData) {
       }
     }
   })
+}
+
+function normalizeTimeSlotData(timeSlotData) {
+  if (!timeSlotData || typeof timeSlotData !== 'object') return {}
+  const normalized = {}
+  const mapping = {
+    '08:00-16:00': '08:00-16:00',
+    '08:00 - 16:00': '08:00-16:00',
+    '16:00-21:00': '16:00-21:00',
+    '16:00 - 21:00': '16:00-21:00',
+    '21:00-08:00': '21:00-08:00',
+    '21:00 - 08:00': '21:00-08:00',
+    'morning': '08:00-16:00',
+    'evening': '16:00-21:00',
+    'night': '21:00-08:00'
+  }
+
+  Object.entries(timeSlotData).forEach(([key, value]) => {
+    const normalizedKey = mapping[key.trim()] || key.trim()
+    if (!normalized[normalizedKey]) {
+      normalized[normalizedKey] = { count: 0, rev: 0 }
+    }
+    const slot = normalized[normalizedKey]
+    if (value && typeof value === 'object') {
+      slot.count = Number(value.count || slot.count || 0)
+      slot.rev = Number(value.rev || slot.rev || 0)
+    }
+  })
+  return normalized
 }
 
 // Calculate Age Groups from orders data
@@ -1127,8 +1439,8 @@ window.loadInventoryDataWithDate = async function(startDate, endDate) {
 
   // ລງຂໍ້ມນຕາມ Custom Order
   const sortedData = [...res.data].sort((a, b) => {
-    const idxA = customOrder.findIndex(name => name.toLowerCase() === a.name?.toLowerCase() || a.name?.toLowerCase().includes(name.toLowerCase()))
-    const idxB = customOrder.findIndex(name => name.toLowerCase() === b.name?.toLowerCase() || b.name?.toLowerCase().includes(name.toLowerCase()))
+    const idxA = getInventorySortIndex(a.name)
+    const idxB = getInventorySortIndex(b.name)
 
     // ຖ້າບໍ່ພົບໃນ Custom Order ໃຫ້ໄວ້ທ້າຍ
     if (idxA === -1 && idxB === -1) return 0
@@ -1263,8 +1575,8 @@ window.sortInventoryData = function() {
     case 'default':
       // ລຽງຕາມ Custom Order ຈາກ Excel (ເປັນຄ່າເລີ່ມ)
       sortedData.sort((a, b) => {
-        const idxA = customOrder.findIndex(name => name.toLowerCase() === a.name?.toLowerCase() || a.name?.toLowerCase().includes(name.toLowerCase()))
-        const idxB = customOrder.findIndex(name => name.toLowerCase() === b.name?.toLowerCase() || b.name?.toLowerCase().includes(name.toLowerCase()))
+        const idxA = getInventorySortIndex(a.name)
+        const idxB = getInventorySortIndex(b.name)
 
         // ຖ້າບໍ່ພົບໃນ Custom Order ໃຫ້ໄວ້ທ້າຍ
         if (idxA === -1 && idxB === -1) return 0

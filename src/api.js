@@ -4,22 +4,27 @@
 // ==========================================
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
-console.log('[API] SUPABASE_URL:', SUPABASE_URL ? 'âœ… Loaded' : 'âŒ Missing')
-console.log('[API] SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? 'âœ… Loaded' : 'âŒ Missing')
+console.log('[API] SUPABASE_URL:', SUPABASE_URL ? '✔ Loaded' : '✖ Missing')
+console.log('[API] SUPABASE_ANON_KEY:', SUPABASE_ANON_KEY ? '✔ Loaded' : '✖ Missing')
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null
+
+if (!supabase) {
   console.error('[API] ERROR: Supabase credentials not loaded! Check .env file')
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+export { supabase }
 
 // ==========================================
 // HELPER: LOG ACTIVITY
 // ==========================================
 async function logActivity(user, action, target, details) {
+  if (!supabase) return
   try {
     await supabase.from('lis_audit_log').insert([{ user_name: user, action, target, details }])
   } catch (e) { /* àºšà»à»ˆ block àº–à»‰àº² log àº¥àº»à»‰àº¡à»€àº«àº¼àº§ */ }
@@ -29,6 +34,13 @@ async function logActivity(user, action, target, details) {
 // AUTH
 // ==========================================
 export async function loginUser(username, password) {
+  if (!supabase) {
+    return {
+      success: false,
+      message: 'Supabase configuration missing. Create a .env file with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.'
+    }
+  }
+
   try {
     const { data, error } = await supabase
       .from('lis_users')
@@ -1042,11 +1054,12 @@ export async function getDashboardData(startDateStr, endDateStr, filters = {}) {
 
     const kpis = { totalPatients: 0, totalRevenue: 0, inlabRev: 0, outlabRev: 0 }
     const charts = {
-      gender: { Male: 0, Female: 0 }, visitType: {}, testTypeRev: { Normal: 0, Package: 0 },
+      gender: { Male: 0, Female: 0 }, visitType: {}, testType: { Normal: 0, Package: 0 },
       deptRev: {}, labType: { InHouse: 0, Outsource: 0 }, timeSlot: {}, insite: {},
       doctors: {}, tests: {}, categories: {}, stockUsage: {}
     }
     const uniquePatients = new Set()
+    const genderPatients = {} // Track unique patients per gender
 
     if (orders) {
       orders.forEach(row => {
@@ -1055,14 +1068,18 @@ export async function getDashboardData(startDateStr, endDateStr, filters = {}) {
         const dept = row.department || 'Other', testType = row.test_type || 'Normal'
         const testName = row.test_name, price = Number(row.price) || 0
         const labDest = row.lab_dest, category = row.category || 'Other'
-        const tSlot = row.time_slot, orderId = row.order_id
+        const tSlot = row.time_slot || '08:00-16:00', orderId = row.order_id
 
         uniquePatients.add(row.patient_id)
+        
+        // Track unique patients per gender
+        if (!genderPatients[gender]) genderPatients[gender] = new Set()
+        genderPatients[gender].add(row.patient_id)
+        
         kpis.totalRevenue += price
         if (labDest && labDest !== 'In-house') { kpis.outlabRev += price; charts.labType.Outsource += price }
         else { kpis.inlabRev += price; charts.labType.InHouse += price }
 
-        if (gender === 'Male') charts.gender.Male++; else if (gender === 'Female') charts.gender.Female++
         if (!charts.visitType[visitType]) charts.visitType[visitType] = 0; charts.visitType[visitType] += price
         if (!charts.deptRev[dept]) charts.deptRev[dept] = 0; charts.deptRev[dept] += price
         if (!charts.insite[insite]) charts.insite[insite] = 0; charts.insite[insite] += price
@@ -1071,8 +1088,14 @@ export async function getDashboardData(startDateStr, endDateStr, filters = {}) {
         if (category) { if (!charts.categories[category]) charts.categories[category] = { count: 0, rev: 0 }; charts.categories[category].count++; charts.categories[category].rev += price }
         if (!charts.timeSlot[tSlot]) charts.timeSlot[tSlot] = { count: 0, rev: 0, orders: new Set() }
         charts.timeSlot[tSlot].rev += price; charts.timeSlot[tSlot].orders.add(orderId)
-        if (!charts.testTypeRev[testType]) charts.testTypeRev[testType] = 0; charts.testTypeRev[testType] += price
+        if (!charts.testType[testType]) charts.testType[testType] = 0; charts.testType[testType] += price
       })
+      
+      // Convert gender patient sets to counts
+      Object.entries(genderPatients).forEach(([gender, patients]) => {
+        charts.gender[gender] = patients.size
+      })
+      
       for (const slot in charts.timeSlot) {
         charts.timeSlot[slot].count = charts.timeSlot[slot].orders.size
         delete charts.timeSlot[slot].orders
