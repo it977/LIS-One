@@ -2313,6 +2313,19 @@ span.badge[class*="badge-category-"],
   font-size: 11px;
 }
 
+#orderHistoryTable .btn-result-saved {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+  border-color: #16a34a !important;
+  color: #ffffff !important;
+}
+
+#orderHistoryTable .btn-result-saved:hover {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  border-color: #15803d !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 14px rgba(34, 197, 94, 0.28);
+}
+
 #orderHistoryTable .btn i {
   font-size: 0.72rem;
 }

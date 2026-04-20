@@ -2122,7 +2122,7 @@ window.renderTable = function(orders) {
     const canViewResults = order.hasResults
     let resultEntryBtn, viewResultBtn
     if (canViewResults) {
-      resultEntryBtn = `<button class="btn btn-sm btn-warning py-0 text-dark fw-bold shadow-sm" onclick="openResultModal('${order.orderId}')" title="ແກ້ໄຂຜົນກວດ"><i class="bi bi-pencil-square"></i></button>`
+      resultEntryBtn = `<button class="btn btn-sm btn-result-saved py-0 fw-bold shadow-sm" onclick="openResultModal('${order.orderId}')" title="ບັນທຶກຜົນກວດແລ້ວ - ກົດເພື່ອແກ້ໄຂ"><i class="bi bi-check2-circle"></i></button>`
       viewResultBtn = `<button class="btn btn-sm btn-primary py-0 shadow-sm" onclick="openResultModal('${order.orderId}', 'view')" title="ເບິ່ງ/ພິມ ຜົນກວດ"><i class="bi bi-printer"></i></button>`
     } else {
       resultEntryBtn = `<button class="btn btn-sm btn-success py-0 fw-bold shadow-sm" onclick="openResultModal('${order.orderId}')" title="ປ້ອນຜົນກວດໃໝ່"><i class="bi bi-clipboard2-pulse"></i></button>`
