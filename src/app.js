@@ -2119,7 +2119,7 @@ window.renderTable = function(orders) {
       ? `<span class="badge badge-solid-primary"><i class="bi bi-box-seam me-1"></i>Package</span>`
       : `<span class="badge badge-solid-secondary"><i class="bi bi-list-check me-1"></i>Normal</span>`
     
-    const canViewResults = order.status === 'Completed' || order.hasResults
+    const canViewResults = order.hasResults
     let resultEntryBtn, viewResultBtn
     if (canViewResults) {
       resultEntryBtn = `<button class="btn btn-sm btn-warning py-0 text-dark fw-bold shadow-sm" onclick="openResultModal('${order.orderId}')" title="ແກ້ໄຂຜົນກວດ"><i class="bi bi-pencil-square"></i></button>`
@@ -2706,11 +2706,12 @@ window.openResultModal = async function(orderId, mode = 'edit') {
       mergeSavedResults(savedResults, cachedSavedResults),
       orderedTests
     )
+    const effectiveMode = mode === 'view' && effectiveSavedResults.length === 0 ? 'edit' : mode
     const context = buildLabResultContext(order, parameterResponse, effectiveSavedResults, patientProfile)
     localStorage.setItem(LAB_RESULT_CONTEXT_KEY, JSON.stringify(context))
     const modalTitle = document.querySelector('#resultEntryModal .modal-title')
     if (modalTitle) {
-      modalTitle.innerHTML = mode === 'view'
+      modalTitle.innerHTML = effectiveMode === 'view'
         ? `<i class="bi bi-printer me-2"></i> ເບິ່ງ/ພິມ ຜົນກວດ - ບິນ: <span id="resOrderIdDisplay">${orderId}</span>`
         : `<i class="bi bi-clipboard2-pulse me-2"></i> ປ້ອນຜົນກວດ - ບິນ: <span id="resOrderIdDisplay">${orderId}</span>`
     }
@@ -2723,8 +2724,8 @@ window.openResultModal = async function(orderId, mode = 'edit') {
       resultModalInstance = new bootstrap.Modal(document.getElementById('resultEntryModal'))
     }
     if (resultFrame) {
-      resultFrame.dataset.mode = mode
-      resultFrame.src = `LabResult_System.html?orderId=${encodeURIComponent(orderId)}&embedded=1&mode=${encodeURIComponent(mode)}&t=${Date.now()}`
+      resultFrame.dataset.mode = effectiveMode
+      resultFrame.src = `LabResult_System.html?orderId=${encodeURIComponent(orderId)}&embedded=1&mode=${encodeURIComponent(effectiveMode)}&t=${Date.now()}`
     }
     Swal.close()
     resultModalInstance.show()

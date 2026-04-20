@@ -78,6 +78,9 @@ input,select{font-family:inherit}
 .btn-save{background:linear-gradient(135deg,var(--shell-primary) 0%,var(--shell-primary-dark) 100%);color:#fff;font-weight:600}
 .btn-print{background:#fff;color:var(--shell-primary-dark);border-color:var(--shell-primary-border);font-weight:600}
 .btn-clear{background:#fff3f5;color:#d43d69;border-color:#ffd0db;font-weight:600}
+.btn-back{background:#fff;color:var(--shell-text);border-color:var(--shell-border);font-weight:600}
+.saved-result-status{display:none;padding:8px 14px;border-bottom:1px solid #fde2b7;background:#fff7ed;color:#9a3412;font-size:11px;font-weight:600;line-height:1.45}
+.saved-result-status.show{display:block}
 
 /* ══ PROFILE SELECTOR ══ */
 #cbc-profile-select{background:linear-gradient(135deg,var(--shell-primary) 0%,var(--shell-primary-dark) 100%)!important;color:#fff!important;border:none!important;padding:4px 8px!important;border-radius:8px!important;font-size:10.5px!important;font-weight:600!important;cursor:pointer!important;min-width:85px!important}
@@ -295,11 +298,13 @@ body.embedded-preview .report-page{margin:0 auto 16px}
   <div class="topbar">
     <h1 id="lab-entry-title">ຕີຜົນກວດ — Lab Entry</h1>
     <div class="btn-group">
+      <button class="btn btn-back" id="btn-close-embedded" onclick="closeEmbeddedResult()" style="display:none">← ກັບຄືນ</button>
       <button class="btn btn-clear"  onclick="clearAll()">🗑 ລ້າງ</button>
       <button class="btn btn-save" id="btn-save-system" onclick="saveOnly()">💾 Save</button>
       <button class="btn btn-print" id="btn-print-pdf" onclick="savePDF()">🖨 Print PDF</button>
     </div>
   </div>
+  <div id="saved-result-status" class="saved-result-status"></div>
   <div class="panel-inner">
 
     <!-- PATIENT -->
@@ -682,11 +687,40 @@ function applyModeUi(){
   const titleEl = document.getElementById('lab-entry-title');
   const saveBtn = document.getElementById('btn-save-system');
   const clearBtn = document.querySelector('.btn-clear');
+  const closeBtn = document.getElementById('btn-close-embedded');
   document.body.classList.toggle('embedded-preview', IS_EMBEDDED);
   if(titleEl) titleEl.textContent = isViewMode ? 'ເບິ່ງ/ພິມຜົນກວດ — Laboratory Report' : 'ຕີຜົນກວດ — Lab Entry';
   if(saveBtn) saveBtn.style.display = isViewMode ? 'none' : '';
   if(clearBtn) clearBtn.style.display = isViewMode ? 'none' : '';
+  if(closeBtn) closeBtn.style.display = IS_EMBEDDED ? '' : 'none';
   requestAnimationFrame(applyEmbeddedPreviewFit);
+}
+
+function closeEmbeddedResult(){
+  const hostWindow = (window.parent && window.parent !== window && typeof window.parent.closeLabResultModal === 'function')
+    ? window.parent
+    : (window.opener && typeof window.opener.closeLabResultModal === 'function' ? window.opener : null);
+  if(hostWindow?.closeLabResultModal){
+    hostWindow.closeLabResultModal();
+    return;
+  }
+  if(window.history.length > 1){
+    window.history.back();
+    return;
+  }
+  window.close();
+}
+
+function updateSavedResultNotice(hasSavedResults){
+  const notice = document.getElementById('saved-result-status');
+  if(!notice) return;
+  if(!IS_EMBEDDED || hasSavedResults){
+    notice.classList.remove('show');
+    notice.textContent = '';
+    return;
+  }
+  notice.textContent = 'ບິນນີ້ຍັງບໍ່ມີຜົນກວດເກົ່າທີ່ບັນທຶກໄວ້. ກະລຸນາປ້ອນຜົນກວດແລ້ວກົດ Save.';
+  notice.classList.add('show');
 }
 
 function applyEmbeddedPreviewFit(){
@@ -1990,6 +2024,7 @@ function enableField(id){
 function resetLabContextForm(){
   clearOrderedContext();
   clearContextCustomItems();
+  updateSavedResultNotice(true);
   ['f_sid','f_cn','f_name','f_age','f_vil','f_dis','f_prov','f_dx'].forEach(id=>setInputValue(id,''));
   setInputValue('f_sex','');
   ensureSelectOption('f_doc','');
@@ -2346,6 +2381,7 @@ function applyLabOrderContext(context){
     filterResultsForCurrentOrder(context.savedResults || [], context),
     filterResultsForCurrentOrder(loadDraftResults(context.orderId), context)
   );
+  updateSavedResultNotice(effectiveSavedResults.length > 0);
   effectiveSavedResults.forEach(item=>{
     const fieldId = mapSavedResultToField(item.testName, item.paramName);
     if(fieldId) applyMappedResult(fieldId, item.value);
@@ -2388,6 +2424,7 @@ async function saveOnly(){
       currentLabContext.savedResults = resultsPayload;
       localStorage.setItem(LAB_RESULT_CONTEXT_KEY, JSON.stringify(currentLabContext));
     }
+    updateSavedResultNotice(resultsPayload.length > 0);
     render();
     const alertResult = await showStatusAlert({
       icon:'success',
