@@ -1,0 +1,3303 @@
+﻿<!DOCTYPE html>
+<html lang="lo">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ລະບົບຕີຜົນກວດ – Lab Result System</title>
+<style>
+
+/* ══ MISSING-RESULT WARNING MODAL ══ */
+.warn-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
+  z-index:9999;align-items:center;justify-content:center
+}
+.warn-overlay.show{display:flex}
+.warn-box{
+  background:#fff;border-radius:8px;padding:20px 24px;
+  max-width:380px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.28);
+  font-family:'Phetsarath OT',Arial,sans-serif
+}
+.warn-box h3{
+  margin:0 0 10px;font-size:14px;color:#b91c1c;
+  display:flex;align-items:center;gap:7px
+}
+.warn-box p{font-size:12px;color:#444;margin:0 0 10px;line-height:1.6}
+.warn-list{
+  max-height:160px;overflow-y:auto;margin:0 0 14px;
+  padding:8px 10px;background:#fff8f8;
+  border:1px solid #fca5a5;border-radius:4px;
+  font-size:11.5px;color:#7f1d1d;line-height:1.7
+}
+.warn-actions{display:flex;gap:8px;justify-content:flex-end}
+.warn-btn{
+  padding:7px 18px;border:none;border-radius:5px;
+  font-size:12px;font-weight:600;cursor:pointer;
+  font-family:inherit
+}
+.warn-btn-cancel{background:#e5e7eb;color:#374151}
+.warn-btn-cancel:hover{background:#d1d5db}
+.warn-btn-ok{background:#1e3a5f;color:#fff}
+.warn-btn-ok:hover{background:#162d4a}
+
+.sec-hide-print{}
+.report-section-hidden{display:none!important}
+/* ══ RESET ══ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --report-page-width:210mm;
+  --report-page-height:297mm;
+  --report-page-padding:10mm;
+  --shell-primary:#6c63ff;
+  --shell-primary-dark:#5146e5;
+  --shell-primary-soft:#edeaff;
+  --shell-primary-border:#d8d9ff;
+  --shell-bg:#f6f7ff;
+  --shell-surface:#ffffff;
+  --shell-surface-alt:#f8f9ff;
+  --shell-text:#1b2340;
+  --shell-muted:#7b86a8;
+  --shell-border:#dde2f3;
+  --shell-shadow:0 20px 42px -28px rgba(38,45,87,.34);
+}
+html,body{height:100%}
+body{font-family:'Phetsarath OT','Noto Sans Lao',Arial,sans-serif;font-size:12.5px;background:radial-gradient(circle at top,#ffffff 0%,#f8f8ff 34%,#f1f4ff 100%);color:var(--shell-text);overflow:hidden}
+input,select{font-family:inherit}
+
+/* ══ APP LAYOUT ══ */
+.app{display:flex;height:100%;min-height:100%;overflow:hidden}
+.panel{width:430px;min-width:380px;background:rgba(255,255,255,.95);display:flex;flex-direction:column;border-right:1px solid var(--shell-border);flex-shrink:0;box-shadow:12px 0 30px -28px rgba(34,42,82,.28)}
+.panel-inner{flex:1;overflow-y:auto;padding:12px}
+.view{flex:1;background:linear-gradient(180deg,#fbfbff 0%,#f2f5ff 100%);overflow-y:auto;padding:10px 14px 20px;display:flex;flex-direction:column;align-items:center}
+
+/* ══ TOP BAR ══ */
+.topbar{background:linear-gradient(180deg,#ffffff 0%,#f6f7ff 100%);color:var(--shell-text);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;border-bottom:1px solid var(--shell-border);box-shadow:0 10px 24px -22px rgba(44,54,102,.4)}
+.topbar h1{font-size:12.5px;font-weight:700;white-space:nowrap;letter-spacing:.1px;color:var(--shell-text)}
+.btn-group{display:flex;gap:6px;flex-wrap:wrap}
+.btn{padding:6px 13px;border:1px solid transparent;border-radius:10px;cursor:pointer;font-size:11.5px;font-weight:600;box-shadow:0 8px 18px -14px rgba(40,50,94,.35);transition:all .18s ease}
+.btn:hover{transform:translateY(-1px)}
+.btn-save{background:linear-gradient(135deg,var(--shell-primary) 0%,var(--shell-primary-dark) 100%);color:#fff;font-weight:600}
+.btn-print{background:#fff;color:var(--shell-primary-dark);border-color:var(--shell-primary-border);font-weight:600}
+.btn-clear{background:#fff3f5;color:#d43d69;border-color:#ffd0db;font-weight:600}
+
+/* ══ PROFILE SELECTOR ══ */
+#cbc-profile-select{background:linear-gradient(135deg,var(--shell-primary) 0%,var(--shell-primary-dark) 100%)!important;color:#fff!important;border:none!important;padding:4px 8px!important;border-radius:8px!important;font-size:10.5px!important;font-weight:600!important;cursor:pointer!important;min-width:85px!important}
+#cbc-profile-select:disabled{background:#b7bcf8!important;cursor:not-allowed!important;opacity:.7!important}
+#cbc-profile-select option{background:#ffffff;color:var(--shell-text)}
+
+/* ══ SECTION HEADERS (form) ══ */
+.sec-hdr{padding:7px 12px;color:#fff;font-weight:700;font-size:11.5px;border-radius:10px;margin:12px 0 5px;cursor:pointer;display:flex;justify-content:space-between;user-select:none;letter-spacing:.1px;background:linear-gradient(135deg,var(--shell-primary) 0%,var(--shell-primary-dark) 100%)}
+.sec-body{margin-bottom:6px}
+
+/* ══ PATIENT FORM ══ */
+.pf-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-bottom:6px}
+.pf-item{display:flex;flex-direction:column;gap:2px}
+.pf-item label{font-size:10px;color:var(--shell-muted);font-weight:700;text-transform:uppercase}
+.pf-item input,.pf-item select{padding:5px 8px;border:1px solid var(--shell-border);border-radius:8px;font-size:11.5px;background:#fbfcff;color:var(--shell-text)}
+.pf-full{grid-column:1/-1}
+
+/* ══ TEST ROWS ══ */
+.test-list{border:1px solid var(--shell-border);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.86)}
+.test-row{display:flex;align-items:center;gap:5px;padding:4px 9px;border-bottom:1px solid #eef1f8;font-size:11.5px}
+.test-row:last-child{border-bottom:none}
+.test-row:nth-child(even){background:#fafbff}
+.test-row input[type=checkbox]{width:14px;height:14px;flex-shrink:0;cursor:pointer}
+.test-row .tn{flex:1;min-width:0}
+.test-row .ri{width:70px;padding:3px 6px;border:1px solid var(--shell-border);border-radius:7px;text-align:center;font-size:11.5px;background:#fff;color:var(--shell-text)}
+.test-row .ri:disabled{background:#f4f4f5;border-color:#e0e0e0;color:#aaa;cursor:not-allowed}
+.test-row .fl{width:26px;font-weight:bold;font-size:11px;text-align:center;color:#c00}
+.test-row .rf{font-size:10px;color:var(--shell-muted);width:90px;text-align:right;flex-shrink:0;display:flex;gap:3px;align-items:center}
+.test-row .rf-edit{font-size:10px;color:var(--shell-muted);flex:1;min-width:0;border:1px solid var(--shell-border);border-radius:6px;background:#fff;outline:none;padding:2px 4px;cursor:text;font-family:inherit}
+.test-row .rf-edit:focus{border-color:var(--shell-primary);background:#f7f6ff;color:var(--shell-primary-dark)}
+.test-row .rf-unit{font-size:9px;color:var(--shell-muted);min-width:35px;text-align:right;font-weight:600}
+.test-row .btn-setting{width:18px;height:18px;padding:0;border:none;border-radius:6px;background:#eceeff;color:var(--shell-primary-dark);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.test-row .btn-setting:hover{background:#dfe2ff;color:var(--shell-primary-dark)}
+.calc-badge{background:#eef0ff;color:var(--shell-primary-dark);font-weight:bold;font-size:10.5px;padding:2px 6px;border-radius:7px;width:75px;text-align:center;border:1px solid var(--shell-primary-border)}
+
+/* ══ CUSTOM ROW ══ */
+.custom-name{padding:2px 6px;border:1px solid var(--shell-primary-border);border-radius:7px;font-size:11.5px;background:#f7f6ff}
+.custom-unit{width:55px;padding:2px 4px;border:1px solid var(--shell-border);border-radius:7px;font-size:10.5px}
+.add-btn{width:100%;padding:6px;background:var(--shell-primary-soft);border:1px dashed var(--shell-primary-border);border-top:none;
+         color:var(--shell-primary-dark);font-size:11.5px;cursor:pointer;font-weight:700}
+.add-btn:hover{background:#e7e4ff}
+.focused-input{outline:2px solid var(--shell-primary)!important;box-shadow:0 0 0 4px rgba(108,99,255,.14)!important}
+
+/* ══ ABO ══ *//* ══ ABO ══ */
+.abo-row{display:flex;gap:10px;padding:5px 9px;background:#f8f9fc;border-top:1px solid #e0e5ef}
+.abo-row .pf-item{flex:1}
+
+/* ══════════════════════════════════════════════════
+   REPORT PAGE  (screen preview)
+══════════════════════════════════════════════════ */
+.report-page{
+  background:#fff;
+  width:var(--report-page-width);
+  min-height:var(--report-page-height);
+  height:var(--report-page-height);
+  margin:0 auto 8px;
+  padding:var(--report-page-padding);
+  box-shadow:0 2px 12px rgba(0,0,0,.15);
+  font-size:10pt;
+  font-family:'Phetsarath OT','Noto Sans Lao',Arial,sans-serif;
+  line-height:1.4;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  overflow:hidden;
+  page-break-after:avoid;
+}
+
+/* Logo */
+.rpt-logo{display:block;width:100%;height:auto;object-fit:contain}
+.rpt-footer-logo{display:block;width:100%;height:auto;object-fit:contain;margin-top:1.5mm}
+.brand-header{display:flex;align-items:flex-end;justify-content:space-between;gap:8mm;padding:0 0 2mm;border-bottom:1.1pt solid #4bb8bd}
+.brand-header__mark{display:flex;flex-direction:column;gap:.8mm;min-width:42mm;max-width:48mm}
+.brand-header__logo{font-size:28pt;line-height:.9;font-weight:700;color:#38b9c3;letter-spacing:-1px}
+.brand-header__logo small{font-size:15pt;color:#66cfd4;vertical-align:top}
+.brand-header__sub{font-size:7.6pt;line-height:1.2;color:#4e9ea3}
+.brand-header__strap{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:2mm;padding-bottom:1mm}
+.brand-header__bar{height:10mm;border-radius:0 0 0 7mm;background:linear-gradient(90deg,#44b8bc 0%,#4dc7c9 100%)}
+.brand-header__title{font-size:9.8pt;line-height:1.3;color:#4bb8bd;text-align:right}
+
+/* Patient info */
+.rpt-pi{width:100%;border-collapse:collapse;margin:1.5mm 0;padding:0;table-layout:fixed}
+.rpt-pi td{padding:.8mm 1.6mm;border:.4pt solid #b8c4d8;font-size:8.2pt;vertical-align:middle;overflow:hidden;word-break:normal;overflow-wrap:anywhere;line-height:1.2}
+.rpt-pi .lbl{font-weight:600;background:#f0f4f8;color:#2c4a6e;font-size:7.2pt;white-space:nowrap;word-break:normal}
+.rpt-pi .val{font-size:8.2pt}
+.rpt-pi .nowrap{white-space:nowrap;overflow-wrap:normal}
+.rpt-pi .compact{font-size:7.6pt}
+
+/* Two-column body */
+.rpt-body{display:flex;gap:2.5mm;margin-top:1.5mm;flex:1}
+.rpt-left{flex:0 0 88mm}
+.rpt-right{flex:1;display:flex;flex-direction:column;gap:1.5mm}
+
+/* Section header */
+.rpt-sh{padding:3mm 5mm;color:#fff;background:#1e3a5f;font-weight:bold;font-size:10pt;letter-spacing:.3px;text-align:center;width:100%}
+
+/* Column header */
+.rpt-ch{display:grid;font-size:10pt;font-weight:bold;background:#dce3ec;width:100%;min-width:100%;border:.4pt solid #bbb;border-bottom:none}
+/* Section-tinted column headers */
+
+.rpt-ch div{padding:.7mm 1.5mm;border-right:.4pt solid #aaa;text-align:center}
+.rpt-ch div:last-child{border-right:none}
+
+/* Data row */
+.rpt-r{display:grid;border-left:.4pt solid #ccc;border-right:.4pt solid #ccc;border-bottom:.4pt solid #ddd;font-size:10pt;width:100%;box-sizing:border-box}
+.rpt-r.odd{background:#f8f9fb}
+.rpt-r.even{background:#fff}
+.rpt-r div{padding:.7mm 1.5mm;border-right:.4pt solid #e5e8f0}
+.rpt-r div:last-child{border-right:none}
+.rpt-r .flag{text-align:center;font-weight:bold;color:#cc0000}
+.rpt-r .result{text-align:center;font-weight:bold}
+.rpt-r .result.positive{text-align:center;font-weight:bold;color:#cc0000}
+.rpt-r .unit{text-align:center;color:#555;font-size:10pt}
+.rpt-r .ref{text-align:center;color:#555;font-size:10pt}
+.rpt-r .ctr{text-align:center}
+.rpt-r .ctr.positive{text-align:center;font-weight:bold;color:#cc0000}
+
+/* Grid templates — Test Item & Ref.Range same width; Result=Unit=Flag equal */
+.gl{grid-template-columns:1fr 16mm 16mm 16mm 1fr} /* hema: name|res|unit|flag|ref */
+.gr{grid-template-columns:1fr 16mm 16mm 16mm 1fr} /* bio:  name|res|unit|flag|ref */
+.gi{grid-template-columns:1fr 30mm 1fr}            /* immu: name|result|ref */
+.gu{grid-template-columns:1fr 16mm 16mm 1fr}       /* urine: name|res|unit|ref */
+.gm{grid-template-columns:1fr 30mm 1fr}             /* micro: name|result|ref */
+.gs{grid-template-columns:1fr 1fr}                  /* stool: name|result */
+
+/* Dynamic column widths for single item */
+.gl-single{grid-template-columns:1fr 16mm 16mm 16mm 1fr}
+.gr-single{grid-template-columns:1fr 16mm 16mm 16mm 1fr}
+.gi-single{grid-template-columns:1fr 30mm 1fr}
+.gu-single{grid-template-columns:1fr 16mm 16mm 1fr}
+.gm-single{grid-template-columns:1fr 30mm 1fr}
+.gs-single{grid-template-columns:1fr 1fr}
+
+/* ABO row */
+.rpt-abo{font-size:10pt;padding:1mm 2mm;border:.4pt solid #ccc;background:#f6f9fb}
+.rpt-abo span{font-weight:bold;color:#1F4E79}
+
+/* Placeholder (no items) */
+.rpt-empty{font-size:10pt;color:#bbb;font-style:italic;padding:.7mm 2mm;border:.4pt dashed #ddd}
+
+/* Fixed header/footer bands */
+.rpt-header-band{width:100%;margin:0;padding:0}
+.rpt-footer-band{width:100%;margin:0;padding:0;align-self:end}
+#rpt-wrap{width:100%;display:flex;flex-direction:column;align-items:center;padding:0}
+.rpt-page-content{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+
+body.embedded-preview .panel{width:380px;min-width:350px}
+body.embedded-preview .panel-inner{padding:10px}
+body.embedded-preview .view{padding:0 8px 12px;align-items:center;overflow-x:hidden}
+body.embedded-preview #rpt-wrap{transform-origin:top center;padding-top:4px;max-width:100%}
+body.embedded-preview .report-page{margin:0 auto 16px}
+
+@media (max-width: 1100px){
+  .view{padding:6px 8px 14px}
+}
+
+/* Footer */
+.rpt-footer{margin-top:2mm;padding-top:1.5mm;border-top:.7pt solid #ccc;text-align:right;font-size:10pt;color:#333}
+.rpt-sig{height:11mm;vertical-align:middle;margin-left:1.5mm}
+
+.brand-footer{margin-top:1.5mm;padding:2.2mm 4mm;border-radius:0;background:linear-gradient(90deg,#44b8bc 0%,#5fd0cf 100%);color:#fff;font-size:8.6pt;display:flex;justify-content:space-between;gap:8mm}
+.brand-footer__col{display:grid;gap:1.2mm}
+.brand-footer__item{display:flex;align-items:center;gap:2mm;white-space:nowrap}
+.brand-footer__icon{width:5.5mm;height:5.5mm;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.18);font-size:8pt;font-weight:700}
+
+/* ══════════════════════════════════════════════════
+   PRINT
+══════════════════════════════════════════════════ */
+@media print{
+  html,body{background:#fff!important;margin:0;padding:0}
+  .app{display:block;height:auto}
+  .panel,.view>.hint{display:none!important}
+  .view{background:#fff;padding:0;overflow:visible;display:block}
+  #rpt-wrap{display:block!important;zoom:1!important;width:100%!important;max-width:none!important;padding-top:0!important;transform:none!important}
+  body.embedded-preview .view{padding:0!important;overflow:visible!important;align-items:stretch!important}
+  body.embedded-preview #rpt-wrap{zoom:1!important;width:100%!important;max-width:none!important;padding-top:0!important;transform:none!important}
+  body.embedded-preview .report-page{margin:0!important}
+
+  .report-page{
+    box-shadow:none;
+    width:var(--report-page-width);
+    min-height:var(--report-page-height);
+    height:var(--report-page-height);
+    box-sizing:border-box;
+    padding:var(--report-page-padding);
+    overflow:hidden;
+    display:grid;
+    grid-template-rows:auto minmax(0,1fr) auto;
+    page-break-inside:avoid;
+    break-inside:avoid-page;
+    margin:0;
+  }
+
+  /* Header / Footer */
+  .rpt-header-band{position:static;width:100%;margin:0;padding-left:0}
+  .rpt-footer-band{position:static;width:100%;margin:3mm 0 0;padding-left:0;page-break-inside:avoid;break-inside:avoid-page}
+  #report-page2.report-page-following{page-break-before:always;break-before:page}
+  .rpt-page-content{display:block!important;min-height:0!important;overflow:hidden!important}
+
+  /* Hide empties */
+  .rpt-empty{display:none!important}
+  .sec-hide-print{display:none!important}
+/* also hide on screen */
+
+  @page{size:A4 portrait;margin:0}
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+<div class="app">
+
+<!-- ════════ PANEL ════════ -->
+<div class="panel">
+  <div class="topbar">
+    <h1 id="lab-entry-title">ຕີຜົນກວດ — Lab Entry</h1>
+    <div class="btn-group">
+      <button class="btn btn-clear"  onclick="clearAll()">🗑 ລ້າງ</button>
+      <button class="btn btn-save" id="btn-save-system" onclick="saveOnly()">💾 Save</button>
+      <button class="btn btn-print" id="btn-print-pdf" onclick="savePDF()">🖨 Print PDF</button>
+    </div>
+  </div>
+  <div class="panel-inner">
+
+    <!-- PATIENT -->
+    <!-- IMAGE UPLOAD SECTION -->
+    <div class="sec-hdr" style="background:#4a6080" onclick="toggle('img-upload')">🖼 ຮູບ Header / Footer <span id="img-upload-arrow">▼</span></div>
+    <div class="sec-body" id="img-upload">
+      <div style="display:flex;flex-direction:column;gap:6px;padding:4px 0">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:11px;font-weight:600;color:#333;min-width:56px">Header</span>
+          <input type="file" id="hdr-file" accept="image/*" style="display:none" onchange="loadImg('hdr',this.files[0])">
+          <button onclick="document.getElementById('hdr-file').click()" style="background:#1a6090;color:#fff;border:none;border-radius:4px;padding:3px 9px;cursor:pointer;font-size:8pt">📷 ອັບໂຫຼດ</button>
+          <button onclick="resetImg('hdr')" style="background:#a04040;color:#fff;border:none;border-radius:4px;padding:3px 9px;cursor:pointer;font-size:8pt">↺ Reset</button>
+          <img id="hdr-preview" style="height:16px;display:none;border:1px solid #ccc;border-radius:3px;padding:1px;background:#fff;max-width:80px">
+        </div>
+        <!-- Footer: hardcoded HTML footer used instead of image -->
+      </div>
+    </div>
+
+    <div class="sec-hdr" style="background:#2d4a6b" onclick="toggle('print-settings-panel')">ຕັ້ງຄ່າ Parameter <span id="print-settings-panel-arrow">▼</span></div>
+    <div class="sec-body" id="print-settings-panel">
+      <div style="padding:8px 10px;border:1px dashed #c8d4e8;border-radius:8px;background:#f8fbff;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:12px;color:#1e3a5f;font-weight:700">ຈັດການຄ່າຜົນກວດຈາກໜ້າ Parameters ຂອງລະບົບ</div>
+        <div style="font-size:11px;color:#64748b">ເພີ່ມ, ແກ້ໄຂ ແລະ ລົບ parameter ໃໝ່ ໃຫ້ໄປຈັດການທີ່ໜ້າ Setup > Parameters ໂດຍກົງ</div>
+        <button type="button" class="btn btn-sm btn-primary fw-bold align-self-start" onclick="openParameterSetupPage()">ເປີດໜ້າ Parameters</button>
+      </div>
+    </div>
+
+        <div class="sec-hdr" style="background:#2d4a6b" onclick="toggle('pi')">ຂໍ້ມູນຄົນເຈັບ (Patient Info) <span id="pi-arrow">▼</span></div>
+    <div class="sec-body" id="pi">
+      <div class="pf-grid">
+        <div class="pf-item"><label>Sample ID</label><input id="f_sid" oninput="render()"></div>
+        <div class="pf-item"><label>CN / Chart No</label><input id="f_cn" oninput="render()"></div>
+        <div class="pf-item pf-full"><label>ຊື່ - ນາມສະກຸນ (Name)</label><input id="f_name" oninput="render()"></div>
+        <div class="pf-item"><label>ອາຍຸ (Age)</label><input id="f_age" oninput="render()"></div>
+        <div class="pf-item"><label>ເພດ (Gender)</label>
+          <select id="f_sex" onchange="render()"><option value="">—</option><option>ຊາຍ (M)</option><option>ຍິງ (F)</option></select></div>
+        <div class="pf-item"><label>ບ້ານ (Village)</label><input id="f_vil" oninput="render()"></div>
+        <div class="pf-item"><label>ເມືອງ (District)</label><input id="f_dis" oninput="render()"></div>
+        <div class="pf-item"><label>ແຂວງ (Province)</label><input id="f_prov" oninput="render()"></div>
+        <div class="pf-item pf-full"><label>ບົ່ງມະຕິ (Diagnosis)</label><input id="f_dx" oninput="render()"></div>
+        <div class="pf-item pf-full"><label>ທ່ານໝໍ (Doctor)</label>
+          <div style="display:flex;gap:5px;align-items:center">
+            <select id="f_doc" onchange="render()" style="flex:1;padding:4px 7px;border:1px solid #ccc;border-radius:3px;font-size:12px;background:#fff;color:#333"></select>
+            <button onclick="openListMgr('doc')" style="padding:4px 9px;background:#4a6080;color:#fff;border:none;border-radius:3px;font-size:11px;cursor:pointer;white-space:nowrap">⚙ ຈັດການ</button>
+          </div>
+        </div>
+        <div class="pf-item pf-full"><label>ລາຍງານໂດຍ (Report By)</label>
+          <div style="display:flex;gap:5px;align-items:center">
+            <select id="f_rby" onchange="render()" style="flex:1;padding:4px 7px;border:1px solid #ccc;border-radius:3px;font-size:12px;background:#fff;color:#333"></select>
+            <button onclick="openListMgr('rby')" style="padding:4px 9px;background:#4a6080;color:#fff;border:none;border-radius:3px;font-size:11px;cursor:pointer;white-space:nowrap">⚙ ຈັດການ</button>
+          </div>
+        </div>
+        <div class="pf-item pf-full" style="align-items:center;gap:8px">
+          <label>ລາຍເຊັນ (Signature)</label>
+          <input type="file" id="sig-file" accept="image/*" style="display:none" onchange="loadSig(this.files[0])">
+          <button onclick="document.getElementById('sig-file').click()" style="background:#1a6090;color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:8pt">📷 ອັບໂຫຼດ</button>
+          <button onclick="clearSig()" style="background:#a04040;color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:8pt">✕ ລຶບ</button>
+          <img id="sig-preview" style="height:18px;vertical-align:middle;display:none;border:1px solid #ccc;border-radius:3px;padding:2px;background:#fff">
+        </div>
+      </div>
+    </div>
+
+    <!-- HEMATOLOGY -->
+    <div class="sec-hdr" style="background:#2d4a6b;display:flex;align-items:center;gap:8px"
+         onclick="toggle('hema')">
+      <span style="flex:1">Hematology <span id="hema-arrow">▼</span></span>
+      <select id="cbc-profile-select" onchange="changeCBCProfile(this.value)"
+              style="padding:4px 8px;background:#4a6080;border:none;border-radius:4px;font-size:11px;font-weight:600;color:#fff;cursor:pointer;min-width:90px"
+              onclick="event.stopPropagation()">
+        <option value="cbc18">CBC 18P</option>
+        <option value="cbc24p" selected>CBC 24P</option>
+      </select>
+      <button id="cbc-btn" onclick="event.stopPropagation();toggleCBC()"
+              style="padding:4px 14px;background:#4a6080;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;color:#fff;white-space:nowrap;min-width:110px">
+        CBC ທັງໝົດ
+      </button>
+    </div>
+    <div class="sec-body" id="hema">
+      <div class="test-list" id="hema-list"></div>
+      <button class="add-btn" onclick="addCustom('hema')">＋ ເພີ່ມລາຍການໃໝ່</button>
+      <div style="padding:4px 9px;background:#f5f6f8;border-top:1px solid #e0e5ef;display:flex;align-items:center;gap:8px">
+        <button id="abo-btn" onclick="toggleABO()"
+                style="padding:4px 14px;background:#4a6080;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;color:#fff;white-space:nowrap;min-width:110px">
+          ABO / Rh
+        </button>
+      </div>
+      <div id="abo-inputs" class="abo-row" style="display:none">
+        <div class="pf-item"><label>ABO Group</label>
+          <input id="abo_type" placeholder="A / B / O / AB" oninput="render()" style="padding:4px 7px;border:1px solid #aaa;border-radius:3px;font-size:12px;width:100%"></div>
+        <div class="pf-item"><label>Rh Factor</label>
+          <select id="abo_rh" onchange="render()" style="padding:4px 7px;border:1px solid #aaa;border-radius:3px;font-size:12px;width:100%">
+            <option value="">—</option><option>Positive</option><option>Negative</option></select></div>
+      </div>
+    </div>
+
+    <!-- BIO -->
+    <div class="sec-hdr" style="background:#2d4a6b" onclick="toggle('bio')">Biochemistry <span id="bio-arrow">▼</span></div>
+    <div class="sec-body" id="bio"><div class="test-list" id="bio-list"></div>
+      <button class="add-btn" onclick="addCustom('bio')">＋ ເພີ່ມລາຍການໃໝ່</button></div>
+
+    <!-- IMMU -->
+    <div class="sec-hdr" style="background:#2d4a6b" onclick="toggle('immu')">Immunology <span id="immu-arrow">▼</span></div>
+    <div class="sec-body" id="immu"><div class="test-list" id="immu-list"></div>
+      <button class="add-btn" onclick="addCustom('immu')">＋ ເພີ່ມລາຍການໃໝ່</button></div>
+
+    <!-- MICRO -->
+    <div class="sec-hdr" style="background:#2d4a6b;display:flex;align-items:center;gap:8px"
+         onclick="toggle('micro')">
+      <span style="flex:1">Micrology <span id="micro-arrow">▼</span></span>
+      <button id="micro-btn" onclick="event.stopPropagation();toggleMicro()"
+              style="padding:4px 14px;background:#4a6080;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;color:#fff;white-space:nowrap;min-width:120px">
+        Micrology ທັງໝົດ
+      </button>
+    </div>
+    <div class="sec-body" id="micro"><div class="test-list" id="micro-list"></div>
+      <button class="add-btn" onclick="addCustom('micro')">＋ ເພີ່ມລາຍການໃໝ່</button></div>
+
+    <!-- URINE -->
+    <div class="sec-hdr" style="background:#2d4a6b;display:flex;align-items:center;gap:8px"
+         onclick="toggle('urine')">
+      <span style="flex:1">Urine Analysis <span id="urine-arrow">▼</span></span>
+      <button id="urine-btn" onclick="event.stopPropagation();toggleUrine()"
+              style="padding:4px 14px;background:#4a6080;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;color:#fff;white-space:nowrap;min-width:120px">
+        Urine ທັງໝົດ
+      </button>
+    </div>
+    <div class="sec-body" id="urine"><div class="test-list" id="urine-list"></div>
+      <button class="add-btn" onclick="addCustom('urine')">＋ ເພີ່ມລາຍການໃໝ່</button></div>
+
+    <!-- STOOL -->
+    <div class="sec-hdr" style="background:#2d4a6b" onclick="toggle('stool')">Stool Exam <span id="stool-arrow">▼</span></div>
+    <div class="sec-body" id="stool"><div class="test-list" id="stool-list"></div>
+      <button class="add-btn" onclick="addCustom('stool')">＋ ເພີ່ມລາຍການໃໝ່</button></div>
+
+  </div>
+</div>
+
+<!-- ════════ VIEW ════════ -->
+<div class="view">
+  <div id="rpt-wrap">
+  <div class="report-page" id="report">
+
+    <div class="rpt-header-band">
+      <img id="hdr-logo" class="rpt-logo" src="" alt="Logo" style="display:none">
+      <div class="brand-header" id="default-header">
+        <div class="brand-header__mark">
+          <div class="brand-header__logo">one<small>+</small></div>
+          <div class="brand-header__sub">ສຸຂະພາບແພດ ວັນເມດິໂຄ ແອນ ແວວເນສ ເຊັນເຕີ<br>One Medical and Wellness Center</div>
+        </div>
+        <div class="brand-header__strap">
+          <div class="brand-header__bar"></div>
+          <div class="brand-header__title">ປະສົມປະສານ ວັດທະນະທຳ ການຮັກສາສຸຂະພາບ ຄືສັນຍາທີ່ເຮົາມີ<br>Bridging Cultures, Building Health, Prevention is our Promise</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rpt-page-content">
+
+    <!-- Report Title -->
+    <div class="rpt-title-block" style="text-align:center;margin:0 0 1mm;border-bottom:1.2pt solid #1e3a5f;padding-bottom:1mm">
+      <div style="font-size:14pt;font-weight:bold;color:#1e3a5f;letter-spacing:.5px;text-align:center">ຜົນກວດເລືອດວິເຄາະ &nbsp;/&nbsp; Laboratory Report</div>
+    </div>
+
+    <!-- Patient Info: 2-row × 10-col table (5 label-value pairs each row) -->
+    <table class="rpt-pi" style="table-layout:fixed;width:100%">
+      <colgroup>
+        <col style="width:15mm"><col style="width:20mm">
+        <col style="width:7mm"><col style="width:18mm">
+        <col style="width:10mm"><col style="width:46mm">
+        <col style="width:9mm"><col style="width:12mm">
+        <col style="width:7mm"><col style="width:19mm">
+      </colgroup>
+      <tr>
+        <td class="lbl">Sample ID</td><td class="val compact" id="r_sid"></td>
+        <td class="lbl">CN</td><td class="val nowrap" id="r_cn"></td>
+        <td class="lbl">ຊື່ Name</td><td class="val" id="r_name"></td>
+        <td class="lbl">Age</td><td class="val nowrap" id="r_age"></td>
+        <td class="lbl">ເພດ</td><td class="val nowrap" id="r_sex"></td>
+      </tr>
+      <tr>
+        <td class="lbl">ບົ່ງມະຕິ</td><td class="val compact" id="r_dx"></td>
+        <td class="lbl">ທ່ານໝໍ</td><td class="val compact" id="r_doc"></td>
+        <td class="lbl">ບ້ານ/ເມືອງ</td><td class="val" id="r_vil"></td>
+        <td class="lbl">ແຂວງ</td><td class="val compact" id="r_prov"></td>
+        <td class="lbl">ເວລາ</td><td class="val compact" id="r_time" colspan="1"></td>
+      </tr>
+    </table>
+
+    <!-- HEMATOLOGY (Page 1) -->
+    <div id="wrap-hema">
+      <div class="rpt-sh" style="background:#1e3a5f">HEMATOLOGY REPORT</div>
+      <div class="rpt-ch gl">
+        <div>Test Item</div><div>Result</div><div>Unit</div><div>Flag</div><div>Ref. Range</div>
+      </div>
+      <div id="rpt-hema"></div>
+      <div id="rpt-abo" style="display:none" class="rpt-abo">
+        ABO Group: <span id="r_abo_type"></span> &nbsp; Rh: <span id="r_abo_rh"></span>
+      </div>
+    </div><!-- /wrap-hema -->
+
+    </div><!-- /rpt-page-content -->
+
+    <div class="rpt-footer-band">
+    <div class="rpt-footer">
+      <span id="r_rdate"></span> &nbsp;|&nbsp; Report By: <strong id="r_rby"></strong><img id="r_sig" class="rpt-sig" style="display:none">
+    </div>
+    <img id="ftr-logo" class="rpt-footer-logo" src="/report-footer.svg" alt="Footer">
+    </div><!-- /rpt-footer-band -->
+
+  </div><!-- /report-page -->
+
+  <!-- ═══════════════════════════════════════════
+       PAGE 2: Bio / Immu / Micro / Urine / Stool
+  ═══════════════════════════════════════════ -->
+  <div class="report-page" id="report-page2">
+
+    <div class="rpt-header-band">
+      <img id="hdr-logo2" class="rpt-logo" src="" style="display:none">
+      <div class="brand-header" id="default-header-2">
+        <div class="brand-header__mark">
+          <div class="brand-header__logo">one<small>+</small></div>
+          <div class="brand-header__sub">ສຸຂະພາບແພດ ວັນເມດິໂຄ ແອນ ແວວເນສ ເຊັນເຕີ<br>One Medical and Wellness Center</div>
+        </div>
+        <div class="brand-header__strap">
+          <div class="brand-header__bar"></div>
+          <div class="brand-header__title">ປະສົມປະສານ ວັດທະນະທຳ ການຮັກສາສຸຂະພາບ ຄືສັນຍາທີ່ເຮົາມີ<br>Bridging Cultures, Building Health, Prevention is our Promise</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rpt-page-content">
+
+    <!-- Report Title -->
+    <div class="rpt-title-block" style="text-align:center;margin:0 0 1mm;border-bottom:1.2pt solid #1e3a5f;padding-bottom:1mm">
+      <div style="font-size:14pt;font-weight:bold;color:#1e3a5f;letter-spacing:.5px;text-align:center">ຜົນກວດເລືອດວິເຄາະ &nbsp;/&nbsp; Laboratory Report</div>
+    </div>
+
+    <!-- Patient Info -->
+    <table class="rpt-pi" style="table-layout:fixed;width:100%">
+      <colgroup>
+        <col style="width:15mm"><col style="width:20mm">
+        <col style="width:7mm"><col style="width:18mm">
+        <col style="width:10mm"><col style="width:46mm">
+        <col style="width:9mm"><col style="width:12mm">
+        <col style="width:7mm"><col style="width:19mm">
+      </colgroup>
+      <tr>
+        <td class="lbl">Sample ID</td><td class="val compact" id="r2_sid"></td>
+        <td class="lbl">CN</td><td class="val nowrap" id="r2_cn"></td>
+        <td class="lbl">ຊື່ Name</td><td class="val" id="r2_name"></td>
+        <td class="lbl">Age</td><td class="val nowrap" id="r2_age"></td>
+        <td class="lbl">ເພດ</td><td class="val nowrap" id="r2_sex"></td>
+      </tr>
+      <tr>
+        <td class="lbl">ບົ່ງມະຕິ</td><td class="val compact" id="r2_dx"></td>
+        <td class="lbl">ທ່ານໝໍ</td><td class="val compact" id="r2_doc"></td>
+        <td class="lbl">ບ້ານ/ເມືອງ</td><td class="val" id="r2_vil"></td>
+        <td class="lbl">ແຂວງ</td><td class="val compact" id="r2_prov"></td>
+        <td class="lbl">ເວລາ</td><td class="val compact" id="r2_time" colspan="1"></td>
+      </tr>
+    </table>
+
+    <!-- ROW 1: BIOCHEMISTRY (left) + IMMUNOLOGY (right) -->
+    <div id="row-bio-immu" style="display:flex;gap:2.5mm;align-items:flex-start">
+      <!-- BIOCHEMISTRY -->
+      <div id="wrap-bio" style="flex:0 0 55%;min-width:0">
+        <div class="rpt-sh" style="background:#1e3a5f">BIOCHEMISTRY REPORT</div>
+        <div class="rpt-ch gr"><div>Test Item</div><div>Result</div><div>Unit</div><div>Flag</div><div>Ref. Range</div></div>
+        <div id="rpt-bio"></div>
+      </div>
+      <!-- IMMUNOLOGY -->
+      <div id="wrap-immu" style="flex:0 0 calc(45% - 2.5mm);min-width:0">
+        <div class="rpt-sh" style="background:#1e3a5f">IMMUNOLOGY REPORT</div>
+        <div class="rpt-ch gi"><div>Test Item</div><div>Result</div><div>Ref. Range</div></div>
+        <div id="rpt-immu"></div>
+      </div>
+    </div>
+
+    <!-- ROW 2: MICROLOGY (left) + URINE ANALYSIS (right) -->
+    <div id="row-micro-urine" style="display:flex;gap:2.5mm;margin-top:1.5mm;align-items:flex-start">
+      <!-- MICROLOGY -->
+      <div id="wrap-micro" style="flex:1;min-width:0">
+        <div class="rpt-sh" style="background:#1e3a5f">MICROLOGY REPORT</div>
+        <div class="rpt-ch gm"><div>Test Item</div><div>Result</div><div>Ref. Range</div></div>
+        <div id="rpt-micro"></div>
+      </div>
+      <!-- URINE ANALYSIS -->
+      <div id="wrap-urine" style="flex:1;min-width:0">
+        <div class="rpt-sh" style="background:#1e3a5f">URINE ANALYSIS REPORT</div>
+        <div class="rpt-ch gu"><div>Test Item</div><div>Result</div><div>Unit</div><div>Ref. Range</div></div>
+        <div id="rpt-urine"></div>
+      </div>
+    </div>
+
+    <!-- STOOL EXAMINATION -->
+    <div id="wrap-stool" style="margin-top:1.5mm">
+      <div class="rpt-sh" style="background:#1e3a5f">STOOL EXAMINATION REPORT</div>
+      <div class="rpt-ch gs"><div>Test Item</div><div>Result</div></div>
+      <div id="rpt-stool"></div>
+    </div>
+
+    </div><!-- /rpt-page-content -->
+
+    <div class="rpt-footer-band">
+    <div class="rpt-footer">
+      <span id="r2_rdate"></span> &nbsp;|&nbsp; Report By: <strong id="r2_rby"></strong><img id="r2_sig" class="rpt-sig" style="display:none">
+    </div>
+    <img id="ftr-logo2" class="rpt-footer-logo" src="/report-footer.svg" alt="Footer">
+    </div><!-- /rpt-footer-band -->
+
+  </div><!-- /report-page2 -->
+  </div><!-- /rpt-wrap -->
+</div><!-- /view -->
+</div><!-- /app -->
+
+<script>
+// ══════════════════════════════════════════════════════════
+// CBC PROFILES - 3 Versions
+// ══════════════════════════════════════════════════════════
+const CBC_PROFILES = {
+  cbc18: {
+    id: 'cbc18',
+    name: 'CBC 18P',
+    tests: ['wbc','lym','mon','neu','lymp','monp','neup','rbc','hgb','hct','mcv','mch','mchc','rdwcv','rdwsd','plt','mpv','pdwcv','pct']
+  },
+  cbc24p: {
+    id: 'cbc24p',
+    name: 'CBC 24P',
+    tests: ['wbc','neu','lym','mon','eos','bas','neup','lymp','monp','eosp','basp','nlr','plr','rbc','hgb','hct','mcv','mch','mchc','rdwcv','rdwsd','plt','mpv','pdwcv','pdwsd','pct','plcc','plcr']
+  }
+};
+
+let currentCBCProfile = 'cbc24p'; // Default profile
+
+// ══════════════════════════════════════════════════════════
+// CBC TOGGLE STATE
+// ══════════════════════════════════════════════════════════
+let cbcOn = false;
+let urineOn = false;
+let microOn = false;
+let aboOn = false;
+// ── Header / Footer image upload ──
+let hdrOrigSrc = '';
+let ftrOrigSrc = '';
+const DEFAULT_HEADER_SRC = '/header.png';
+const DEFAULT_FOOTER_SRC = '/footer2.png';
+const IS_EMBEDDED = new URLSearchParams(window.location.search).get('embedded') === '1';
+const LAB_RESULT_MODE = new URLSearchParams(window.location.search).get('mode') || 'edit';
+let isViewMode = LAB_RESULT_MODE === 'view';
+
+function decodeContextFromUrl(){
+  const ctx64 = new URLSearchParams(window.location.search).get('ctx64');
+  if(!ctx64) return null;
+  try{
+    const normalized = ctx64.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+    const bytes = Uint8Array.from(atob(padded), ch => ch.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }catch(err){
+    console.error('Unable to decode lab result context from URL:', err);
+    return null;
+  }
+}
+
+function getSwalHost(){
+  return window.Swal
+    || (window.parent && window.parent !== window ? window.parent.Swal : null)
+    || (window.opener ? window.opener.Swal : null)
+    || null;
+}
+
+async function showStatusAlert(options){
+  const SwalHost = getSwalHost();
+  if(SwalHost) return SwalHost.fire(options);
+  window.alert(options.text || options.title || '');
+  return { isConfirmed:true, isDismissed:false, isDenied:false };
+}
+
+function applyModeUi(){
+  const titleEl = document.getElementById('lab-entry-title');
+  const saveBtn = document.getElementById('btn-save-system');
+  const clearBtn = document.querySelector('.btn-clear');
+  document.body.classList.toggle('embedded-preview', IS_EMBEDDED);
+  if(titleEl) titleEl.textContent = isViewMode ? 'ເບິ່ງ/ພິມຜົນກວດ — Laboratory Report' : 'ຕີຜົນກວດ — Lab Entry';
+  if(saveBtn) saveBtn.style.display = isViewMode ? 'none' : '';
+  if(clearBtn) clearBtn.style.display = isViewMode ? 'none' : '';
+  requestAnimationFrame(applyEmbeddedPreviewFit);
+}
+
+function applyEmbeddedPreviewFit(){
+  if(!IS_EMBEDDED) return;
+  const wrap = document.getElementById('rpt-wrap');
+  const view = document.querySelector('.view');
+  const pages = Array.from(document.querySelectorAll('.report-page'));
+  const visiblePages = pages.filter(el => getComputedStyle(el).display !== 'none');
+  const page = visiblePages[0];
+  if(!wrap || !view || !page) return;
+  wrap.style.zoom = '1';
+  wrap.style.width = '100%';
+  wrap.style.maxWidth = '100%';
+
+  const availableWidth = Math.max(320, view.clientWidth - 32);
+  const availableHeight = Math.max(360, view.clientHeight - 16);
+  const pageWidth = page.offsetWidth || page.getBoundingClientRect().width || 1;
+  const pageHeight = page.offsetHeight || page.getBoundingClientRect().height || 1;
+  const scaleByWidth = availableWidth / pageWidth;
+  const scaleByHeight = availableHeight / pageHeight;
+  const fitScale = visiblePages.length === 1 ? Math.min(scaleByWidth, scaleByHeight) : scaleByWidth;
+  const scale = fitScale < 1 ? fitScale : Math.min(fitScale, 1.25);
+
+  wrap.style.zoom = String(scale);
+  wrap.style.width = `${100 / scale}%`;
+}
+
+window.addEventListener('resize', () => {
+  requestAnimationFrame(applyEmbeddedPreviewFit);
+});
+
+function refreshCurrentContextResults(){
+  if(!currentLabContext) return;
+  currentLabContext.savedResults = collectLabResultsPayload();
+  localStorage.setItem(LAB_RESULT_CONTEXT_KEY, JSON.stringify(currentLabContext));
+}
+
+function syncHeaderBranding(src){
+  const logoIds = ['hdr-logo', 'hdr-logo2'];
+  const fallbackIds = ['default-header', 'default-header-2'];
+  logoIds.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.src = src || '';
+    el.style.display = src ? 'block' : 'none';
+  });
+  fallbackIds.forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = src ? 'none' : 'flex';
+  });
+}
+
+// Load saved images on page load
+function loadSavedImages(){
+  const savedHdr = localStorage.getItem('hdr-logo-src');
+  const savedFtr = localStorage.getItem('ftr-logo-src');
+  if(savedHdr){
+    hdrOrigSrc = savedHdr;
+    syncHeaderBranding(savedHdr);
+  } else {
+    syncHeaderBranding(DEFAULT_HEADER_SRC);
+  }
+  if(savedFtr){
+    ftrOrigSrc = savedFtr;
+    const ftrLogo = document.getElementById('ftr-logo');
+    const ftrLogo2 = document.getElementById('ftr-logo2');
+    if(ftrLogo) ftrLogo.src = savedFtr;
+    if(ftrLogo2) ftrLogo2.src = savedFtr;
+  } else {
+    const ftrLogo = document.getElementById('ftr-logo');
+    const ftrLogo2 = document.getElementById('ftr-logo2');
+    if(ftrLogo) ftrLogo.src = DEFAULT_FOOTER_SRC;
+    if(ftrLogo2) ftrLogo2.src = DEFAULT_FOOTER_SRC;
+  }
+  // Load signature
+  const savedSig = localStorage.getItem('sig-logo-src');
+  if(savedSig){
+    sigB64 = savedSig;
+    document.getElementById('r_sig').src = savedSig;
+    document.getElementById('r_sig').style.display = 'inline';
+    document.getElementById('r2_sig').src = savedSig;
+    document.getElementById('r2_sig').style.display = 'inline';
+    document.getElementById('sig-preview').src = savedSig;
+    document.getElementById('sig-preview').style.display = 'inline';
+  }
+  // Sync page 2 header/footer with page 1 (use same default images)
+  const hdrLogo = document.getElementById('hdr-logo');
+  const hdrLogo2 = document.getElementById('hdr-logo2');
+  if(hdrLogo2 && hdrLogo && hdrLogo.src) hdrLogo2.src = hdrLogo.src;
+}
+
+function loadImg(which, file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const src = e.target.result;
+    const imgId = which==='hdr' ? 'hdr-logo' : 'ftr-logo';
+    const prevId = which==='hdr' ? 'hdr-preview' : 'ftr-preview';
+    const img = document.getElementById(imgId);
+    const prev = document.getElementById(prevId);
+    // Save original on first load
+    if(which==='hdr' && !hdrOrigSrc) hdrOrigSrc = img.src;
+    if(which==='ftr' && !ftrOrigSrc) ftrOrigSrc = img.src;
+    if(img) img.src = src;
+    if(prev){ prev.src = src; prev.style.display = 'inline'; }
+    // Sync page 2 header/footer
+    const logo2Id = which==='hdr' ? 'hdr-logo2' : 'ftr-logo2';
+    const logo2 = document.getElementById(logo2Id);
+    if(logo2) logo2.src = src;
+    if(which==='hdr') syncHeaderBranding(src);
+    // Save to localStorage
+    localStorage.setItem(imgId+'-src', src);
+  };
+  reader.readAsDataURL(file);
+}
+
+function resetImg(which){
+  const imgId = which==='hdr' ? 'hdr-logo' : 'ftr-logo';
+  const prevId = which==='hdr' ? 'hdr-preview' : 'ftr-preview';
+  const fileId = which==='hdr' ? 'hdr-file' : 'ftr-file';
+  const img = document.getElementById(imgId);
+  const prev = document.getElementById(prevId);
+  // Reset to default or empty
+  if(img) img.src = '';
+  if(prev){ prev.src=''; prev.style.display='none'; }
+  const fileInput = document.getElementById(fileId);
+  if(fileInput) fileInput.value='';
+  if(which==='hdr') hdrOrigSrc=''; else ftrOrigSrc='';
+  // Reset page 2 image too
+  const logo2Id = which==='hdr' ? 'hdr-logo2' : 'ftr-logo2';
+  const logo2 = document.getElementById(logo2Id);
+  if(logo2) logo2.src = '';
+  if(which==='hdr') syncHeaderBranding(DEFAULT_HEADER_SRC);
+  if(which==='ftr'){
+    const ftrLogo = document.getElementById('ftr-logo');
+    const ftrLogo2 = document.getElementById('ftr-logo2');
+    if(ftrLogo) ftrLogo.src = DEFAULT_FOOTER_SRC;
+    if(ftrLogo2) ftrLogo2.src = DEFAULT_FOOTER_SRC;
+  }
+  // Remove from localStorage
+  localStorage.removeItem(imgId+'-src');
+}
+
+let sigB64 = '';
+
+// ══ SETTINGS MODAL FUNCTIONS ══
+let currentSettingId = null;
+let currentSettingType = null;
+
+function openSettings(id, type){
+  openParameterSetupPage();
+  return;
+  currentSettingId = id;
+  currentSettingType = type;
+  
+  let testName = '';
+  let currentUnit = '';
+  let currentRef = '';
+  
+  if(type === 'custom'){
+    // Custom item
+    const nmInput = document.getElementById('nm_' + id);
+    const unInput = document.getElementById('un_' + id);
+    const rrInput = document.getElementById('rr_' + id);
+    testName = nmInput ? nmInput.value : '(custom)';
+    currentUnit = unInput ? unInput.value : '';
+    currentRef = rrInput ? rrInput.value : '';
+  } else {
+    // Standard test
+    const allTests = [...HEMA, ...BIO, ...IMMU, ...URINE, ...MICRO, ...STOOL];
+    const t = allTests.find(x => x.id === id);
+    if(t){
+      testName = t.name + ' (' + id + ')';
+      currentUnit = t.unit || '';
+      currentRef = t.ref || '';
+    }
+  }
+  
+  document.getElementById('settings-test-name').textContent = testName;
+  document.getElementById('set-unit').value = currentUnit;
+  document.getElementById('set-ref').value = currentRef;
+  document.getElementById('settings-overlay').classList.add('show');
+}
+
+function closeSettings(){
+  document.getElementById('settings-overlay').classList.remove('show');
+  currentSettingId = null;
+  currentSettingType = null;
+}
+
+function saveSettings(){
+  if(!currentSettingId) return;
+  
+  const newUnit = document.getElementById('set-unit').value;
+  const newRef = document.getElementById('set-ref').value;
+  
+  // Check if it's a custom item
+  if(currentSettingType === 'custom'){
+    // Update custom item unit and ref
+    const unitInput = document.getElementById('un_' + currentSettingId);
+    const refInput = document.getElementById('rr_' + currentSettingId);
+    if(unitInput) unitInput.value = newUnit;
+    if(refInput) refInput.value = newRef;
+    updateCustomMeta(currentSettingId);
+  } else {
+    // Standard test item
+    const allTests = [...HEMA, ...BIO, ...IMMU, ...URINE, ...MICRO, ...STOOL];
+    const t = allTests.find(x => x.id === currentSettingId);
+    if(t){
+      // Update unit
+      if(t.unit !== undefined) t.unit = newUnit;
+
+      // Update ref using parseRefInput
+      const rrInput = document.getElementById('rr_' + currentSettingId);
+      if(rrInput) rrInput.value = newRef;
+      parseRefInput(currentSettingId, newRef);
+    }
+  }
+  
+  closeSettings();
+  saveCustomItems();
+  render();
+}
+
+// Open settings for unit (custom items)
+function openUnitSettings(id){
+  openParameterSetupPage();
+}
+
+function loadSig(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = new Image();
+    img.onload = function(){
+      // Draw on canvas and convert to black ink on transparent background
+      const cv = document.createElement('canvas');
+      cv.width = img.width; cv.height = img.height;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0,0,cv.width,cv.height);
+      const px = d.data;
+      for(let i=0;i<px.length;i+=4){
+        // Brightness of the pixel
+        const br = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
+        if(br < 160){ // dark pixel → black ink
+          px[i]=0; px[i+1]=0; px[i+2]=0; px[i+3]=255;
+        } else { // light pixel → transparent
+          px[i+3]=0;
+        }
+      }
+      ctx.putImageData(d,0,0);
+      sigB64 = cv.toDataURL('image/png');
+      // Update footer signature (page 1 & 2)
+      const rSig = document.getElementById('r_sig');
+      rSig.src = sigB64; rSig.style.display = 'inline';
+      const rSig2 = document.getElementById('r2_sig');
+      if(rSig2){ rSig2.src = sigB64; rSig2.style.display = 'inline'; }
+      // Update preview
+      const prev = document.getElementById('sig-preview');
+      prev.src = sigB64;
+      prev.style.display = 'inline';
+      // Save to localStorage
+      localStorage.setItem('sig-logo-src', sigB64);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearSig(){
+  sigB64 = '';
+  const rSig = document.getElementById('r_sig');
+  rSig.src = ''; rSig.style.display = 'none';
+  const rSig2 = document.getElementById('r2_sig');
+  if(rSig2){ rSig2.src = ''; rSig2.style.display = 'none'; }
+  const prev = document.getElementById('sig-preview');
+  prev.src = ''; prev.style.display = 'none';
+  document.getElementById('sig-file').value = '';
+  // Remove from localStorage
+  localStorage.removeItem('sig-logo-src');
+}
+function toggleCBC(){
+  cbcOn = !cbcOn;
+  const btn = document.getElementById('cbc-btn');
+  const profileSelect = document.getElementById('cbc-profile-select');
+  if(cbcOn){
+    btn.style.background='#1a8a4a';
+    btn.textContent='CBC ✓ ເປີດຢູ່';
+    profileSelect.disabled = true; // Disable profile change when CBC is on
+    // Enable all HEMA inputs for current profile
+    const profile = CBC_PROFILES[currentCBCProfile];
+    
+    // Custom order for CBC 18P: LYM, MID (MON), NEU
+    const cbc18Order = ['wbc','lym','mon','neu','lymp','monp','neup','rbc','hgb','hct','mcv','mch','mchc','rdwcv','rdwsd','plt','mpv','pdwcv','pct'];
+    const useCustomOrder = (currentCBCProfile === 'cbc18');
+    const testOrder = useCustomOrder ? cbc18Order : profile.tests;
+    
+    // First, disable all HEMA inputs
+    HEMA.forEach(t=>{
+      const c=document.getElementById('ck_'+t.id);
+      const r=document.getElementById('ri_'+t.id);
+      if(c)c.checked=false;
+      if(r){r.disabled=true;r.value='';}
+    });
+    
+    // Then enable only items in current profile with correct order
+    testOrder.forEach(testId=>{
+      const t = HEMA.find(x=>x.id===testId);
+      if(!t) return;
+      const c=document.getElementById('ck_'+t.id);
+      const r=document.getElementById('ri_'+t.id);
+      if(c)c.checked=true;
+      if(r)r.disabled=false;
+    });
+  } else {
+    btn.style.background='#4a6080';
+    btn.textContent='CBC ທັງໝົດ';
+    profileSelect.disabled = false; // Enable profile change when CBC is off
+    // Disable all HEMA inputs
+    HEMA.forEach(t=>{
+      const c=document.getElementById('ck_'+t.id);
+      const r=document.getElementById('ri_'+t.id);
+      if(c)c.checked=false;
+      if(r){r.disabled=true;r.value='';}
+    });
+  }
+  render();
+}
+
+function changeCBCProfile(profileId){
+  currentCBCProfile = profileId;
+  
+  // Rebuild HEMA form with new profile order
+  document.getElementById('hema-list').innerHTML = '';
+  buildHemaForm('hema-list', HEMA, 'hema');
+  
+  // Update checkbox states based on new profile
+  const profile = CBC_PROFILES[profileId];
+  
+  // Custom order for CBC 18P: LYM, MID (MON), NEU
+  const cbc18Order = ['wbc','lym','mon','neu','lymp','monp','neup','rbc','hgb','hct','mcv','mch','mchc','rdwcv','rdwsd','plt','mpv','pdwcv','pct'];
+  const useCustomOrder = (profileId === 'cbc18');
+  const testOrder = useCustomOrder ? cbc18Order : profile.tests;
+  
+  // First, disable all HEMA inputs
+  HEMA.forEach(t=>{
+    const c=document.getElementById('ck_'+t.id);
+    const r=document.getElementById('ri_'+t.id);
+    if(c)c.checked=false;
+    if(r){r.disabled=true;r.value='';}
+  });
+  
+  // Then enable only items in current profile with correct order
+  testOrder.forEach(testId=>{
+    const t = HEMA.find(x=>x.id===testId);
+    if(!t) return;
+    const c=document.getElementById('ck_'+t.id);
+    const r=document.getElementById('ri_'+t.id);
+    if(c)c.checked=true;
+    if(r)r.disabled=false;
+  });
+  
+  applyOrderedEntryLayout();
+  
+  render();
+}
+function toggleUrine(){
+  urineOn = !urineOn;
+  const btn = document.getElementById('urine-btn');
+  if(urineOn){
+    btn.style.background='#1a8a4a';
+    btn.textContent='Urine ✓ ເປີດຢູ່';
+  } else {
+    btn.style.background='#4a6080';
+    btn.textContent='Urine ທັງົດ';
+  }
+  render();
+}
+function toggleMicro(){
+  microOn = !microOn;
+  const btn = document.getElementById('micro-btn');
+  if(microOn){
+    btn.style.background='#1a8a4a';
+    btn.textContent='Micrology ✓ ເປີດຢູ່';
+  } else {
+    btn.style.background='#4a6080';
+    btn.textContent='Micrology ທັງໝົດ';
+  }
+  render();
+}
+function toggleABO(){
+  aboOn = !aboOn;
+  const btn = document.getElementById('abo-btn');
+  document.getElementById('abo-inputs').style.display = aboOn ? 'flex' : 'none';
+  if(aboOn){
+    btn.style.background='#1a8a4a';
+    btn.textContent='ABO ✓ ເປີດຢູ່';
+  } else {
+    btn.style.background='#4a6080';
+    btn.textContent='ABO / Rh';
+    // clear values when toggling off
+    document.getElementById('abo_type').value='';
+    document.getElementById('abo_rh').value='';
+  }
+  render();
+}
+
+// ══════════════════════════════════════════════════════════
+// CUSTOM ITEMS tracking  { hema:[{id,name,result,unit}], bio:[], ... }
+// ══════════════════════════════════════════════════════════
+const CUSTOM = {hema:[],bio:[],immu:[],urine:[],stool:[],micro:[]};
+const CUSTOM_META = {};
+let _cIdx = 0;
+let currentPrintItemSection = 'bio';
+const CONTEXT_CUSTOM_PREFIX = 'ctx_';
+
+const attrEsc = value => String(value || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+
+function isContextCustomId(id){
+  return String(id || '').startsWith(CONTEXT_CUSTOM_PREFIX) || CUSTOM_META[id]?.source === 'parameter';
+}
+
+function parseParameterOptions(options){
+  if(Array.isArray(options)) return options.map(item => String(item).trim()).filter(Boolean);
+  const raw = String(options || '').trim();
+  if(!raw) return [];
+  try{
+    const parsed = JSON.parse(raw);
+    if(Array.isArray(parsed)) return parsed.map(item => String(item).trim()).filter(Boolean);
+    if(parsed && typeof parsed === 'object'){
+      const itemSource = Array.isArray(parsed.items)
+        ? parsed.items
+        : Array.isArray(parsed.options)
+          ? parsed.options
+          : String(parsed.items || parsed.options || '').split(/[\n,]+/);
+      return itemSource.map(item => String(item).trim()).filter(Boolean);
+    }
+  }catch{}
+  return raw.split(/[\n,]+/).map(item => item.trim()).filter(Boolean);
+}
+
+function formatParameterReference(param){
+  if(param?.referenceText) return String(param.referenceText).trim();
+  const rawOptions = String(param?.options || '').trim();
+  if(rawOptions){
+    try{
+      const parsed = JSON.parse(rawOptions);
+      if(parsed && typeof parsed === 'object' && !Array.isArray(parsed)){
+        const referenceText = String(parsed.reference || parsed.ref || parsed.range || '').trim();
+        if(referenceText) return referenceText;
+      }
+    }catch{}
+  }
+  const optionList = parseParameterOptions(param?.options);
+  if(optionList.length > 0) return optionList.join(', ');
+  const min = param?.normalMin;
+  const max = param?.normalMax;
+  const hasMin = min !== '' && min !== null && min !== undefined;
+  const hasMax = max !== '' && max !== null && max !== undefined;
+  if(hasMin && hasMax) return `${min}–${max}`;
+  if(hasMin) return `>=${min}`;
+  if(hasMax) return `<=${max}`;
+  return param?.unit || '';
+}
+
+function getSectionFromParameterContext(testName, testMeta = {}, param = {}){
+  const categoryKey = normalizeLabText(testMeta?.category);
+  const combinedKey = normalizeLabText(`${testName} ${param?.paramName || ''}`);
+  if(categoryKey === 'hematology') return 'hema';
+  if(categoryKey === 'biochemistry' || categoryKey === 'hormone') return 'bio';
+  if(categoryKey === 'immunoserology' || categoryKey === 'immunology') return 'immu';
+  if(categoryKey === 'stoolurine'){
+    if(combinedKey.includes('stool') || combinedKey.includes('occult') || combinedKey.includes('parasite')) return 'stool';
+    return 'urine';
+  }
+  if(categoryKey === 'microbiology' || categoryKey === 'micrology') return 'micro';
+  return normalizeLabText(param?.inputType) === 'dropdown' ? 'immu' : 'bio';
+}
+
+function clearContextCustomItems(){
+  let changed = false;
+  ['hema','bio','immu','urine','stool','micro'].forEach(sec => {
+    CUSTOM[sec] = (CUSTOM[sec] || []).filter(id => {
+      const keep = !isContextCustomId(id);
+      if(!keep){
+        delete CUSTOM_META[id];
+        changed = true;
+      }
+      return keep;
+    });
+  });
+  if(changed) rebuildCustomLists();
+}
+
+function findCustomItemByBackendField(testName, paramName){
+  const testKey = normalizeLabText(testName);
+  const paramKey = normalizeLabText(paramName);
+  return Object.keys(CUSTOM_META).find(id => {
+    const meta = CUSTOM_META[id];
+    return meta
+      && normalizeLabText(meta.backendTestName) === testKey
+      && normalizeLabText(meta.backendParamName) === paramKey;
+  }) || null;
+}
+
+function applyCustomMappedResult(testName, paramName, value){
+  const id = findCustomItemByBackendField(testName, paramName);
+  if(!id) return false;
+  const input = document.getElementById('ri_' + id);
+  if(!input) return false;
+  const checkbox = document.getElementById('ck_' + id);
+  if(checkbox) checkbox.checked = true;
+  if(input.tagName === 'SELECT'){
+    const option = Array.from(input.options).find(opt => normalizeLabText(opt.value) === normalizeLabText(value));
+    input.value = option ? option.value : value;
+  } else {
+    input.value = value || '';
+  }
+  return true;
+}
+
+function createContextParameterItems(context){
+  clearContextCustomItems();
+  const parameterEntries = context?.parameters || {};
+  const orderedTestMeta = context?.orderedTestMeta || {};
+
+  Object.entries(parameterEntries).forEach(([testName, params]) => {
+    const testMeta = orderedTestMeta[testName] || {};
+    (params || []).forEach(param => {
+      if(mapSavedResultToField(testName, param.paramName)) return;
+      if(findCustomItemByBackendField(testName, param.paramName)) return;
+
+      const section = getSectionFromParameterContext(testName, testMeta, param);
+      markSectionActive(section);
+      _cIdx++;
+      const id = `${CONTEXT_CUSTOM_PREFIX}${section}_${_cIdx}`;
+      CUSTOM[section].push(id);
+      CUSTOM_META[id] = {
+        ...getCustomDefaultMeta(section),
+        source: 'parameter',
+        name: param.paramName || testName,
+        unit: param.unit || '',
+        ref: formatParameterReference(param),
+        resultType: normalizeLabText(param.inputType) === 'dropdown' ? 'select' : (normalizeLabText(param.inputType) === 'number' ? 'number' : 'text'),
+        options: param.options || '',
+        backendTestName: testName,
+        backendParamName: param.paramName,
+        backendUnit: param.unit || ''
+      };
+      const list = document.getElementById(section + '-list');
+      if(list) list.appendChild(createCustomRowElement(section, id));
+    });
+  });
+}
+
+function getCustomDefaultMeta(sec){
+  return {
+    section: sec,
+    name: '',
+    unit: '',
+    ref: sec === 'immu' ? 'Neg / Pos' : '',
+    resultType: sec === 'immu' ? 'select' : 'text'
+  };
+}
+
+function ensureCustomMeta(id, sec){
+  if(!CUSTOM_META[id]) CUSTOM_META[id] = getCustomDefaultMeta(sec);
+  CUSTOM_META[id].section = sec;
+  return CUSTOM_META[id];
+}
+
+function syncCustomMetaFromInputs(id){
+  const meta = CUSTOM_META[id];
+  if(!meta) return;
+  const nameInput = document.getElementById('nm_' + id);
+  const unitInput = document.getElementById('un_' + id);
+  const refInput = document.getElementById('rr_' + id);
+  if(nameInput) meta.name = nameInput.value;
+  if(unitInput) meta.unit = unitInput.value;
+  if(refInput) meta.ref = refInput.value;
+}
+
+function updateCustomMeta(id){
+  syncCustomMetaFromInputs(id);
+  saveCustomItems();
+}
+
+function saveCustomItems(){
+  Object.values(CUSTOM).flat().forEach(syncCustomMetaFromInputs);
+  const persistedMeta = Object.fromEntries(Object.entries(CUSTOM_META).filter(([id]) => !isContextCustomId(id)));
+  localStorage.setItem('custom-items', JSON.stringify({
+    hema: CUSTOM.hema.filter(id => !isContextCustomId(id)),
+    bio: CUSTOM.bio.filter(id => !isContextCustomId(id)),
+    immu: CUSTOM.immu.filter(id => !isContextCustomId(id)),
+    urine: CUSTOM.urine.filter(id => !isContextCustomId(id)),
+    stool: CUSTOM.stool.filter(id => !isContextCustomId(id)),
+    micro: CUSTOM.micro.filter(id => !isContextCustomId(id)),
+    meta: persistedMeta,
+    cIdx: _cIdx
+  }));
+}
+
+function createCustomRowElement(sec, id){
+  const meta = ensureCustomMeta(id, sec);
+  const div = document.createElement('div');
+  div.className = 'test-row';
+  div.id = 'row_' + id;
+  const nm = attrEsc(meta.name);
+  const unit = attrEsc(meta.unit);
+  const ref = attrEsc(meta.ref);
+  if(sec==='hema'){
+    div.innerHTML = `
+      <input type="checkbox" id="ck_${id}" checked onchange="render()">
+      <input type="text" class="custom-name ri" id="nm_${id}" value="${nm}" placeholder="ຊື່ລາຍການ..." oninput="updateCustomMeta('${id}');render()" style="flex:1;min-width:0" tabindex="0">
+      <input type="text" class="ri" id="ri_${id}" placeholder="—" oninput="render()" style="width:70px" tabindex="0">
+      <button onclick="openUnitSettings('${id}')" title="ຕັ້ງຄ່າ Unit" style="width:20px;height:18px;padding:0;border:none;border-radius:3px;background:#4a6080;color:#fff;cursor:pointer;font-size:9px;font-weight:bold;flex-shrink:0">U</button>
+      <span class="fl" id="fl_${id}"></span>
+      <span class="rf">
+        <input type="text" class="rf-edit" id="rr_${id}" value="${ref}" placeholder="ref" oninput="updateCustomMeta('${id}');render()" style="flex:1;min-width:0">
+        <button onclick="openSettings('${id}','custom')" title="ຕັ້ງຄ່າ" class="btn-setting">⚙</button>
+      </span>
+      <button onclick="removeCustomConfirm('${sec}','${id}')" title="ລຶບ" style="width:18px;height:18px;padding:0;border:none;border-radius:50%;background:#c23b3b;color:#fff;cursor:pointer;font-size:12px;font-weight:bold;flex-shrink:0;margin-left:3px">✕</button>
+      <input type="text" id="un_${id}" class="custom-unit" value="${unit}" placeholder="unit" style="display:none">`;
+  } else if(sec==='bio' || sec==='urine'){
+    div.innerHTML = `
+      <input type="checkbox" id="ck_${id}" checked onchange="render()">
+      <span class="tn" style="padding-left:4px"><input type="text" class="custom-name ri" id="nm_${id}" value="${nm}" placeholder="ຊື່ລາຍການ..." oninput="updateCustomMeta('${id}');render()" style="width:100%;border:none;background:transparent;outline:none;padding:0" tabindex="0"></span>
+      <input type="text" class="ri" id="ri_${id}" placeholder="—" oninput="render()" style="width:${sec==='bio' ? '70px' : '90px'}" tabindex="0">
+      <button onclick="openUnitSettings('${id}')" title="ຕັ້ງຄ່າ Unit" style="width:20px;height:18px;padding:0;border:none;border-radius:3px;background:#4a6080;color:#fff;cursor:pointer;font-size:9px;font-weight:bold;flex-shrink:0">U</button>
+      <span class="fl" id="fl_${id}"></span>
+      <span class="rf">
+        <input type="text" class="rf-edit" id="rr_${id}" value="${ref}" placeholder="ref" oninput="updateCustomMeta('${id}');render()" style="flex:1;min-width:0">
+        <button onclick="openSettings('${id}','custom')" title="ຕັ້ງຄ່າ" class="btn-setting">⚙</button>
+      </span>
+      <button onclick="removeCustomConfirm('${sec}','${id}')" title="ລຶບ" style="width:18px;height:18px;padding:0;border:none;border-radius:50%;background:#c23b3b;color:#fff;cursor:pointer;font-size:12px;font-weight:bold;flex-shrink:0;margin-left:3px">✕</button>
+      <input type="text" id="un_${id}" class="custom-unit" value="${unit}" placeholder="unit" style="display:none">`;
+  } else if(sec==='immu'){
+    const optionValues = ['—', ...(parseParameterOptions(meta.options).length > 0 ? parseParameterOptions(meta.options) : ['Negative','Positive','Equivocal'])];
+    const opts = optionValues.map(o=>`<option ${meta.resultType==='select' && o===meta.defaultValue ? 'selected' : ''}>${o}</option>`).join('');
+    div.innerHTML = `
+      <input type="checkbox" id="ck_${id}" checked onchange="render()">
+      <span class="tn" style="padding-left:4px"><input type="text" class="custom-name ri" id="nm_${id}" value="${nm}" placeholder="ຊື່ລາຍການ..." oninput="updateCustomMeta('${id}');render()" style="width:100%;border:none;background:transparent;outline:none;padding:0" tabindex="0"></span>
+      <select class="ri" id="ri_${id}" onchange="render()" style="width:90px;font-size:11px">${opts}</select>
+      <span class="fl"></span>
+      <span class="rf">
+        <input type="text" class="rf-edit" id="rr_${id}" value="${ref}" placeholder="ref" oninput="updateCustomMeta('${id}');render()" style="flex:1;min-width:0">
+        <button onclick="openSettings('${id}','custom')" title="ຕັ້ງຄ່າ" class="btn-setting">⚙</button>
+      </span>
+      <button onclick="removeCustomConfirm('${sec}','${id}')" title="ລຶບ" style="width:18px;height:18px;padding:0;border:none;border-radius:50%;background:#c23b3b;color:#fff;cursor:pointer;font-size:12px;font-weight:bold;flex-shrink:0;margin-left:3px">✕</button>`;
+  } else {
+    div.innerHTML = `
+      <input type="checkbox" id="ck_${id}" checked onchange="render()">
+      <span class="tn" style="padding-left:4px"><input type="text" class="custom-name ri" id="nm_${id}" value="${nm}" placeholder="ຊື່ລາຍການ..." oninput="updateCustomMeta('${id}');render()" style="width:100%;border:none;background:transparent;outline:none;padding:0" tabindex="0"></span>
+      <input type="text" class="ri" id="ri_${id}" placeholder="—" oninput="render()" style="width:90px" tabindex="0">
+      <span class="fl"></span>
+      <span class="rf">${sec==='micro' ? `<input type="text" class="rf-edit" id="rr_${id}" value="${ref}" placeholder="ref" oninput="updateCustomMeta('${id}');render()" style="flex:1;min-width:0"><button onclick="openSettings('${id}','custom')" title="ຕັ້ງຄ່າ" class="btn-setting">⚙</button>` : ''}</span>
+      <button onclick="removeCustomConfirm('${sec}','${id}')" title="ລຶບ" style="width:18px;height:18px;padding:0;border:none;border-radius:50%;background:#c23b3b;color:#fff;cursor:pointer;font-size:12px;font-weight:bold;flex-shrink:0;margin-left:3px">✕</button>`;
+  }
+  return div;
+}
+
+function rebuildCustomLists(){
+  ['hema','bio','immu','urine','stool','micro'].forEach(sec=>{
+    const list = document.getElementById(sec+'-list');
+    if(!list) return;
+    list.querySelectorAll('[id^="row_c_"],[id^="row_ctx_"]').forEach(el=>el.remove());
+    CUSTOM[sec].forEach(id=>{
+      const row = createCustomRowElement(sec, id);
+      list.appendChild(row);
+    });
+  });
+}
+
+function createCustomItem(sec, preset = {}){
+  _cIdx++;
+  const id = 'c_' + sec + '_' + _cIdx;
+  CUSTOM[sec].push(id);
+  CUSTOM_META[id] = { ...getCustomDefaultMeta(sec), ...preset, section: sec };
+  const list = document.getElementById(sec + '-list');
+  if(list) list.appendChild(createCustomRowElement(sec, id));
+  saveCustomItems();
+  render();
+  return id;
+}
+
+function addCustom(sec){
+  const id = createCustomItem(sec);
+  const nameInput = document.getElementById('nm_' + id);
+  if(nameInput) nameInput.focus();
+}
+
+function removeCustom(sec, id){
+  const idx = CUSTOM[sec].indexOf(id);
+  if(idx >= 0) CUSTOM[sec].splice(idx, 1);
+  delete CUSTOM_META[id];
+  const el = document.getElementById('row_' + id);
+  if(el) el.remove();
+  saveCustomItems();
+  renderPrintItemManager();
+  render();
+}
+
+function loadSavedCustomItems(){
+  const savedCustom = localStorage.getItem('custom-items');
+  if(!savedCustom) return;
+  try{
+    const data = JSON.parse(savedCustom);
+    ['hema','bio','immu','urine','stool','micro'].forEach(sec=>{
+      CUSTOM[sec] = Array.isArray(data[sec]) ? data[sec] : [];
+    });
+    Object.assign(CUSTOM_META, data.meta || {});
+    _cIdx = data.cIdx || 0;
+    Object.entries(CUSTOM).forEach(([sec, ids]) => ids.forEach(id => ensureCustomMeta(id, sec)));
+    rebuildCustomLists();
+  } catch(e){
+    console.error('Error loading custom items:', e);
+  }
+}
+
+function openPrintItemManager(section = currentPrintItemSection){
+  currentPrintItemSection = section;
+  const sectionSelect = document.getElementById('print-item-section');
+  if(sectionSelect) sectionSelect.value = section;
+  renderPrintItemManager();
+  document.getElementById('print-item-overlay').classList.add('show');
+}
+
+function closePrintItemManager(){
+  document.getElementById('print-item-overlay').classList.remove('show');
+}
+
+function renderPrintItemManager(){
+  const sectionSelect = document.getElementById('print-item-section');
+  const section = sectionSelect ? sectionSelect.value : currentPrintItemSection;
+  currentPrintItemSection = section;
+  const list = document.getElementById('print-item-list');
+  if(!list) return;
+  const ids = (CUSTOM[section] || []).filter(id => !isContextCustomId(id));
+  if(ids.length === 0){
+    list.innerHTML = '<div class="print-item-empty">ຍັງບໍ່ມີ custom item ໃນພາກນີ້</div>';
+    return;
+  }
+  list.innerHTML = ids.map(id => {
+    const meta = ensureCustomMeta(id, section);
+    return `
+      <div class="print-item-row">
+        <input type="text" value="${attrEsc(meta.name)}" placeholder="ຊື່ລາຍການ" oninput="updateManagedCustomField('${id}','name',this.value)">
+        <input type="text" value="${attrEsc(meta.unit)}" placeholder="unit" oninput="updateManagedCustomField('${id}','unit',this.value)">
+        <input type="text" value="${attrEsc(meta.ref)}" placeholder="ref" oninput="updateManagedCustomField('${id}','ref',this.value)">
+        <button class="preview-btn" style="background:#c23b3b" onclick="removeCustomConfirm('${section}','${id}')">ລົບ</button>
+      </div>`;
+  }).join('');
+}
+
+function updateManagedCustomField(id, field, value){
+  const meta = CUSTOM_META[id];
+  if(!meta) return;
+  meta[field] = value;
+  const domMap = { name:'nm_', unit:'un_', ref:'rr_' };
+  const target = document.getElementById((domMap[field] || '') + id);
+  if(target) target.value = value;
+  saveCustomItems();
+  render();
+}
+
+function addManagedCustomItem(){
+  const section = document.getElementById('print-item-section').value;
+  const name = document.getElementById('print-item-name').value.trim();
+  const unit = document.getElementById('print-item-unit').value.trim();
+  const ref = document.getElementById('print-item-ref').value.trim();
+  if(!name) return;
+  createCustomItem(section, { name, unit, ref });
+  document.getElementById('print-item-name').value = '';
+  document.getElementById('print-item-unit').value = '';
+  document.getElementById('print-item-ref').value = '';
+  renderPrintItemManager();
+}
+
+function openParameterSetupPage(){
+  const hostWindow = (window.parent && window.parent !== window) ? window.parent : (window.opener || null);
+  if(!hostWindow) return;
+  if(typeof hostWindow.closeLabResultModal === 'function') hostWindow.closeLabResultModal();
+  if(typeof hostWindow.showPage === 'function') hostWindow.showPage(null, 'paramSetupPage');
+}
+
+// Remove custom item with confirmation
+function removeCustomConfirm(sec, id){
+  if(confirm('ຕ້ອງການລຶບລາຍການນີ້ບໍ່?')){
+    removeCustom(sec, id);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════
+const HEMA = [
+  {id:'wbc',   name:'WBC',    unit:'10⁹/L',  ref:'4.00–10.00', lo:4,    hi:10,   cL:1,cH:1},
+  {id:'neu',   name:'Neu#',   unit:'10⁹/L',  ref:'2.00–7.00',  lo:2,    hi:7,    cL:1,cH:1},
+  {id:'lym',   name:'Lym#',   unit:'10⁹/L',  ref:'0.80–4.00',  lo:.8,   hi:4,    cL:1,cH:1},
+  {id:'mon',   name:'Mon#',   unit:'10⁹/L',  ref:'0.12–1.20',  lo:.12,  hi:1.2,  cL:1,cH:1},
+  {id:'eos',   name:'Eos#',   unit:'10⁹/L',  ref:'0.02–0.50',  lo:.02,  hi:.5,   cL:1,cH:1},
+  {id:'bas',   name:'Bas#',   unit:'10⁹/L',  ref:'0.00–0.10',  lo:0,    hi:.1,   cL:1,cH:1},
+  {id:'neup',  name:'Neu%',   unit:'%',       ref:'50.0–70.0',  lo:50,   hi:70,   cL:1,cH:1},
+  {id:'lymp',  name:'Lym%',   unit:'%',       ref:'20.0–40.0',  lo:20,   hi:40,   cL:1,cH:1},
+  {id:'monp',  name:'Mon%',   unit:'%',       ref:'3.0–12.0',   lo:3,    hi:12,   cL:1,cH:1},
+  {id:'eosp',  name:'Eos%',   unit:'%',       ref:'0.5–5.0',    lo:.5,   hi:5,    cL:1,cH:1},
+  {id:'basp',  name:'Bas%',   unit:'%',       ref:'0.0–1.0',    lo:0,    hi:1,    cL:1,cH:1},
+  {id:'nlr',   name:'NLR',    unit:'',        ref:'',            lo:null, hi:null, cL:0,cH:0, auto:1},
+  {id:'plr',   name:'PLR',    unit:'',        ref:'',            lo:null, hi:null, cL:0,cH:0, auto:1},
+  {id:'rbc',   name:'RBC',    unit:'10¹²/L', ref:'3.50–5.50',  lo:3.5,  hi:5.5,  cL:1,cH:1},
+  {id:'hgb',   name:'HGB',    unit:'g/dL',   ref:'11.0–16.0',  lo:11,   hi:16,   cL:1,cH:1},
+  {id:'hct',   name:'HCT',    unit:'%',       ref:'37.0–54.0',  lo:37,   hi:54,   cL:1,cH:1},
+  {id:'mcv',   name:'MCV',    unit:'fL',      ref:'80.0–100.0', lo:80,   hi:100,  cL:1,cH:1},
+  {id:'mch',   name:'MCH',    unit:'pg',      ref:'27.0–34.0',  lo:27,   hi:34,   cL:1,cH:1},
+  {id:'mchc',  name:'MCHC',   unit:'g/L',     ref:'320–360',    lo:320,  hi:360,  cL:1,cH:1},
+  {id:'rdwcv', name:'RDW-CV', unit:'%',       ref:'11.0–16.0',  lo:11,   hi:16,   cL:1,cH:1},
+  {id:'rdwsd', name:'RDW-SD', unit:'fL',      ref:'35.0–56.0',  lo:35,   hi:56,   cL:1,cH:1},
+  {id:'plt',   name:'PLT',    unit:'10⁹/L',  ref:'100–300',    lo:100,  hi:300,  cL:1,cH:1},
+  {id:'mpv',   name:'MPV',    unit:'fL',      ref:'7.0–11.0',   lo:7,    hi:11,   cL:1,cH:1},
+  {id:'pdwcv', name:'PDW-CV', unit:'%',       ref:'9.0–17.0',   lo:9,    hi:17,   cL:1,cH:1},
+  {id:'pdwsd', name:'PDW-SD', unit:'fL',      ref:'9.0–17.0',   lo:9,    hi:17,   cL:1,cH:1},
+  {id:'pct',   name:'PCT',    unit:'mL/L',    ref:'1.08–2.82',  lo:1.08, hi:2.82, cL:1,cH:1},
+  {id:'plcc',  name:'P-LCC',  unit:'10⁹/L',  ref:'30–90',      lo:30,   hi:90,   cL:1,cH:1},
+  {id:'plcr',  name:'P-LCR',  unit:'%',       ref:'11.0–45.0',  lo:11,   hi:45,   cL:1,cH:1},
+  {id:'esr',   name:'ESR (VS)', unit:'mm/hr',  ref:'0–20',       lo:0,    hi:20,   cL:1,cH:1},
+  {id:'malaria', name:'Malaria stain', unit:'', ref:'Negative',    lo:null, hi:null, cL:0,cH:0},
+  {id:'tstc',  name:'Ts Tc',    unit:'',        ref:'Negative',    lo:null, hi:null, cL:0,cH:0},
+];
+const BIO=[
+  {id:'gluc', name:'Glucose',         unit:'mg/dL',ref:'70–125',    lo:70,  hi:125,  cL:1,cH:1},
+  {id:'bun',  name:'BUN',             unit:'mg/dL',ref:'15–40',     lo:15,  hi:40,   cL:1,cH:1},
+  {id:'crea', name:'Creatinine',      unit:'mg/dL',ref:'0.3–1.3',   lo:.3,  hi:1.3,  cL:1,cH:1},
+  {id:'uric', name:'Uric Acid',       unit:'mg/dL',ref:'2.5–8.5',   lo:2.5, hi:8.5,  cL:1,cH:1},
+  {id:'ca',   name:'Calcium',         unit:'mg/dL',ref:'8.6–10.0',  lo:8.6, hi:10,   cL:1,cH:1},
+  {id:'prot', name:'Total Protein',   unit:'g/L',   ref:'64–83',    lo:64,  hi:83,   cL:1,cH:1},
+  {id:'alb',  name:'Albumin',         unit:'g/L',   ref:'35–50',    lo:35,  hi:50,   cL:1,cH:1},
+  {id:'sgot', name:'AST (SGOT)',      unit:'U/L',   ref:'0–40',     lo:0,   hi:40,   cL:1,cH:1},
+  {id:'sgpt', name:'ALT (SGPT)',      unit:'U/L',   ref:'0–45',     lo:0,   hi:45,   cL:1,cH:1},
+  {id:'ggt',  name:'Gamma (GGT)',     unit:'U/L',   ref:'0–50',     lo:0,   hi:50,   cL:1,cH:1},
+  {id:'alp',  name:'ALP',             unit:'U/L',   ref:'35–104',   lo:35,  hi:104,  cL:1,cH:1},
+  {id:'dbil', name:'Direct Bilirubin',unit:'mg/dL', ref:'0–0.2',    lo:0,   hi:.2,   cL:1,cH:1},
+  {id:'tbil', name:'Total Bilirubin', unit:'mg/dL', ref:'0.2–1.2',  lo:.2,  hi:1.2,  cL:1,cH:1},
+  {id:'chol', name:'Cholesterol',     unit:'mg/dL', ref:'<200',     lo:null,hi:200,  cL:0,cH:1},
+  {id:'trig', name:'Triglyceride',    unit:'mg/dL', ref:'<150',     lo:null,hi:150,  cL:0,cH:1},
+  {id:'hdl',  name:'HDL-C',           unit:'mg/dL', ref:'>55',      lo:55,  hi:null, cL:1,cH:0},
+  {id:'ldl',  name:'LDL-C',           unit:'mg/dL', ref:'<100',     lo:null,hi:100,  cL:0,cH:1},
+  {id:'hba1c',name:'HbA1C',           unit:'%',     ref:'4–6.5',    lo:4,   hi:6.5,  cL:1,cH:1},
+  {id:'na',   name:'Sodium (Na)',     unit:'mmol/L',ref:'136–145',  lo:136, hi:145,  cL:1,cH:1},
+  {id:'k',    name:'Potassium (K+)',  unit:'mmol/L',ref:'3.5–5.1',  lo:3.5, hi:5.1,  cL:1,cH:1},
+  {id:'cl',   name:'Chloride (Cl)',   unit:'mmol/L',ref:'98–107',   lo:98,  hi:107,  cL:1,cH:1},
+  {id:'t3',   name:'T3',              unit:'ng/dL', ref:'1.3–3.1',  lo:1.3, hi:3.1,  cL:1,cH:1},
+  {id:'t4',   name:'T4',              unit:'nmol/L',ref:'66–181',   lo:66,  hi:181,  cL:1,cH:1},
+  {id:'tsh',  name:'TSH',             unit:'mIU/L', ref:'0.3–4.2',  lo:.3,  hi:4.2,  cL:1,cH:1},
+];
+const IMMU=[
+  // Hepatitis B
+  {id:'hbsag', name:'HBs-Ag', ref:'Negative'},
+  {id:'hbsab', name:'HBs-Ab', ref:'Negative'},
+  {id:'hbeag', name:'HBe-Ag', ref:'Negative'},
+  {id:'hbeab', name:'HBe-Ab', ref:'Negative'},
+  {id:'hbcab', name:'HBc-Ab', ref:'Negative'},
+  // Hepatitis C
+  {id:'hcv',   name:'HCV-Ab', ref:'Negative'},
+  // HIV
+  {id:'hiv',   name:'HIV test', ref:'Negative'},
+  // Syphilis
+  {id:'vdrl',  name:'Syphilis test (VDRL)', ref:'Negative'},
+  {id:'tpha',  name:'TPHA', ref:'Negative'},
+  // Chlamydia & Gonorrhea
+  {id:'chlamydia', name:'Chlamydia rapid test', ref:'Negative'},
+  {id:'gonorrhea', name:'Gonorrhea rapid test', ref:'Negative'},
+  // H. pylori
+  {id:'hpylori', name:'H. pylori test', ref:'Negative'},
+  // Typhoid
+  {id:'typhoid', name:'Typhoid fever', ref:'Negative'},
+  // Rapid tests (text input - quantitative/semi-quantitative)
+  {id:'crp',   name:'CRP (C-reactive protein)', ref:'Negative', text:1},
+  {id:'ricket',name:'Rickettsia Rapid test', ref:'Negative', text:1},
+  {id:'lepto', name:'Leptospirosis Rapid test', ref:'Negative', text:1},
+  // Dengue
+  {id:'ns1',   name:'Dengue NS1', ref:'Negative'},
+  {id:'igm',   name:'IgM (Dengue)', ref:'Negative'},
+  {id:'igg',   name:'IgG (Dengue)', ref:'Negative'},
+  // Other
+  {id:'flua',  name:'FLU A', ref:'Negative'},
+  {id:'flub',  name:'FLU B', ref:'Negative'},
+  {id:'rsv',   name:'RSV', ref:'Negative'},
+  {id:'covid', name:'Covid-19', ref:'Negative'},
+  {id:'afp',   name:'AFP (Rapid)', ref:'Negative'},
+  {id:'cea',   name:'CEA (Rapid)', ref:'Negative'},
+  {id:'psa',   name:'PSA (Rapid)', ref:'Negative'},
+  {id:'amp',   name:'Amphetamine', ref:'Negative'},
+  // GDM & Vaginal
+  {id:'gdm',   name:'GDM screening(OGTT)', ref:'Negative', text:1},
+  {id:'vph',   name:'Vaginal PH Test', ref:'Negative', text:1},
+];
+const URINE=[
+  {id:'leu',name:'Leukocytes (LEU)',unit:'Cells/uL',ref:'Negative'},
+  {id:'nit',name:'Nitrite (NIT)',   unit:'',        ref:'Negative'},
+  {id:'uro',name:'Urobilinogen',    unit:'umol/L',  ref:'Negative'},
+  {id:'pro',name:'Protein (PRO)',   unit:'g/L',     ref:'Negative'},
+  {id:'ph', name:'pH',              unit:'',        ref:'4.6–8.0'},
+  {id:'bld',name:'Blood (BLD)',     unit:'Cell/uL', ref:'Negative'},
+  {id:'sg', name:'Specific Gravity',unit:'',        ref:'1.003–1.030'},
+  {id:'asc',name:'Ascorbate',       unit:'mmol/L',  ref:'Negative'},
+  {id:'ket',name:'Ketones (KET)',   unit:'mmol/L',  ref:'Negative'},
+  {id:'bil',name:'Bilirubin (BIL)',unit:'umol/L',  ref:'Negative'},
+  {id:'glu',name:'Glucose (GLU)',   unit:'mmol/L',  ref:'Negative'},
+];
+const STOOL=[{id:'sob',name:'Stool occult blood'},{id:'sex',name:'Stool examination'}];
+const MICRO=[
+  {id:'epi',   name:'Epithelial cell',        unit:'', ref:'(-)'},
+  {id:'cand',  name:'Candida spp',            unit:'', ref:'(-)'},
+  {id:'scor',  name:'Scor',                   unit:'', ref:'(-)'},
+  {id:'clue',  name:'Clues cell',             unit:'', ref:'(-)'},
+  {id:'bact',  name:'Bacteria',               unit:'', ref:'(-)'},
+  {id:'lacto', name:'Lactobacillus',          unit:'', ref:'(-)'},
+  {id:'leuko', name:'Leukocyte',              unit:'', ref:'(-)'},
+  {id:'gram',  name:'Gram negative diplococci',unit:'', ref:'(-)'},
+  {id:'ery',   name:'Erythrocyte',            unit:'', ref:'(-)'},
+];
+
+// ══════════════════════════════════════════════════════════
+// BUILD FORM
+// ══════════════════════════════════════════════════════════
+function buildForm(elId, tests, type){
+  const ul = document.getElementById(elId);
+  tests.forEach(t=>{
+    const row = document.createElement('div');
+    row.className='test-row'; row.id='row_'+t.id;
+    if(type==='hema'){
+      if(t.auto){
+        row.innerHTML=`
+          <input type="checkbox" id="ck_${t.id}" checked onchange="toggleI('${t.id}');render()">
+          <span class="tn" style="color:#1F4E79;font-weight:bold;padding-left:4px">${t.name} <small style="font-weight:normal;color:#888">(auto)</small></span>
+          <input type="number" step="any" class="ri" id="ri_${t.id}" placeholder="auto"
+                 oninput="render()" style="background:#EBF3FA">
+          <span class="fl" id="fl_${t.id}"></span>
+          <span class="rf">
+            <input type="text" class="rf-edit" id="rr_${t.id}" value="${t.ref}" title="ແກ້ ref range" oninput="parseRefInput('${t.id}',this.value)">
+            <button class="btn-setting" onclick="openSettings('${t.id}','${type}')" title="ຕັ້ງຄ່າ">⚙</button>
+          </span>`;
+      } else {
+        row.innerHTML=`
+          <input type="checkbox" id="ck_${t.id}" checked onchange="toggleI('${t.id}');render()">
+          <span class="tn" style="padding-left:4px">${t.name}</span>
+          <input type="text" class="ri" id="ri_${t.id}" placeholder="—" oninput="render()" style="width:70px">
+          <span class="fl" id="fl_${t.id}"></span>
+          <span class="rf">
+            <input type="text" class="rf-edit" id="rr_${t.id}" value="${t.ref}" title="ແກ້ ref range" oninput="parseRefInput('${t.id}',this.value)">
+            <button class="btn-setting" onclick="openSettings('${t.id}','${type}')" title="ຕັ້ງຄ່າ">⚙</button>
+          </span>`;
+      }
+    } else if(type==='bio'){
+      row.innerHTML=`
+        <input type="checkbox" id="ck_${t.id}" onchange="toggleI('${t.id}');render()">
+        <span class="tn">${t.name}</span>
+        <input type="number" step="any" class="ri" id="ri_${t.id}" disabled placeholder="—" oninput="updateF('${t.id}');render()">
+        <span class="fl" id="fl_${t.id}"></span>
+        <span class="rf">
+          <input type="text" class="rf-edit" id="rr_${t.id}" value="${t.ref}" title="ແກ້ ref range" oninput="parseRefInput('${t.id}',this.value)">
+          <button class="btn-setting" onclick="openSettings('${t.id}','${type}')" title="ຕັ້ງຄ່າ">⚙</button>
+        </span>`;
+    } else if(type==='immu'||type==='stool'){
+      if(type==='stool' && t.id==='sex'){
+        // Stool examination → free text input
+        row.innerHTML=`
+          <input type="checkbox" id="ck_${t.id}" onchange="toggleI('${t.id}');render()">
+          <span class="tn">${t.name}</span>
+          <input type="text" class="ri stool-text" id="ri_${t.id}" disabled placeholder="—" oninput="render()" style="width:90px">
+          <span class="fl"></span><span class="rf"></span>`;
+      } else if(t.text){
+        // IMMU items with text:1 (CRP, Rickettsia, Leptospirosis) → text input
+        row.innerHTML=`
+          <input type="checkbox" id="ck_${t.id}" onchange="toggleI('${t.id}');render()">
+          <span class="tn">${t.name}</span>
+          <input type="text" class="ri" id="ri_${t.id}" disabled placeholder="—" oninput="render()" style="width:90px">
+          <span class="fl"></span>
+          <span class="rf">
+            <input type="text" class="rf-edit" id="rr_${t.id}" value="${t.ref||'Neg / Pos'}" title="ແກ້ ref range" oninput="parseRefInput('${t.id}',this.value)">
+            <button class="btn-setting" onclick="openSettings('${t.id}','${type}')" title="ຕັ້ງຄ່າ">⚙</button>
+          </span>`;
+      } else {
+        const opts=['—','Negative','Positive','Equivocal'].map(o=>`<option>${o}</option>`).join('');
+        row.innerHTML=`
+          <input type="checkbox" id="ck_${t.id}" onchange="toggleI('${t.id}');render()">
+          <span class="tn">${t.name}</span>
+          <select class="ri" id="ri_${t.id}" disabled onchange="render()" style="width:90px;font-size:11px">${opts}</select>
+          <span class="fl"></span>
+          <span class="rf">
+            <input type="text" class="rf-edit" id="rr_${t.id}" value="${t.ref||'Neg / Pos'}" title="ແກ້ ref range" oninput="parseRefInput('${t.id}',this.value)">
+            <button class="btn-setting" onclick="openSettings('${t.id}','${type}')" title="ຕັ້ງຄ່າ">⚙</button>
+          </span>`;
+      }
+    } else if(type==='micro'){
+      // MICRO — no checkbox, always shown, text input with ref
+      row.innerHTML=`
+        <span class="tn" style="padding-left:4px">${t.name}</span>
+        <input type="text" class="ri" id="ri_${t.id}" placeholder="—" oninput="render()" style="width:90px">
+        <span class="fl"></span>
+        <span class="rf">
+          <input type="text" class="rf-edit" id="rr_${t.id}" value="${t.ref}" title="ແກ້ ref range" oninput="parseRefInput('${t.id}',this.value)">
+          <button class="btn-setting" onclick="openSettings('${t.id}','${type}')" title="ຕັ້ງຄ່າ">⚙</button>
+        </span>`;
+    } else { // urine — no checkbox, toggle button controls whole section, but ref is editable
+      row.innerHTML=`
+        <span class="tn" style="padding-left:4px">${t.name}</span>
+        <input type="text" class="ri" id="ri_${t.id}" placeholder="—" oninput="render()" style="width:90px">
+        <span class="fl"></span>
+        <span class="rf">
+          <input type="text" class="rf-edit" id="rr_${t.id}" value="${t.ref}" title="ແກ້ ref range" oninput="parseRefInput('${t.id}',this.value)">
+          <button class="btn-setting" onclick="openSettings('${t.id}','${type}')" title="ຕັ້ງຄ່າ">⚙</button>
+        </span>`;
+    }
+    ul.appendChild(row);
+  });
+}
+
+// Custom buildForm for HEMA with CBC profile order support
+function buildHemaForm(elId, tests, type){
+  const ul = document.getElementById(elId);
+  
+  // CBC 24P order: NEU, LYM, MON, EOS, BAS
+  const cbc24pOrder = ['wbc','neu','lym','mon','eos','bas','neup','lymp','monp','eosp','basp','nlr','plr','rbc','hgb','hct','mcv','mch','mchc','rdwcv','rdwsd','plt','mpv','pdwcv','pdwsd','pct','plcc','plcr'];
+  
+  // CBC 18P order: LYM, MID (MON), NEU
+  const cbc18Order = ['wbc','lym','mon','neu','lymp','monp','neup','rbc','hgb','hct','mcv','mch','mchc','rdwcv','rdwsd','plt','mpv','pdwcv','pct','eos','bas','eosp','basp','nlr','plr','pdwsd','plcc','plcr'];
+  
+  // Use order based on current profile
+  const renderOrder = (currentCBCProfile === 'cbc18') ? cbc18Order : cbc24pOrder;
+  
+  renderOrder.forEach(testId=>{
+    const t = tests.find(x=>x.id===testId);
+    if(!t) return;
+    const row = document.createElement('div');
+    row.className='test-row'; row.id='row_'+t.id;
+    if(t.auto){
+      row.innerHTML=`
+        <input type="checkbox" id="ck_${t.id}" checked onchange="toggleI('${t.id}');render()">
+        <span class="tn" style="color:#1F4E79;font-weight:bold;padding-left:4px">${t.name} <small style="font-weight:normal;color:#888">(auto)</small></span>
+        <input type="number" step="any" class="ri" id="ri_${t.id}" placeholder="auto"
+               oninput="render()" style="background:#EBF3FA">
+        <span class="fl" id="fl_${t.id}"></span>
+        <span class="rf">
+          <input type="text" class="rf-edit" id="rr_${t.id}" value="${t.ref}" title="ແກ້ ref range" oninput="parseRefInput('${t.id}',this.value)">
+          <button class="btn-setting" onclick="openSettings('${t.id}','${type}')" title="ຕັ້ງຄ່າ">⚙</button>
+        </span>`;
+    } else {
+      row.innerHTML=`
+        <input type="checkbox" id="ck_${t.id}" checked onchange="toggleI('${t.id}');render()">
+        <span class="tn" style="padding-left:4px">${t.name}</span>
+        <input type="number" step="any" class="ri" id="ri_${t.id}" placeholder="—" oninput="updateF('${t.id}');render()">
+        <span class="fl" id="fl_${t.id}"></span>
+        <span class="rf">
+          <input type="text" class="rf-edit" id="rr_${t.id}" value="${t.ref}" title="ແກ້ ref range" oninput="parseRefInput('${t.id}',this.value)">
+          <button class="btn-setting" onclick="openSettings('${t.id}','${type}')" title="ຕັ້ງຄ່າ">⚙</button>
+        </span>`;
+    }
+    ul.appendChild(row);
+  });
+
+  // Add special HEMA items (ESR, Malaria, Ts Tc) at the end
+  const specialHemaIds = ['esr','malaria','tstc'];
+  specialHemaIds.forEach(testId=>{
+    const t = tests.find(x=>x.id===testId);
+    if(!t) return;
+    const row = document.createElement('div');
+    row.className='test-row'; row.id='row_'+t.id;
+    
+    // Special items use text input (user types value)
+    row.innerHTML=`
+      <input type="checkbox" id="ck_${t.id}" checked onchange="toggleI('${t.id}');render()">
+      <span class="tn" style="padding-left:4px">${t.name}</span>
+      <input type="text" class="ri" id="ri_${t.id}" placeholder="—" oninput="render()" style="width:70px">
+      <span class="fl" id="fl_${t.id}"></span>
+      <span class="rf">
+        <input type="text" class="rf-edit" id="rr_${t.id}" value="${t.ref}" title="ແກ້ ref range" oninput="parseRefInput('${t.id}',this.value)">
+        <button class="btn-setting" onclick="openSettings('${t.id}','${type}')" title="ຕັ້ງຄ່າ">⚙</button>
+      </span>`;
+    ul.appendChild(row);
+  });
+}
+
+// Build initial HEMA form
+buildHemaForm('hema-list', HEMA, 'hema');
+buildForm('bio-list', BIO, 'bio');
+buildForm('immu-list',IMMU,'immu');
+buildForm('urine-list',URINE,'urine');
+buildForm('stool-list',STOOL,'stool');
+buildForm('micro-list',MICRO,'micro');
+
+// ══════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════
+const ck = id => { const e=document.getElementById('ck_'+id); return e&&e.checked; };
+const gv = id => { const e=document.getElementById('ri_'+id); return (e&&!e.disabled)?e.value:''; };
+const esc= s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const LAB_RESULT_CONTEXT_KEY = 'lis_lab_result_context';
+const LAB_RESULT_DRAFT_KEY_PREFIX = 'lis_lab_result_draft_';
+let currentLabContext = null;
+let orderedFieldIds = null;
+let orderedSectionIds = null;
+
+const FIELD_SECTION_MAP = {};
+
+const FIELD_PARAM_ALIASES = {
+  wbc:['wbc'], lym:['lymnum','lym'], mon:['mxdnum','midnum','monnum','mon'], neu:['neutnum','neunum','neu'],
+  eos:['eosnum','eos'], bas:['basnum','bas'], lymp:['lympct'], monp:['mxdpct','midpct','monpct'], neup:['neutpct','neupct'],
+  eosp:['eospct'], basp:['baspct'], nlr:['nlr'], plr:['plr'], rbc:['rbc'], hgb:['hgb'], hct:['hct'], mcv:['mcv'],
+  mch:['mch'], mchc:['mchc'], rdwcv:['rdwcv'], rdwsd:['rdwsd'], plt:['plt'], mpv:['mpv'], pdwcv:['pdw','pdwcv'],
+  pdwsd:['pdwsd'], pct:['pct'], plcc:['plcc'], plcr:['plcr'], esr:['esr'], malaria:['malariastain'], tstc:['tstc'],
+  gluc:['glu','glucose'], bun:['bun'], crea:['crea','creatinine'], uric:['ua','uricacid'], ca:['ca','calcium'],
+  prot:['tp','totalprotein'], alb:['alb','albumin'], sgot:['ast','sgot'], sgpt:['alt','sgpt'], ggt:['ggt'],
+  alp:['alp'], tbil:['tbill','tbil','totalbilirubin'], dbil:['dbill','dbil','directbilirubin'], chol:['cho','cholesterol'],
+  trig:['tg','trig','triglyceride'], hdl:['hdl','hdlc'], ldl:['ldl','ldlc'], hba1c:['hba1c'], na:['na','sodium'], k:['k','potassium'],
+  cl:['cl','chloride'], t3:['t3'], t4:['t4'], tsh:['tsh'], hbsag:['hbsag'], hbsab:['hbsab'], hcv:['hcvab','hcv'],
+  hiv:['hiv'], vdrl:['syphillis','syphilis','vdrl'], hpylori:['hpylori'], typhoid:['typhoid'], crp:['crp'],
+  ricket:['ricketsiaigg','ricketsiaigm','ricket'], lepto:['leptoigm','leptoigg','lepto'], ns1:['ns1'], igm:['dengueigm','igm'],
+  igg:['dengueigg','igg'], leu:['leu'], nit:['nit'], uro:['uro'], pro:['pro'], ph:['ph'], bld:['blo','bld','blood'],
+  sg:['sg'], ket:['ket'], bil:['bil'], glu:['glu'], asc:['asc'], sob:['occultblood'], sex:['parasites']
+};
+
+const FIELD_FALLBACKS = {
+  wbc:{ testName:'CBC 24P', paramName:'WBC' }, lym:{ testName:'CBC 24P', paramName:'LYM#' }, mon:{ testName:'CBC 24P', paramName:'MXD#' },
+  neu:{ testName:'CBC 24P', paramName:'NEUT#' }, eos:{ testName:'CBC 24P', paramName:'EOS#' }, bas:{ testName:'CBC 24P', paramName:'BAS#' },
+  lymp:{ testName:'CBC 24P', paramName:'LYM%' }, monp:{ testName:'CBC 24P', paramName:'MXD%' }, neup:{ testName:'CBC 24P', paramName:'NEUT%' },
+  eosp:{ testName:'CBC 24P', paramName:'EOS%' }, basp:{ testName:'CBC 24P', paramName:'BAS%' }, nlr:{ testName:'CBC 24P', paramName:'NLR' },
+  plr:{ testName:'CBC 24P', paramName:'PLR' }, rbc:{ testName:'CBC 24P', paramName:'RBC' }, hgb:{ testName:'CBC 24P', paramName:'HGB' },
+  hct:{ testName:'CBC 24P', paramName:'HCT' }, mcv:{ testName:'CBC 24P', paramName:'MCV' }, mch:{ testName:'CBC 24P', paramName:'MCH' },
+  mchc:{ testName:'CBC 24P', paramName:'MCHC' }, rdwcv:{ testName:'CBC 24P', paramName:'RDWCV' }, rdwsd:{ testName:'CBC 24P', paramName:'RDWSD' },
+  plt:{ testName:'CBC 24P', paramName:'PLT' }, mpv:{ testName:'CBC 24P', paramName:'MPV' }, pdwcv:{ testName:'CBC 24P', paramName:'PDW' },
+  pdwsd:{ testName:'CBC 24P', paramName:'PDWSD' }, pct:{ testName:'CBC 24P', paramName:'PCT' }, plcc:{ testName:'CBC 24P', paramName:'P-LCC' },
+  plcr:{ testName:'CBC 24P', paramName:'P-LCR' }, esr:{ testName:'ESR(VS)', paramName:'ESR' }, malaria:{ testName:'Malaria stain', paramName:'Malaria stain' },
+  tstc:{ testName:'Ts Tc', paramName:'Ts Tc' }, gluc:{ testName:'Glucose', paramName:'GLU' }, bun:{ testName:'Bun', paramName:'BUN' },
+  crea:{ testName:'Creatinine', paramName:'Crea' }, uric:{ testName:'Uric acide', paramName:'UA' }, ca:{ testName:'calcium', paramName:'CA' },
+  prot:{ testName:'Totol potein', paramName:'TP' }, alb:{ testName:'Albumin', paramName:'ALB' }, sgot:{ testName:'AST(SGOT)', paramName:'AST' },
+  sgpt:{ testName:'ALT( SGPT)', paramName:'ALT' }, ggt:{ testName:'Gamma ( GGT )', paramName:'GGT' }, alp:{ testName:'ALP(Alkaline phosphatase)', paramName:'ALP' },
+  tbil:{ testName:'Total bilirubin', paramName:'T-Bill' }, dbil:{ testName:'Direct bilirubin', paramName:'D-Bill' }, chol:{ testName:'Cholesterol', paramName:'CHO' },
+  trig:{ testName:'Triglycirid', paramName:'TG' }, hdl:{ testName:'HDL', paramName:'HDL' }, ldl:{ testName:'LDL', paramName:'LDL' },
+  hba1c:{ testName:'HbA1C', paramName:'HbA1C' }, na:{ testName:'Electolyte', paramName:'Na' }, k:{ testName:'Electolyte', paramName:'K' },
+  cl:{ testName:'Electolyte', paramName:'CL' }, t3:{ testName:'T3', paramName:'T3' }, t4:{ testName:'T4', paramName:'T4' },
+  tsh:{ testName:'TSH', paramName:'TSH' }, hbsag:{ testName:'HBs- Ag', paramName:'HBs-Ag' }, hbsab:{ testName:'HBs - Ab', paramName:'HBs-Ab' },
+  hcv:{ testName:'HCV -Ab', paramName:'HCV-Ab' }, hiv:{ testName:'HIV test', paramName:'HIV' }, vdrl:{ testName:'Syphilis test (VDRL)', paramName:'Syphillis' },
+  hpylori:{ testName:'H-pylori test', paramName:'H.pylori' }, typhoid:{ testName:'Typhoid fever', paramName:'Typhoid fever' },
+  crp:{ testName:'CRP (c-reactive protein)', paramName:'CRP' }, ricket:{ testName:'Ricketsia Rapid test', paramName:'Ricketsia-IgM' },
+  lepto:{ testName:'leptospirosis Rapid test', paramName:'Lepto-IgM' }, ns1:{ testName:'Dengue Fever test (Ns1, IgG ,igM)', paramName:'NS1' },
+  igm:{ testName:'Dengue Fever test (Ns1, IgG ,igM)', paramName:'Dengue-IgM' }, igg:{ testName:'Dengue Fever test (Ns1, IgG ,igM)', paramName:'Dengue-IgG' },
+  leu:{ testName:'Urine physical Examination', paramName:'LEU' }, nit:{ testName:'Urine physical Examination', paramName:'NIT' },
+  uro:{ testName:'Urine physical Examination', paramName:'URO' }, pro:{ testName:'Urine physical Examination', paramName:'PRO' },
+  ph:{ testName:'Urine physical Examination', paramName:'pH' }, bld:{ testName:'Urine physical Examination', paramName:'BLO' },
+  sg:{ testName:'Urine physical Examination', paramName:'SG' }, ket:{ testName:'Urine physical Examination', paramName:'KET' },
+  bil:{ testName:'Urine physical Examination', paramName:'BIL' }, glu:{ testName:'Urine physical Examination', paramName:'GLU' },
+  asc:{ testName:'Urine physical Examination', paramName:'ASC' }, sob:{ testName:'Occult blood test', paramName:'Occult blood test' },
+  sex:{ testName:'Parasites', paramName:'parasites' }
+};
+
+HEMA.forEach(t=>{ FIELD_SECTION_MAP[t.id] = 'hema'; });
+BIO.forEach(t=>{ FIELD_SECTION_MAP[t.id] = 'bio'; });
+IMMU.forEach(t=>{ FIELD_SECTION_MAP[t.id] = 'immu'; });
+URINE.forEach(t=>{ FIELD_SECTION_MAP[t.id] = 'urine'; });
+MICRO.forEach(t=>{ FIELD_SECTION_MAP[t.id] = 'micro'; });
+STOOL.forEach(t=>{ FIELD_SECTION_MAP[t.id] = 'stool'; });
+
+function hasOrderedContext(){
+  return orderedFieldIds instanceof Set && orderedSectionIds instanceof Set;
+}
+
+function beginOrderedContext(){
+  orderedFieldIds = new Set();
+  orderedSectionIds = new Set();
+}
+
+function clearOrderedContext(){
+  orderedFieldIds = null;
+  orderedSectionIds = null;
+}
+
+function markFieldActive(id){
+  if(!(orderedFieldIds instanceof Set) || !FIELD_SECTION_MAP[id]) return;
+  orderedFieldIds.add(id);
+  orderedSectionIds.add(FIELD_SECTION_MAP[id]);
+}
+
+function markSectionActive(sectionId){
+  if(orderedSectionIds instanceof Set) orderedSectionIds.add(sectionId);
+}
+
+function getCbcProfileTests(profileId){
+  const profile = CBC_PROFILES[profileId] || CBC_PROFILES.cbc24p;
+  return profile.tests || [];
+}
+
+function applyOrderedEntryLayout(){
+  const rowIds = new Set(Object.keys(FIELD_SECTION_MAP));
+  document.querySelectorAll('.test-row[id^="row_"]').forEach(row=>{
+    if(!hasOrderedContext()){
+      row.style.display = '';
+      return;
+    }
+    const fieldId = row.id.slice(4);
+    if(!rowIds.has(fieldId)){
+      row.style.display = '';
+      return;
+    }
+    row.style.display = orderedFieldIds.has(fieldId) ? '' : 'none';
+  });
+
+  const sectionConfigs = [
+    { key:'hema', bodyId:'hema' },
+    { key:'bio', bodyId:'bio' },
+    { key:'immu', bodyId:'immu' },
+    { key:'micro', bodyId:'micro' },
+    { key:'urine', bodyId:'urine' },
+    { key:'stool', bodyId:'stool' }
+  ];
+
+  sectionConfigs.forEach(({ key, bodyId })=>{
+    const body = document.getElementById(bodyId);
+    const header = body?.previousElementSibling;
+    if(!body || !header) return;
+    const isVisible = !hasOrderedContext() || orderedSectionIds.has(key);
+    header.style.display = isVisible ? '' : 'none';
+    body.style.display = isVisible ? '' : 'none';
+  });
+
+  const aboBtn = document.getElementById('abo-btn');
+  if(aboBtn){
+    aboBtn.style.display = !hasOrderedContext() || orderedSectionIds.has('hema') ? '' : 'none';
+  }
+}
+
+function normalizeLabText(value){
+  return String(value||'').toLowerCase().replace(/\s+/g,'').replace(/[()_.\/-]/g,'').replace(/#/g,'num').replace(/%/g,'pct');
+}
+
+const COMPATIBLE_TEST_KEY_GROUPS = [
+  ['hdl','hdlc'],
+  ['ldl','ldlc'],
+  ['triglyceride','triglycerid','triglycirid']
+];
+
+function buildCompatibleLabTestKeySet(values = []){
+  const keys = new Set();
+  (values || []).forEach(value => {
+    const normalized = normalizeLabText(value);
+    if(!normalized) return;
+    keys.add(normalized);
+    COMPATIBLE_TEST_KEY_GROUPS.forEach(group => {
+      if(group.includes(normalized)) group.forEach(item => keys.add(item));
+    });
+  });
+  return keys;
+}
+
+function setInputValue(id, value){
+  const el = document.getElementById(id);
+  if(!el) return;
+  if(el.tagName==='SELECT'){
+    const option = Array.from(el.options).find(opt=>normalizeLabText(opt.value)===normalizeLabText(value));
+    el.value = option ? option.value : value;
+  } else {
+    el.value = value || '';
+  }
+}
+
+function ensureSelectOption(id, value){
+  const el = document.getElementById(id);
+  if(!el || !value) return;
+  const exists = Array.from(el.options).some(opt => opt.value === value);
+  if(!exists){
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = value;
+    el.appendChild(opt);
+  }
+  el.value = value;
+}
+
+function ensureCbcMode(profileId){
+  const desiredProfile = profileId || 'cbc24p';
+  document.getElementById('cbc-profile-select').value = desiredProfile;
+  if(currentCBCProfile !== desiredProfile) changeCBCProfile(desiredProfile);
+  if(!cbcOn) toggleCBC();
+}
+
+function ensureUrineMode(){ if(!urineOn) toggleUrine(); }
+function ensureMicroMode(){ if(!microOn) toggleMicro(); }
+function ensureAboMode(){ if(!aboOn) toggleABO(); }
+
+function enableField(id){
+  const checkbox = document.getElementById('ck_'+id);
+  if(checkbox) checkbox.checked = true;
+  const input = document.getElementById('ri_'+id);
+  if(input){
+    input.disabled = false;
+    if(input.tagName==='SELECT' && (!input.value || input.value==='—')) input.value = 'Negative';
+  }
+}
+
+function resetLabContextForm(){
+  clearOrderedContext();
+  clearContextCustomItems();
+  ['f_sid','f_cn','f_name','f_age','f_vil','f_dis','f_prov','f_dx'].forEach(id=>setInputValue(id,''));
+  setInputValue('f_sex','');
+  ensureSelectOption('f_doc','');
+  document.getElementById('f_doc').value = '';
+  document.getElementById('f_rby').value = document.getElementById('f_rby').value || '';
+  if(cbcOn) toggleCBC();
+  if(urineOn) toggleUrine();
+  if(microOn) toggleMicro();
+  if(aboOn) toggleABO();
+  document.getElementById('cbc-profile-select').value = 'cbc24p';
+  currentCBCProfile = 'cbc24p';
+  document.querySelectorAll('[id^="ck_"]').forEach(el=>{ el.checked = false; });
+  document.querySelectorAll('[id^="ri_"]').forEach(el=>{
+    if(el.tagName==='SELECT') el.value = '—';
+    else el.value = '';
+  });
+  [...BIO,...IMMU,...STOOL].forEach(t=>{ const el=document.getElementById('ri_'+t.id); if(el) el.disabled=true; });
+  HEMA.forEach(t=>{ const el=document.getElementById('ri_'+t.id); if(el) el.disabled=false; });
+  applyOrderedEntryLayout();
+}
+
+function formatGenderForTemplate(gender){
+  const key = normalizeLabText(gender);
+  if(key==='male'||key==='m'||key==='ຊາຍ') return 'ຊາຍ (M)';
+  if(key==='female'||key==='f'||key==='ຍິງ') return 'ຍິງ (F)';
+  return '';
+}
+
+function activateOrderedTest(testName){
+  const key = normalizeLabText(testName);
+  switch(key){
+    case 'cbc18p':
+      ensureCbcMode('cbc18');
+      markSectionActive('hema');
+      getCbcProfileTests('cbc18').forEach(markFieldActive);
+      break;
+    case 'cbc24p':
+      ensureCbcMode('cbc24p');
+      markSectionActive('hema');
+      getCbcProfileTests('cbc24p').forEach(markFieldActive);
+      break;
+    case 'bloodtypingabo':
+      ensureAboMode();
+      markSectionActive('hema');
+      break;
+    case 'rh':
+      ensureAboMode();
+      markSectionActive('hema');
+      break;
+    case 'esrvs':
+    case 'esr': enableField('esr'); markFieldActive('esr'); break;
+    case 'malariastain': enableField('malaria'); markFieldActive('malaria'); break;
+    case 'tstc': enableField('tstc'); markFieldActive('tstc'); break;
+    case 'glucose':
+    case 'bloodsugarfbs':
+    case 'bloodsugafbs': enableField('gluc'); markFieldActive('gluc'); break;
+    case 'bun':
+    case 'urea':
+    case 'ureabun': enableField('bun'); markFieldActive('bun'); break;
+    case 'creatinine': enableField('crea'); markFieldActive('crea'); break;
+    case 'uricacide':
+    case 'uricacid': enableField('uric'); markFieldActive('uric'); break;
+    case 'calcium': enableField('ca'); markFieldActive('ca'); break;
+    case 'totolpotein': enableField('prot'); markFieldActive('prot'); break;
+    case 'albumin': enableField('alb'); markFieldActive('alb'); break;
+    case 'astsgot': enableField('sgot'); markFieldActive('sgot'); break;
+    case 'altsgpt': enableField('sgpt'); markFieldActive('sgpt'); break;
+    case 'gammaggt': enableField('ggt'); markFieldActive('ggt'); break;
+    case 'alpalkalinephosphatase': enableField('alp'); markFieldActive('alp'); break;
+    case 'totalbilirubin': enableField('tbil'); markFieldActive('tbil'); break;
+    case 'directbilirubin': enableField('dbil'); markFieldActive('dbil'); break;
+    case 'electolyte': ['na','k','cl'].forEach(id=>{ enableField(id); markFieldActive(id); }); break;
+    case 'cholesterol': enableField('chol'); markFieldActive('chol'); break;
+    case 'triglycirid':
+    case 'triglyceride':
+    case 'triglycerid': enableField('trig'); markFieldActive('trig'); break;
+    case 'hdl':
+    case 'hdlc': enableField('hdl'); markFieldActive('hdl'); break;
+    case 'ldl':
+    case 'ldlc': enableField('ldl'); markFieldActive('ldl'); break;
+    case 'hba1c': enableField('hba1c'); markFieldActive('hba1c'); break;
+    case 't3': enableField('t3'); markFieldActive('t3'); break;
+    case 't4': enableField('t4'); markFieldActive('t4'); break;
+    case 'tsh': enableField('tsh'); markFieldActive('tsh'); break;
+    case 'hbsag': enableField('hbsag'); markFieldActive('hbsag'); break;
+    case 'hbsab': enableField('hbsab'); markFieldActive('hbsab'); break;
+    case 'hcvab': enableField('hcv'); markFieldActive('hcv'); break;
+    case 'hivtest': enableField('hiv'); markFieldActive('hiv'); break;
+    case 'syphilistestvdrl': enableField('vdrl'); markFieldActive('vdrl'); break;
+    case 'hpyloritest': enableField('hpylori'); markFieldActive('hpylori'); break;
+    case 'typhoidfever': enableField('typhoid'); markFieldActive('typhoid'); break;
+    case 'crpcreactiveprotein': enableField('crp'); markFieldActive('crp'); break;
+    case 'ricketsiarapidtest': enableField('ricket'); markFieldActive('ricket'); break;
+    case 'leptospirosisrapidtest': enableField('lepto'); markFieldActive('lepto'); break;
+    case 'denguefevertestns1iggigm': ['ns1','igm','igg'].forEach(id=>{ enableField(id); markFieldActive(id); }); break;
+    case 'urinephysicalexamination':
+    case 'urinechemicalexamination':
+      ensureUrineMode();
+      markSectionActive('urine');
+      URINE.forEach(t=>markFieldActive(t.id));
+      break;
+    case 'occultbloodtest': enableField('sob'); markFieldActive('sob'); break;
+    case 'parasites': enableField('sex'); markFieldActive('sex'); break;
+    case 'gramstain':
+      ensureMicroMode();
+      markSectionActive('micro');
+      MICRO.forEach(t=>markFieldActive(t.id));
+      break;
+  }
+}
+
+function mapSavedResultToField(testName, paramName){
+  const testKey = normalizeLabText(testName);
+  const paramKey = normalizeLabText(paramName);
+  const directTestMap = {
+    glucose:'gluc', bun:'bun', urea:'bun', ureabun:'bun', creatinine:'crea', uricacid:'uric', uricacide:'uric',
+    calcium:'ca', totalprotein:'prot', albumin:'alb', astsgot:'sgot', altsgpt:'sgpt', gammaggt:'ggt',
+    alpalkalinephosphatase:'alp', totalbilirubin:'tbil', directbilirubin:'dbil', cholesterol:'chol',
+    triglyceride:'trig', triglycerid:'trig', triglycirid:'trig', hdl:'hdl', hdlc:'hdl', ldl:'ldl', ldlc:'ldl',
+    hba1c:'hba1c', t3:'t3', t4:'t4', tsh:'tsh', hbsag:'hbsag', hbsab:'hbsab', hcvab:'hcv', hivtest:'hiv',
+    syphilistestvdrl:'vdrl', hpyloritest:'hpylori', typhoidfever:'typhoid', crpcreactiveprotein:'crp',
+    ricketsiarapidtest:'ricket', leptospirosisrapidtest:'lepto', occultbloodtest:'sob', parasites:'sex',
+    malariastain:'malaria', tstc:'tstc'
+  };
+  if(testKey==='urinephysicalexamination' || testKey==='urinechemicalexamination'){
+    const urineFieldMap = {
+      leu:'leu', nit:'nit', uro:'uro', pro:'pro', ph:'ph', blo:'bld', bld:'bld', sg:'sg', ket:'ket', bil:'bil', glu:'glu', asc:'asc'
+    };
+    return urineFieldMap[paramKey] || null;
+  }
+  if(directTestMap[testKey]) return directTestMap[testKey];
+  const mappedField = Object.keys(FIELD_PARAM_ALIASES).find(fieldId => FIELD_PARAM_ALIASES[fieldId].includes(paramKey));
+  if(mappedField) return mappedField;
+  if(testKey==='bloodtypingabo' || paramKey==='abo' || paramKey==='bloodtype') return 'abo_type';
+  if(testKey==='rh' || paramKey==='rh') return 'abo_rh';
+  if(testKey==='occultbloodtest') return 'sob';
+  if(testKey==='malariastain') return 'malaria';
+  if(testKey==='tstc') return 'tstc';
+  return null;
+}
+
+function applyMappedResult(fieldId, value){
+  if(fieldId==='abo_type'){
+    ensureAboMode();
+    setInputValue('abo_type', value);
+    return;
+  }
+  if(fieldId==='abo_rh'){
+    ensureAboMode();
+    const rhValue = normalizeLabText(value).includes('neg') ? 'Negative' : (value ? 'Positive' : '');
+    setInputValue('abo_rh', rhValue);
+    return;
+  }
+  enableField(fieldId);
+  const input = document.getElementById('ri_'+fieldId);
+  if(input){
+    if(input.tagName==='SELECT'){
+      const normalized = normalizeLabText(value);
+      if(normalized.includes('pos')) input.value='Positive';
+      else if(normalized.includes('equi')) input.value='Equivocal';
+      else if(value) input.value='Negative';
+      else input.value='—';
+    } else {
+      input.value = value || '';
+    }
+  }
+}
+
+function resolveBackendField(fieldId){
+  const fallback = FIELD_FALLBACKS[fieldId];
+  const aliases = FIELD_PARAM_ALIASES[fieldId] || [];
+  const parameterEntries = currentLabContext?.parameters || {};
+  const preferredTests = [];
+  const fieldLabel = [...HEMA,...BIO,...IMMU,...URINE,...MICRO,...STOOL].find(item => item.id===fieldId)?.name || '';
+  const compatibleFieldKeys = buildCompatibleLabTestKeySet([fieldId, fieldLabel, ...aliases]);
+  const orderedTestMatch = (currentLabContext?.orderedTests || []).find(name => compatibleFieldKeys.has(normalizeLabText(name)));
+  if(fallback?.testName === 'CBC 24P' && currentLabContext?.orderedTests?.some(name => normalizeLabText(name)==='cbc18p')) preferredTests.push('CBC 18P');
+  if(orderedTestMatch) preferredTests.push(orderedTestMatch);
+  if(fallback?.testName) preferredTests.push(fallback.testName);
+  Object.entries(parameterEntries).forEach(([testName, params])=>{
+    const match = (params||[]).find(param => aliases.includes(normalizeLabText(param.paramName)));
+    if(match) preferredTests.push(testName);
+  });
+  for(const testName of preferredTests){
+    const params = parameterEntries[testName] || [];
+    const match = params.find(param => aliases.includes(normalizeLabText(param.paramName)));
+    if(match) return { testName, paramName: match.paramName, unit: match.unit || '' };
+  }
+  if(!fallback) return null;
+  if(orderedTestMatch){
+    return {
+      testName: orderedTestMatch,
+      paramName: fallback.paramName || fieldLabel || orderedTestMatch,
+      unit: ''
+    };
+  }
+  const cbcTestName = currentLabContext?.orderedTests?.find(name => ['cbc18p','cbc24p'].includes(normalizeLabText(name)));
+  return {
+    testName: fallback.testName === 'CBC 24P' && cbcTestName ? cbcTestName : fallback.testName,
+    paramName: fallback.paramName,
+    unit: ''
+  };
+}
+
+function collectLabResultsPayload(){
+  const fieldIds = ['wbc','lym','mon','neu','eos','bas','lymp','monp','neup','eosp','basp','nlr','plr','rbc','hgb','hct','mcv','mch','mchc','rdwcv','rdwsd','plt','mpv','pdwcv','pdwsd','pct','plcc','plcr','esr','malaria','tstc','gluc','bun','crea','uric','ca','prot','alb','sgot','sgpt','ggt','alp','dbil','tbil','chol','trig','hdl','ldl','hba1c','na','k','cl','t3','t4','tsh','hbsag','hbsab','hcv','hiv','vdrl','hpylori','typhoid','crp','ricket','lepto','ns1','igm','igg','leu','nit','uro','pro','ph','bld','sg','asc','ket','bil','glu','sob','sex'];
+  const results = [];
+
+  fieldIds.forEach(fieldId => {
+    const input = document.getElementById('ri_'+fieldId);
+    if(!input || input.disabled) return;
+    if(document.getElementById('ck_'+fieldId) && !ck(fieldId)) return;
+    const value = input.tagName==='SELECT' ? (input.value==='—' ? '' : input.value) : String(input.value||'').trim();
+    if(!value) return;
+    const backendField = resolveBackendField(fieldId);
+    if(!backendField) return;
+    results.push({
+      testName: backendField.testName,
+      paramName: backendField.paramName,
+      value,
+      unit: backendField.unit || ''
+    });
+  });
+
+  Object.values(CUSTOM).flat().forEach(id => {
+    const meta = CUSTOM_META[id];
+    if(!meta?.backendTestName || !meta?.backendParamName) return;
+    if(document.getElementById('ck_' + id) && !ck(id)) return;
+    const input = document.getElementById('ri_' + id);
+    if(!input) return;
+    const value = input.tagName === 'SELECT' ? (input.value === '—' ? '' : input.value) : String(input.value || '').trim();
+    if(!value) return;
+    results.push({
+      testName: meta.backendTestName,
+      paramName: meta.backendParamName,
+      value,
+      unit: meta.backendUnit || ''
+    });
+  });
+
+  if(aboOn){
+    const aboType = document.getElementById('abo_type').value.trim();
+    const aboRh = document.getElementById('abo_rh').value;
+    if(aboType) results.push({ testName:'Blood typing(ABO )', paramName:'ABO', value:aboType, unit:'' });
+    if(aboRh) results.push({ testName:'Rh', paramName:'Rh', value:aboRh, unit:'' });
+  }
+
+  return results;
+}
+
+function getLabResultDraftKey(orderId){
+  return `${LAB_RESULT_DRAFT_KEY_PREFIX}${orderId || ''}`;
+}
+
+function loadDraftResults(orderId){
+  try{
+    const raw = localStorage.getItem(getLabResultDraftKey(orderId));
+    if(!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  }catch{
+    return [];
+  }
+}
+
+function persistDraftResults(results){
+  const orderId = currentLabContext?.orderId;
+  if(!orderId) return;
+  const filteredResults = filterResultsForCurrentOrder(results);
+  const draftKey = getLabResultDraftKey(orderId);
+  if(filteredResults.length===0){
+    localStorage.removeItem(draftKey);
+    return;
+  }
+  localStorage.setItem(draftKey, JSON.stringify(filteredResults));
+}
+
+function mergeResultLists(primaryResults = [], fallbackResults = []){
+  const merged = new Map();
+  [...fallbackResults, ...primaryResults].forEach(item=>{
+    if(!item) return;
+    const key = `${item.testName || ''}::${item.paramName || ''}`.toLowerCase();
+    if(!key || !item.value) return;
+    merged.set(key, item);
+  });
+  return Array.from(merged.values());
+}
+
+function filterResultsForCurrentOrder(results = [], context = currentLabContext){
+  const normalizedResults = Array.isArray(results)
+    ? results.filter(item => item && String(item.value ?? '').trim() !== '')
+    : [];
+  const allowedTests = buildCompatibleLabTestKeySet(context?.orderedTests || []);
+  if(allowedTests.size === 0) return normalizedResults;
+  return normalizedResults.filter(item => {
+    if(allowedTests.has(normalizeLabText(item.testName))) return true;
+    const fieldId = mapSavedResultToField(item.testName, item.paramName);
+    return Boolean(fieldId && orderedFieldIds instanceof Set && orderedFieldIds.has(fieldId));
+  });
+}
+
+function loadLabOrderContext(){
+  try{
+    const urlContext = decodeContextFromUrl();
+    if(urlContext){
+      currentLabContext = urlContext;
+      applyLabOrderContext(urlContext);
+      return;
+    }
+    const raw = localStorage.getItem(LAB_RESULT_CONTEXT_KEY);
+    if(!raw) return;
+    const parsed = JSON.parse(raw);
+    const orderIdFromUrl = new URLSearchParams(window.location.search).get('orderId');
+    if(orderIdFromUrl && parsed.orderId && parsed.orderId !== orderIdFromUrl) return;
+    currentLabContext = parsed;
+    applyLabOrderContext(parsed);
+  }catch(err){
+    console.error('Unable to load lab result context:', err);
+  }
+}
+
+function applyParameterSavedValues(context){
+  Object.entries(context?.parameters || {}).forEach(([testName, params])=>{
+    (params || []).forEach(param=>{
+      if(param?.savedValue === undefined || param?.savedValue === null) return;
+      const savedValue = String(param.savedValue).trim();
+      if(!savedValue) return;
+      const fieldId = mapSavedResultToField(testName, param.paramName);
+      if(fieldId) applyMappedResult(fieldId, savedValue);
+      else applyCustomMappedResult(testName, param.paramName, savedValue);
+    });
+  });
+}
+
+function applyLabOrderContext(context){
+  resetLabContextForm();
+  beginOrderedContext();
+  const patient = context.patient || {};
+  setInputValue('f_sid', context.orderId || '');
+  setInputValue('f_cn', patient.patientId || '');
+  setInputValue('f_name', patient.patientName || '');
+  setInputValue('f_age', patient.age || '');
+  setInputValue('f_sex', formatGenderForTemplate(patient.gender));
+  setInputValue('f_vil', patient.village || '');
+  setInputValue('f_dis', patient.district || '');
+  setInputValue('f_prov', patient.province || '');
+  ensureSelectOption('f_doc', patient.doctor || '');
+  if(patient.doctor) document.getElementById('f_doc').value = patient.doctor;
+  (context.orderedTests || []).forEach(activateOrderedTest);
+  createContextParameterItems(context);
+  applyOrderedEntryLayout();
+  applyParameterSavedValues(context);
+  const effectiveSavedResults = mergeResultLists(
+    filterResultsForCurrentOrder(context.savedResults || [], context),
+    filterResultsForCurrentOrder(loadDraftResults(context.orderId), context)
+  );
+  effectiveSavedResults.forEach(item=>{
+    const fieldId = mapSavedResultToField(item.testName, item.paramName);
+    if(fieldId) applyMappedResult(fieldId, item.value);
+    else applyCustomMappedResult(item.testName, item.paramName, item.value);
+  });
+}
+
+async function saveResultsToSystem(){
+  if(!currentLabContext || !currentLabContext.orderId) return { success:true, message:'' };
+  const hostWindow = (window.parent && window.parent !== window && typeof window.parent.persistLabResultEntry === 'function')
+    ? window.parent
+    : (window.opener && typeof window.opener.persistLabResultEntry === 'function' ? window.opener : null);
+  if(!hostWindow) {
+    return { success:false, message:'ບໍ່ສາມາດຕິດຕໍ່ໜ້າຫຼັກເພື່ອບັນທຶກຜົນກວດໄດ້' };
+  }
+  return await hostWindow.persistLabResultEntry({
+    orderId: currentLabContext.orderId,
+    results: collectLabResultsPayload(),
+    attachments: []
+  });
+}
+
+async function saveOnly(){
+  const missing = checkMissing();
+  if(missing.length > 0){
+    const go = await showWarnModal(missing);
+    if(!go) return;
+  }
+  const btn = document.getElementById('btn-save-system');
+  const orig = btn.innerHTML;
+  btn.innerHTML = '⏳ Saving...';
+  btn.disabled = true;
+  try {
+    const resultsPayload = collectLabResultsPayload();
+    const saveResult = await saveResultsToSystem();
+    if(!saveResult.success){
+      throw new Error(saveResult.message || 'ບັນທຶກຜົນກວດເຂົ້າລະບົບບໍ່ສຳເລັດ');
+    }
+    if(currentLabContext){
+      currentLabContext.savedResults = resultsPayload;
+      localStorage.setItem(LAB_RESULT_CONTEXT_KEY, JSON.stringify(currentLabContext));
+    }
+    render();
+    const alertResult = await showStatusAlert({
+      icon:'success',
+      title:'ບັນທຶກຜົນກວດສຳເລັດ',
+      text:'ຜົນກວດຖືກບັນທຶກເຂົ້າລະບົບແລ້ວ ສາມາດເບິ່ງ preview ຫຼື ພິມ PDF ຕໍ່ໄດ້',
+      showCancelButton: !!(window.parent && window.parent !== window && typeof window.parent.closeLabResultModal === 'function'),
+      confirmButtonText:'ເບິ່ງຜົນກວດ',
+      cancelButtonText:'ປິດ',
+      confirmButtonColor:'#1a8a4a',
+      cancelButtonColor:'#64748b'
+    });
+    isViewMode = true;
+    applyModeUi();
+    if(alertResult.dismiss === 'cancel' && window.parent && window.parent !== window && typeof window.parent.closeLabResultModal === 'function'){
+      window.parent.closeLabResultModal();
+    }
+  } catch (err) {
+    await showStatusAlert({
+      icon:'error',
+      title:'ບັນທຶກຜົນກວດບໍ່ສຳເລັດ',
+      text:err.message || 'ບໍ່ສາມາດບັນທຶກຜົນກວດໄດ້',
+      confirmButtonColor:'#dc2626'
+    });
+  } finally {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+  }
+}
+
+// ── Editable Reference Range ──
+function parseRefInput(id, val){
+  const t = [...HEMA,...BIO,...IMMU,...URINE,...MICRO,...STOOL].find(x=>x.id===id);
+  if(!t) return;
+  t.ref = val;
+  const s = val.trim();
+  if(s.startsWith('<')){
+    const n = parseFloat(s.slice(1));
+    t.lo=null; t.hi=isNaN(n)?null:n; t.cL=0; t.cH=(t.hi!==null)?1:0;
+  } else if(s.startsWith('>')){
+    const n = parseFloat(s.slice(1));
+    t.hi=null; t.lo=isNaN(n)?null:n; t.cH=0; t.cL=(t.lo!==null)?1:0;
+  } else {
+    // lo–hi  (em-dash or hyphen; handle decimals)
+    const m = s.replace(/–|—/g,'-').match(/^(-?[\d.]+)-(-?[\d.]+)$/);
+    if(m){
+      t.lo=parseFloat(m[1]); t.hi=parseFloat(m[2]);
+      t.cL=isNaN(t.lo)?0:1; t.cH=isNaN(t.hi)?0:1;
+    } else {
+      // Non-numeric ref → disable flagging
+      t.lo=null; t.hi=null; t.cL=0; t.cH=0;
+    }
+  }
+  // Save to localStorage
+  localStorage.setItem('ref-'+id, val);
+  // Sync report ref column too (rr_ input already reflects val via t.ref)
+  updateF(id);
+  render();
+}
+
+// Load saved reference values
+function loadSavedRefs(){
+  [...HEMA,...BIO,...IMMU,...URINE,...MICRO,...STOOL].forEach(t=>{
+    const saved = localStorage.getItem('ref-'+t.id);
+    if(saved){
+      t.ref = saved;
+      const rrInput = document.getElementById('rr_'+t.id);
+      if(rrInput) rrInput.value = saved;
+    }
+  });
+}
+
+function toggleI(id){
+  const e=document.getElementById('ri_'+id);
+  if(!e) return;
+  const checked = ck(id);
+  // For HEMA, always keep enabled (checkboxes are checked by default)
+  const isHema = HEMA.some(t=>t.id===id);
+  if(isHema){
+    e.disabled = false;
+  } else {
+    e.disabled = !checked;
+  }
+  // Immu/Stool selects: auto-default to Negative when enabled, reset when disabled
+  if(e.tagName==='SELECT'){
+    if(checked && (e.value===''||e.value==='—')) e.value='Negative';
+    if(!checked) e.value='—';
+  }
+}
+function flag(val,t){
+  if(!t.cL&&!t.cH) return '';
+  const v=parseFloat(val);
+  if(isNaN(v)||val==='') return '';
+  if(t.cL&&t.lo!==null&&v<t.lo) return 'L';
+  if(t.cH&&t.hi!==null&&v>t.hi) return 'H';
+  return '';
+}
+function updateF(id){
+  const t=[...HEMA,...BIO].find(x=>x.id===id); if(!t) return;
+  const f=document.getElementById('fl_'+id);
+  if(f) f.textContent=flag(gv(id),t);
+}
+function calcNLR(){
+  const n=parseFloat(gv('neu')), l=parseFloat(gv('lym'));
+  return (ck('neu')&&ck('lym')&&!isNaN(n)&&!isNaN(l)&&l>0) ? (n/l).toFixed(2) : '—';
+}
+function calcPLR(){
+  const p=parseFloat(gv('plt')), l=parseFloat(gv('lym'));
+  return (ck('plt')&&ck('lym')&&!isNaN(p)&&!isNaN(l)&&l>0) ? (p/l).toFixed(2) : '—';
+}
+function nowStr(){
+  const d=new Date();
+  return [d.getDate(),d.getMonth()+1,d.getFullYear()].map(n=>String(n).padStart(2,'0')).join('/')+
+    '  '+[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+}
+function rows(tests, cls, renderFn){
+  let html='', idx=0;
+  tests.forEach(t=>{
+    if(!ck(t.id)) return;
+    html+=`<div class="rpt-r ${idx%2?'even':'odd'} ${cls}">${renderFn(t,idx)}</div>`;
+    idx++;
+  });
+  return html || '<div class="rpt-empty">— ຍັງບໍ່ໄດ້ເລືອກ —</div>';
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════════════════
+function render(){
+  // Patient info
+  const sid=document.getElementById('f_sid').value;
+  document.getElementById('r_sid').textContent=sid;
+  document.getElementById('r_cn').textContent=document.getElementById('f_cn').value;
+  document.getElementById('r_name').textContent=document.getElementById('f_name').value;
+  document.getElementById('r_age').textContent=document.getElementById('f_age').value;
+  document.getElementById('r_sex').textContent=document.getElementById('f_sex').value;
+  document.getElementById('r_dx').textContent=document.getElementById('f_dx').value;
+  document.getElementById('r_doc').textContent=document.getElementById('f_doc').value;
+  const vil=document.getElementById('f_vil').value, dis=document.getElementById('f_dis').value;
+  document.getElementById('r_vil').textContent=[vil,dis].filter(Boolean).join(' / ');
+  document.getElementById('r_prov').textContent=document.getElementById('f_prov').value;
+  document.getElementById('r_time').textContent=nowStr();
+  document.getElementById('r_rdate').textContent='Report date:  '+nowStr();
+  document.getElementById('r_rby').textContent=document.getElementById('f_rby').value;
+
+  // PAGE 2 patient info (mirror of page 1)
+  const _p2f = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+  _p2f('r2_sid', document.getElementById('f_sid').value);
+  _p2f('r2_cn',  document.getElementById('f_cn').value);
+  _p2f('r2_name',document.getElementById('f_name').value);
+  _p2f('r2_age', document.getElementById('f_age').value);
+  _p2f('r2_sex', document.getElementById('f_sex').value);
+  _p2f('r2_dx',  document.getElementById('f_dx').value);
+  _p2f('r2_doc', document.getElementById('f_doc').value);
+  _p2f('r2_vil', [document.getElementById('f_vil').value, document.getElementById('f_dis').value].filter(Boolean).join(' / '));
+  _p2f('r2_prov',document.getElementById('f_prov').value);
+  _p2f('r2_time',nowStr());
+  _p2f('r2_rdate','Report date:  '+nowStr());
+  _p2f('r2_rby', document.getElementById('f_rby').value);
+
+  // HEMATOLOGY
+  let hemaHtml='', idx=0;
+  if(cbcOn){
+    const profile = CBC_PROFILES[currentCBCProfile];
+    // Custom order for CBC 18P: LYM, MID (MON), NEU
+    const cbc18Order = ['wbc','lym','mon','neu','lymp','monp','neup','rbc','hgb','hct','mcv','mch','mchc','rdwcv','rdwsd','plt','mpv','pdwcv','pct'];
+    const useCustomOrder = (currentCBCProfile === 'cbc18');
+    const testOrder = useCustomOrder ? cbc18Order : profile.tests;
+
+    // NLR / PLR: auto-fill input when empty
+    const nlrCalc=calcNLR(), plrCalc=calcPLR();
+    const nlrInput=document.getElementById('ri_nlr');
+    const plrInput=document.getElementById('ri_plr');
+    if(nlrInput && nlrInput.value==='') nlrInput.value = nlrCalc==='—'?'':nlrCalc;
+    if(plrInput && plrInput.value==='') plrInput.value = plrCalc==='—'?'':plrCalc;
+    const nlr = nlrInput ? (nlrInput.value||nlrCalc) : nlrCalc;
+    const plr = plrInput ? (plrInput.value||plrCalc) : plrCalc;
+
+    testOrder.forEach(testId=>{
+      const t = HEMA.find(x=>x.id===testId);
+      if(!t) return;
+      if(!ck(t.id)) return;  // Skip if not checked
+      if(t.auto){
+        const val = gv(t.id) || (t.id==='nlr'? nlr : plr);
+        const displayVal = (val==='—'||val==='')?'':val;
+        if(!displayVal){ idx++; return; }
+        hemaHtml+=`<div class="rpt-r ${idx%2?'even':'odd'} gl">
+          <div>${esc(t.name)}</div>
+          <div class="result">${esc(String(displayVal))}</div>
+          <div class="unit"></div><div class="flag"></div><div class="ref">${esc(t.ref)}</div></div>`;
+      } else {
+        const val=gv(t.id), fl=flag(val,t);
+        hemaHtml+=`<div class="rpt-r ${idx%2?'even':'odd'} gl">
+          <div>${esc(t.name)}</div>
+          <div class="result">${esc(val)}</div>
+          <div class="unit">${esc(t.unit)}</div><div class="flag">${fl}</div><div class="ref">${esc(t.ref)}</div></div>`;
+      }
+      idx++;
+    });
+  }
+  // Special HEMA items (Malaria, Ts Tc, ESR) - always shown if checked
+  ['esr','malaria','tstc'].forEach(testId=>{
+    const t = HEMA.find(x=>x.id===testId);
+    if(!t) return;
+    const ckEl = document.getElementById('ck_'+t.id);
+    if(!ckEl || !ckEl.checked) return;
+    const val=gv(t.id);
+    hemaHtml+=`<div class="rpt-r ${idx%2?'even':'odd'} gl">
+      <div>${esc(t.name)}</div>
+      <div class="result">${esc(val)}</div>
+      <div class="unit">${esc(t.unit)}</div><div class="flag"></div><div class="ref">${esc(t.ref)}</div></div>`;
+    idx++;
+  });
+  // Custom hema items
+  CUSTOM.hema.forEach(id=>{
+    if(!ck(id)) return;
+    const nm=document.getElementById('nm_'+id)?.value||'';
+    const val=document.getElementById('ri_'+id)?.value||'';
+    const un=document.getElementById('un_'+id)?.value||'';
+    const rr=document.getElementById('rr_'+id)?.value||'';
+    hemaHtml+=`<div class="rpt-r ${idx%2?'even':'odd'} gl">
+      <div>${esc(nm)}</div>
+      <div class="result">${esc(val)}</div>
+      <div class="unit">${esc(un)}</div><div class="flag"></div><div class="ref">${esc(rr)}</div></div>`;
+    idx++;
+  });
+  document.getElementById('rpt-hema').innerHTML=hemaHtml||'<div class="rpt-empty">— ຍັງບໍ່ໄດ້ເລືອກ —</div>';
+  // Count hema items (standard from profile + custom)
+  const profile = CBC_PROFILES[currentCBCProfile];
+  const cbc18Order = ['wbc','lym','mon','neu','lymp','monp','neup','rbc','hgb','hct','mcv','mch','mchc','rdwcv','rdwsd','plt','mpv','pdwcv','pct'];
+  const useCustomOrder = (currentCBCProfile === 'cbc18');
+  const hemaCount = (cbcOn && profile ? (useCustomOrder ? cbc18Order : profile.tests).filter(id=>ck(id)).length : 0) + CUSTOM.hema.filter(id=>ck(id)).length;
+  // Apply single-item class for better width when only 1 item
+  const hemaWrap = document.getElementById('wrap-hema');
+  const hemaGrid = hemaWrap?.querySelector('.rpt-ch.gl');
+  if(hemaGrid){
+    hemaGrid.classList.toggle('gl-single', hemaCount === 1);
+    const hemaRows = document.getElementById('rpt-hema')?.querySelectorAll('.rpt-r.gl');
+    hemaRows?.forEach(r=>r.classList.toggle('gl-single', hemaCount === 1));
+  }
+  // ABO
+  const at=document.getElementById('abo_type').value, ar=document.getElementById('abo_rh').value;
+  const aboDiv=document.getElementById('rpt-abo');
+  aboDiv.style.display=aboOn?'block':'none';
+  const arIsPositive = ar === 'Positive';
+  document.getElementById('r_abo_type').textContent=at||'—';
+  document.getElementById('r_abo_rh').innerHTML=arIsPositive ? `<span style="color:#cc0000;font-weight:bold">${ar||'—'}</span>` : (ar||'—');
+  const hasAboSection = aboOn && Boolean(at || ar);
+  const hasPage1Hematology = hemaCount > 0 || hasAboSection;
+  document.getElementById('wrap-hema').classList.toggle('report-section-hidden', !hasPage1Hematology);
+
+  // BIOCHEMISTRY
+  let bioHtml='', bidx=0;
+  BIO.forEach(t=>{
+    if(!ck(t.id)) return;
+    const val=gv(t.id), fl=flag(val,t);
+    bioHtml+=`<div class="rpt-r ${bidx%2?'even':'odd'} gr">
+      <div>${esc(t.name)}</div>
+      <div class="result">${esc(val)}</div>
+      <div class="unit">${esc(t.unit)}</div><div class="flag">${fl}</div><div class="ref">${esc(t.ref)}</div></div>`;
+    bidx++;
+  });
+  CUSTOM.bio.forEach(id=>{
+    if(!ck(id)) return;
+    const nm=document.getElementById('nm_'+id)?.value||'';
+    const val=document.getElementById('ri_'+id)?.value||'';
+    const un=document.getElementById('un_'+id)?.value||'';
+    const rr=document.getElementById('rr_'+id)?.value||'';
+    bioHtml+=`<div class="rpt-r ${bidx%2?'even':'odd'} gr">
+      <div>${esc(nm)}</div>
+      <div class="result">${esc(val)}</div>
+      <div class="unit">${esc(un)}</div><div class="flag"></div><div class="ref">${esc(rr)}</div></div>`;
+    bidx++;
+  });
+  document.getElementById('rpt-bio').innerHTML=bioHtml||'<div class="rpt-empty">— ຍັງບໍ່ໄດ້ເລືອກ —</div>';
+  // Apply single-item class for bio
+  const bioWrap = document.getElementById('wrap-bio');
+  const bioGrid = bioWrap?.querySelector('.rpt-ch.gr');
+  if(bioGrid){
+    bioGrid.classList.toggle('gr-single', bidx === 1);
+    const bioRows = document.getElementById('rpt-bio')?.querySelectorAll('.rpt-r.gr');
+    bioRows?.forEach(r=>r.classList.toggle('gr-single', bidx === 1));
+  }
+  document.getElementById('wrap-bio').classList.toggle('report-section-hidden', bidx===0);
+
+  // IMMUNOLOGY
+  let immuHtml='', iidx=0;
+  IMMU.forEach(t=>{
+    if(!ck(t.id)) return;
+    const val=gv(t.id)||'Negative';
+    // Check if it's a text input item (CRP, Rickettsia, Leptospirosis)
+    if(t.text){
+      immuHtml+=`<div class="rpt-r ${iidx%2?'even':'odd'} gi">
+        <div>${esc(t.name)}</div><div class="ctr">${esc(val)}</div><div class="ref">${esc(t.ref)}</div></div>`;
+    } else {
+      const isPositive = val === 'Positive';
+      immuHtml+=`<div class="rpt-r ${iidx%2?'even':'odd'} gi">
+        <div>${esc(t.name)}</div><div class="ctr${isPositive?' positive':''}">${esc(val)}</div><div class="ref">${esc(t.ref)}</div></div>`;
+    }
+    iidx++;
+  });
+  CUSTOM.immu.forEach(id=>{
+    if(!ck(id)) return;
+    const nm=document.getElementById('nm_'+id)?.value||'';
+    const val=document.getElementById('ri_'+id)?.value||'';
+    const rr=document.getElementById('rr_'+id)?.value||'Neg / Pos';
+    const isPositive = val === 'Positive';
+    immuHtml+=`<div class="rpt-r ${iidx%2?'even':'odd'} gi">
+      <div>${esc(nm)}</div><div class="ctr${isPositive?' positive':''}">${esc(val)}</div><div class="ref">${esc(rr)}</div></div>`;
+    iidx++;
+  });
+  document.getElementById('rpt-immu').innerHTML=immuHtml||'<div class="rpt-empty">— ຍັງບໍ່ໄດ້ເລືອກ —</div>';
+  // Apply single-item class for immu
+  const immuWrap = document.getElementById('wrap-immu');
+  const immuGrid = immuWrap?.querySelector('.rpt-ch.gi');
+  if(immuGrid){
+    immuGrid.classList.toggle('gi-single', iidx === 1);
+    const immuRows = document.getElementById('rpt-immu')?.querySelectorAll('.rpt-r.gi');
+    immuRows?.forEach(r=>r.classList.toggle('gi-single', iidx === 1));
+  }
+  document.getElementById('wrap-immu').classList.toggle('report-section-hidden', iidx===0);
+
+  // URINE
+  let urineHtml='', uidx=0;
+  if(urineOn){
+  URINE.forEach(t=>{
+    const val=document.getElementById('ri_'+t.id)?.value||'';
+    urineHtml+=`<div class="rpt-r ${uidx%2?'even':'odd'} gu">
+      <div>${esc(t.name)}</div><div class="ctr">${esc(val)}</div>
+      <div class="unit">${esc(t.unit)}</div><div class="ref">${esc(t.ref)}</div></div>`;
+    uidx++;
+  });
+  } // end urineOn
+  CUSTOM.urine.forEach(id=>{
+    if(!ck(id)) return;
+    const nm=document.getElementById('nm_'+id)?.value||'';
+    const val=document.getElementById('ri_'+id)?.value||'';
+    const un=document.getElementById('un_'+id)?.value||'';
+    const rr=document.getElementById('rr_'+id)?.value||'';
+    urineHtml+=`<div class="rpt-r ${uidx%2?'even':'odd'} gu">
+      <div>${esc(nm)}</div><div class="ctr">${esc(val)}</div>
+      <div class="unit">${esc(un)}</div><div class="ref">${esc(rr)}</div></div>`;
+    uidx++;
+  });
+  document.getElementById('rpt-urine').innerHTML=urineHtml||'<div class="rpt-empty">— ຍັງບໍ່ໄດ້ເລືອກ —</div>';
+  // Apply single-item class for urine
+  const urineWrap = document.getElementById('wrap-urine');
+  const urineGrid = urineWrap?.querySelector('.rpt-ch.gu');
+  if(urineGrid){
+    urineGrid.classList.toggle('gu-single', uidx === 1);
+    const urineRows = document.getElementById('rpt-urine')?.querySelectorAll('.rpt-r.gu');
+    urineRows?.forEach(r=>r.classList.toggle('gu-single', uidx === 1));
+  }
+  document.getElementById('wrap-urine').classList.toggle('report-section-hidden', uidx===0);
+
+  // STOOL
+  let stoolHtml='', sidx=0;
+  STOOL.forEach(t=>{
+    if(!ck(t.id)) return;
+    const val=gv(t.id);
+    stoolHtml+=`<div class="rpt-r ${sidx%2?'even':'odd'} gs">
+      <div>${esc(t.name)}</div><div class="ctr">${esc(val)}</div></div>`;
+    sidx++;
+  });
+  CUSTOM.stool.forEach(id=>{
+    if(!ck(id)) return;
+    const nm=document.getElementById('nm_'+id)?.value||'';
+    const val=document.getElementById('ri_'+id)?.value||'';
+    stoolHtml+=`<div class="rpt-r ${sidx%2?'even':'odd'} gs">
+      <div>${esc(nm)}</div><div class="ctr">${esc(val)}</div></div>`;
+    sidx++;
+  });
+  document.getElementById('rpt-stool').innerHTML=stoolHtml||'<div class="rpt-empty">— ຍັງບໍ່ໄດ້ເລືອກ —</div>';
+  // Apply single-item class for stool
+  const stoolWrap = document.getElementById('wrap-stool');
+  const stoolGrid = stoolWrap?.querySelector('.rpt-ch.gs');
+  if(stoolGrid){
+    stoolGrid.classList.toggle('gs-single', sidx === 1);
+    const stoolRows = document.getElementById('rpt-stool')?.querySelectorAll('.rpt-r.gs');
+    stoolRows?.forEach(r=>r.classList.toggle('gs-single', sidx === 1));
+  }
+  document.getElementById('wrap-stool').classList.toggle('report-section-hidden', sidx===0);
+
+  // MICROLOGY
+  let microHtml='', midx=0;
+  if(microOn){
+    MICRO.forEach(t=>{
+      const val=document.getElementById('ri_'+t.id)?.value||'';
+      microHtml+=`<div class="rpt-r ${midx%2?'even':'odd'} gm">
+        <div>${esc(t.name)}</div><div class="ctr">${esc(val)}</div><div class="ref">${esc(t.ref)}</div></div>`;
+      midx++;
+    });
+    CUSTOM.micro.forEach(id=>{
+      if(!ck(id)) return;
+      const nm=document.getElementById('nm_'+id)?.value||'';
+      const val=document.getElementById('ri_'+id)?.value||'';
+      const rr=document.getElementById('rr_'+id)?.value||'';
+      microHtml+=`<div class="rpt-r ${midx%2?'even':'odd'} gm">
+        <div>${esc(nm)}</div><div class="ctr">${esc(val)}</div><div class="ref">${esc(rr)}</div></div>`;
+      midx++;
+    });
+  } // end microOn
+  document.getElementById('rpt-micro').innerHTML=microHtml||'<div class="rpt-empty">— ຍັງບໍ່ໄດ້ເລືອກ —</div>';
+  // Apply single-item class for micro
+  const microWrap = document.getElementById('wrap-micro');
+  const microGrid = microWrap?.querySelector('.rpt-ch.gm');
+  if(microGrid){
+    microGrid.classList.toggle('gm-single', midx === 1);
+    const microRows = document.getElementById('rpt-micro')?.querySelectorAll('.rpt-r.gm');
+    microRows?.forEach(r=>r.classList.toggle('gm-single', midx === 1));
+  }
+  document.getElementById('wrap-micro').classList.toggle('report-section-hidden', midx===0);
+
+  // ── Auto-layout: expand single section to full width ──
+  const hasBio  = bidx > 0;
+  const hasImmu = iidx > 0;
+  const hasMicro= midx > 0;
+  const hasUrineSection = uidx > 0;
+
+  // Bio / Immu row
+  const wrapBio  = document.getElementById('wrap-bio');
+  const wrapImmu = document.getElementById('wrap-immu');
+  if(hasBio && !hasImmu){
+    wrapBio.style.flex  = '0 0 100%';
+    wrapImmu.style.display = 'none';
+  } else if(!hasBio && hasImmu){
+    wrapImmu.style.flex = '0 0 100%';
+    wrapBio.style.display = 'none';
+  } else {
+    wrapBio.style.flex  = '0 0 55%';
+    wrapBio.style.display  = '';
+    wrapImmu.style.flex = '0 0 calc(45% - 2.5mm)';
+    wrapImmu.style.display = '';
+  }
+  const rowBioImmu = document.getElementById('row-bio-immu');
+  if(rowBioImmu) rowBioImmu.classList.toggle('report-section-hidden', !hasBio && !hasImmu);
+
+  // Micro / Urine row
+  const wrapMicro = document.getElementById('wrap-micro');
+  const wrapUrine = document.getElementById('wrap-urine');
+  if(hasMicro && !hasUrineSection){
+    wrapMicro.style.flex = '0 0 100%';
+    wrapUrine.style.display = 'none';
+  } else if(!hasMicro && hasUrineSection){
+    wrapUrine.style.flex = '0 0 100%';
+    wrapMicro.style.display = 'none';
+  } else {
+    wrapMicro.style.flex = '1';
+    wrapMicro.style.display = '';
+    wrapUrine.style.flex = '1';
+    wrapUrine.style.display = '';
+  }
+  const rowMicroUrine = document.getElementById('row-micro-urine');
+  if(rowMicroUrine) rowMicroUrine.classList.toggle('report-section-hidden', !hasMicro && !hasUrineSection);
+
+  // Show/hide page 2 based on whether any of its sections have content
+  const page2Has = hasBio || hasImmu || hasMicro || hasUrineSection || sidx > 0;
+  const page1 = document.getElementById('report');
+  if(page1){
+    page1.style.display = hasPage1Hematology ? '' : 'none';
+  }
+  const page2 = document.getElementById('report-page2');
+  if(page2){
+    page2.style.display = page2Has ? '' : 'none';
+    page2.classList.toggle('report-page-following', hasPage1Hematology && page2Has);
+  }
+
+  persistDraftResults(collectLabResultsPayload());
+
+  requestAnimationFrame(applyEmbeddedPreviewFit);
+}
+
+// ══════════════════════════════════════════════════════════
+// UI
+// ══════════════════════════════════════════════════════════
+function toggle(id){
+  const el=document.getElementById(id), ar=document.getElementById(id+'-arrow');
+  const hide=el.style.display==='none';
+  el.style.display=hide?'':'none';
+  if(ar) ar.textContent=hide?'▼':'▶';
+}
+function selectAll(sec){
+  const map={hema:HEMA,bio:BIO,immu:IMMU,urine:URINE,stool:STOOL};
+  const list=map[sec]||[];
+  list.forEach(t=>{
+    const c=document.getElementById('ck_'+t.id);
+    const r=document.getElementById('ri_'+t.id);
+    if(c){c.checked=true; if(r)r.disabled=false;}
+  });
+  render();
+}
+function deselectAll(sec){
+  const map={hema:HEMA,bio:BIO,immu:IMMU,urine:URINE,stool:STOOL};
+  const list=map[sec]||[];
+  list.forEach(t=>{
+    const c=document.getElementById('ck_'+t.id);
+    const r=document.getElementById('ri_'+t.id);
+    if(c){c.checked=false; if(r){r.disabled=true;r.value='';}}
+    const f=document.getElementById('fl_'+t.id);
+    if(f)f.textContent='';
+  });
+  render();
+}
+// ══════════════════════════════════════════════════════════
+// LIST MANAGER — Doctor & Report By (localStorage)
+// ══════════════════════════════════════════════════════════
+const DEFAULT_DOCTORS = [
+  'ດຣ ອາລິສອນ','ດຣ ພູນສະຫວັດ','ດຣ ີ່ງ','ດຣ ພຸດທະສອນ','ດຣ ວິລກອນ',
+  'ດຣ ບົວພາ','ດຣ ສຸດທິພົງ','ດຣ ໄຊຍະສອນ','ດຣ ສີອຳພອນ','ດຣ ວິໄຊ',
+  'ດຣ ແກ້ວອຸດອນ','ດຣ ພຸດທະລັກ','ດຣ ພອນລິຕາ','ດຣ ສຸລິຕາ','ດຣ ສດາລັດ',
+  'ດຣ ກດສະາ','ດຣ ຫັດສະດີ','ດຣ ສງມະນີ','ດຣ ທັດສະພອນມີ','ດຣ ນິຕິສັກ',
+  'ດຣ ຈັນທະວິໄລ','ດຣ ຕານ້ອຍ','ດຣ ສະແນັກ','ດຣ ສຸພາພອນ','ດຣ ຈັນທະສອນ',
+  'ດຣ ພອນພາ','ດຣ ສະພັນທະວີ','ດຣ ວັນນະດາ','ດຣ ສີພອນ'
+];
+const DEFAULT_RBY = [
+  'Phoutthasin DOUANGMANY','Anong VONGPHAILOD',
+  'MS Sengphet PHOMKETKEO','Chanthaviphone SENGSOULICHAN','Phoutdavanh NAMMACHAK'
+];
+
+function getList(type){ try{ return JSON.parse(localStorage.getItem('list_'+type))||null; }catch(e){ return null; } }
+function saveList(type,arr){ localStorage.setItem('list_'+type, JSON.stringify(arr)); }
+
+function populateSelect(selId, type, placeholder){
+  const sel = document.getElementById(selId);
+  if(!sel) return;
+  const cur = sel.value;
+  const list = getList(type) || (type==='doc' ? DEFAULT_DOCTORS : DEFAULT_RBY);
+  sel.innerHTML = '';
+  if(placeholder){ const o=document.createElement('option'); o.value=''; o.textContent=placeholder; sel.appendChild(o); }
+  list.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
+  if(cur && [...sel.options].some(o=>o.value===cur)) sel.value=cur;
+}
+
+function initLists(){
+  populateSelect('f_doc','doc','-- ເລືອກທ່ານໝໍ --');
+  populateSelect('f_rby','rby','');
+  const rby=document.getElementById('f_rby');
+  if(rby && !rby.value && rby.options.length) rby.value=rby.options[0].value;
+}
+
+let _lmType='';
+function openListMgr(type){
+  _lmType = type;
+  const titles = {doc:'ຈັດການລາຍຊື່ທ່ານໝໍ', rby:'ຈັດການລາຍງານໂດຍ (Report By)'};
+  document.getElementById('listmgr-title').textContent = '⚙ '+titles[type];
+  document.getElementById('listmgr-input').value='';
+  renderListMgrItems();
+  document.getElementById('listmgr-overlay').classList.add('show');
+}
+function closeListMgr(){
+  document.getElementById('listmgr-overlay').classList.remove('show');
+  const selId = _lmType==='doc'?'f_doc':'f_rby';
+  populateSelect(selId, _lmType, _lmType==='doc'?'-- ເລືອກທ່ານໝໍ --':'');
+  render();
+}
+function renderListMgrItems(){
+  const list = getList(_lmType) || (_lmType==='doc' ? [...DEFAULT_DOCTORS] : [...DEFAULT_RBY]);
+  const box = document.getElementById('listmgr-items');
+  box.innerHTML = list.map((v,i)=>`
+    <div style="display:flex;align-items:center;gap:6px;background:#f7f8fb;border:1px solid #e0e5ef;border-radius:4px;padding:4px 8px">
+      <input type="text" value="${v.replace(/"/g,'&quot;')}" onchange="listMgrEdit(${i},this.value)"
+        style="flex:1;border:none;background:transparent;font-size:12px;font-family:inherit;color:#222;outline:none;min-width:0">
+      <button onclick="listMgrDel(${i})" style="background:#d63031;color:#fff;border:none;border-radius:3px;padding:2px 8px;font-size:11px;cursor:pointer">✕</button>
+    </div>`).join('');
+}
+function listMgrEdit(i,val){
+  const list = getList(_lmType) || (_lmType==='doc' ? [...DEFAULT_DOCTORS] : [...DEFAULT_RBY]);
+  list[i] = val.trim();
+  saveList(_lmType, list);
+}
+function listMgrAdd(){
+  const inp = document.getElementById('listmgr-input');
+  const val = inp.value.trim();
+  if(!val) return;
+  const list = getList(_lmType) || (_lmType==='doc' ? [...DEFAULT_DOCTORS] : [...DEFAULT_RBY]);
+  list.push(val);
+  saveList(_lmType, list);
+  inp.value='';
+  renderListMgrItems();
+}
+function listMgrDel(i){
+  const list = getList(_lmType) || (_lmType==='doc' ? [...DEFAULT_DOCTORS] : [...DEFAULT_RBY]);
+  list.splice(i,1);
+  saveList(_lmType, list);
+  renderListMgrItems();
+}
+
+function clearAll(){
+  if(!confirm('ລ້າງຂໍ້ມູນທັງໝົດ?')) return;
+  document.querySelectorAll('input').forEach(e=>{if(e.type==='checkbox')e.checked=false;else if(e.type!=='file')e.value='';});
+  document.querySelectorAll('select').forEach(e=>e.value='');
+  document.getElementById('f_rby').value='Phoutthasin DOUANGMANY';
+  // Reset CBC profile selector
+  document.getElementById('cbc-profile-select').value = 'cbc24p';
+  currentCBCProfile = 'cbc24p';
+  // Re-check HEMA checkboxes (they default to checked)
+  HEMA.forEach(t=>{const c=document.getElementById('ck_'+t.id);if(c)c.checked=true;});
+  // Disable non-hema inputs
+  [...BIO,...IMMU,...STOOL,...MICRO].forEach(t=>{const r=document.getElementById('ri_'+t.id);if(r)r.disabled=true;});
+  // Reset CBC and Urine state
+  if(cbcOn) toggleCBC();
+  if(urineOn) toggleUrine();
+  if(microOn) toggleMicro();
+  if(aboOn) toggleABO();
+  // Clear localStorage for references and custom items (optional - comment out if you want to keep them)
+  // localStorage.clear();
+  render();
+}
+// ══ KEYBOARD NAVIGATION ══
+// Enter / ArrowDown → next result field
+// ArrowUp           → previous result field
+// (Tab works natively through the inputs)
+function getNavInputs(){
+  // All enabled .ri inputs that are result fields (not name fields)
+  return Array.from(document.querySelectorAll('.ri:not(:disabled)'))
+    .filter(el => el.type !== 'text' || !el.classList.contains('custom-name'))
+    .filter(el => !el.classList.contains('custom-name'));
+}
+
+document.addEventListener('keydown', function(e){
+  const a = document.activeElement;
+  if (!a || !a.classList.contains('ri') || a.classList.contains('custom-name')) return;
+  const inputs = getNavInputs();
+  const i = inputs.indexOf(a);
+  if (e.key==='Enter' || e.key==='ArrowDown'){
+    e.preventDefault();
+    if (i>=0 && i<inputs.length-1){ inputs[i+1].focus(); inputs[i+1].select(); }
+  } else if (e.key==='ArrowUp'){
+    e.preventDefault();
+    if (i>0){ inputs[i-1].focus(); inputs[i-1].select(); }
+  }
+});
+
+// Highlight focused input
+document.addEventListener('focusin',  e=>{ if(e.target.classList.contains('ri')) e.target.classList.add('focused-input'); });
+document.addEventListener('focusout', e=>{ if(e.target.classList.contains('ri')) e.target.classList.remove('focused-input'); });
+
+// Close settings modal on Escape
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeSettings(); });
+
+setInterval(render,30000);
+
+// Init lists from localStorage on startup
+// Clear old footer image (footer is now hardcoded HTML)
+localStorage.removeItem("ftr-logo-src");
+initLists();
+loadSavedImages();
+loadSavedRefs();
+loadSavedCustomItems();
+loadLabOrderContext();
+render();
+
+
+// ══ MISSING RESULT CHECK ══
+let _warnResolve = null;
+
+function checkMissing(){
+  const missing = [];
+  const profile = CBC_PROFILES[currentCBCProfile];
+
+  // HEMA (cbcOn controls whole section, but now uses checkboxes and profile)
+  if(cbcOn && profile){
+    HEMA.forEach(t=>{
+      if(!profile.tests.includes(t.id)) return;  // Skip tests not in current profile
+      if(!ck(t.id)) return;  // Skip unchecked items
+      if(t.auto) return; // NLR/PLR auto — skip missing check
+      const v = document.getElementById('ri_'+t.id)?.value||'';
+      if(v==='') missing.push(t.name);
+    });
+  }
+
+  // Special HEMA items (ESR, Malaria, Ts Tc) - check if checked but empty
+  ['esr','malaria','tstc'].forEach(testId=>{
+    const t = HEMA.find(x=>x.id===testId);
+    if(!t) return;
+    const ckEl = document.getElementById('ck_'+testId);
+    if(!ckEl || !ckEl.checked) return;
+    const v = document.getElementById('ri_'+testId)?.value||'';
+    if(v===''||v==='—') missing.push(t.name);
+  });
+
+  // BIO (individual checkboxes)
+  BIO.forEach(t=>{
+    if(!ck(t.id)) return;
+    const v = document.getElementById('ri_'+t.id)?.value||'';
+    if(v==='') missing.push(t.name);
+  });
+
+  // IMMU (individual checkboxes — select, "—" = empty)
+  IMMU.forEach(t=>{
+    if(!ck(t.id)) return;
+    const el = document.getElementById('ri_'+t.id);
+    const v = el ? (el.tagName==='SELECT' ? el.value : el.value) : '';
+    if(v===''||v==='—') missing.push(t.name);
+  });
+
+  // URINE (urineOn controls section)
+  if(urineOn){
+    URINE.forEach(t=>{
+      const v = document.getElementById('ri_'+t.id)?.value||'';
+      if(v==='') missing.push(t.name);
+    });
+  }
+
+  // STOOL (individual checkboxes)
+  STOOL.forEach(t=>{
+    if(!ck(t.id)) return;
+    const el = document.getElementById('ri_'+t.id);
+    const v = el ? (el.tagName==='SELECT' ? el.value : el.value) : '';
+    if(v===''||v==='—') missing.push(t.name);
+  });
+
+  // MICROLOGY (no checkboxes, only check if value entered)
+  // Skip missing check for micrology - only shows when values are entered
+
+  // Custom items (all sections)
+  [...CUSTOM.hema,...CUSTOM.bio,...CUSTOM.immu,...CUSTOM.urine,...CUSTOM.stool,...CUSTOM.micro].forEach(id=>{
+    if(!ck(id)) return;
+    const v = document.getElementById('ri_'+id)?.value||'';
+    if(v==='') {
+      const nm = document.getElementById('nm_'+id)?.value||'(custom)';
+      missing.push(nm);
+    }
+  });
+
+  return missing;
+}
+
+function warnCancel(){
+  document.getElementById('warn-overlay').classList.remove('show');
+  if(_warnResolve) _warnResolve(false);
+  _warnResolve = null;
+}
+function warnContinue(){
+  document.getElementById('warn-overlay').classList.remove('show');
+  if(_warnResolve) _warnResolve(true);
+  _warnResolve = null;
+}
+
+function showWarnModal(missing){
+  return new Promise(resolve=>{
+    _warnResolve = resolve;
+    const list = document.getElementById('warn-list');
+    list.innerHTML = missing.map(n=>`• ${n}`).join('<br>');
+    document.getElementById('warn-overlay').classList.add('show');
+  });
+}
+
+function getVisibleReportPages(){
+  return Array.from(document.querySelectorAll('.report-page')).filter(page => getComputedStyle(page).display !== 'none');
+}
+
+function prepareReportCaptureLayout(){
+  const wrap = document.getElementById('rpt-wrap');
+  const view = document.querySelector('.view');
+  const snapshot = {
+    wrapZoom: wrap?.style.zoom || '',
+    wrapWidth: wrap?.style.width || '',
+    wrapMaxWidth: wrap?.style.maxWidth || '',
+    viewScrollTop: view?.scrollTop || 0
+  };
+
+  if(wrap){
+    wrap.style.zoom = '1';
+    wrap.style.width = '100%';
+    wrap.style.maxWidth = 'none';
+  }
+
+  return () => {
+    if(wrap){
+      wrap.style.zoom = snapshot.wrapZoom;
+      wrap.style.width = snapshot.wrapWidth;
+      wrap.style.maxWidth = snapshot.wrapMaxWidth;
+    }
+    if(view) view.scrollTop = snapshot.viewScrollTop;
+    requestAnimationFrame(applyEmbeddedPreviewFit);
+  };
+}
+
+async function exportReportPdfFile(options = {}){
+  const { download = true } = options;
+  const pages = getVisibleReportPages();
+  if(pages.length === 0) throw new Error('ບໍ່ພົບໜ້າລາຍງານສຳລັບ export');
+  if(!window.jspdf?.jsPDF || typeof window.html2canvas !== 'function'){
+    throw new Error('PDF export libraries ບໍ່ພ້ອມໃຊ້ງານ');
+  }
+
+  const restoreLayout = prepareReportCaptureLayout();
+  const { jsPDF } = window.jspdf;
+  const filename = `${currentLabContext?.orderId || 'lab-report'}.pdf`;
+
+  try{
+    if(document.fonts?.ready) await document.fonts.ready;
+    const pdf = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4', compress:true });
+
+    for(let index = 0; index < pages.length; index++){
+      const page = pages[index];
+      const canvas = await window.html2canvas(page, {
+        backgroundColor:'#ffffff',
+        scale:2,
+        useCORS:true,
+        logging:false
+      });
+      const imageData = canvas.toDataURL('image/png');
+      if(index > 0) pdf.addPage('a4', 'portrait');
+      pdf.addImage(imageData, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
+    }
+
+    if(download){
+      pdf.save(filename);
+      return { pageCount: pages.length, filename };
+    }
+
+    return {
+      pageCount: pages.length,
+      filename,
+      dataUri: pdf.output('datauristring')
+    };
+  } finally {
+    restoreLayout();
+  }
+}
+
+async function savePDF(){
+  const missing = checkMissing();
+  if(missing.length > 0){ const go = await showWarnModal(missing); if(!go) return; }
+  const btn = document.getElementById('btn-print-pdf');
+  const orig = btn.innerHTML;
+  btn.innerHTML = '⏳ ກຳລັງກະກຽມ...'; btn.disabled = true;
+  try {
+    const saveResult = await saveResultsToSystem();
+    if(!saveResult.success){
+      throw new Error(saveResult.message || 'ບັນທຶກຜົນກວດເຂົ້າລະບົບບໍ່ສຳເລັດ');
+    }
+    isViewMode = true;
+    applyModeUi();
+    render();
+    await exportReportPdfFile();
+  } catch(e) { alert('ບໍ່ສາມາດສ້າງ PDF: '+e.message); }
+  finally {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+  }
+}
+
+applyModeUi();
+
+if(new URLSearchParams(window.location.search).get('testpdf') === '1'){
+  requestAnimationFrame(async () => {
+    try{
+      const result = await exportReportPdfFile({ download:false });
+      document.body.dataset.pdfExport = 'ok';
+      document.body.dataset.pdfPages = String(result.pageCount);
+      document.body.dataset.pdfLength = String(result.dataUri?.length || 0);
+    }catch(err){
+      document.body.dataset.pdfExport = 'error';
+      document.body.dataset.pdfError = err?.message || 'unknown';
+    }
+  });
+}
+</script>
+
+<!-- ══ Missing-result warning modal ══ -->
+<div class="warn-overlay" id="warn-overlay">
+  <div class="warn-box">
+    <h3>⚠️ ລາຍການຍັງບໍ່ໄດ້ຕີຜົນ</h3>
+    <p>ລາຍການຕໍ່ໄປນີ້ຖືກເລືອກແຕ່ຍັງບໍ່ໄດ້ປ້ອນຜົນກວດ:</p>
+    <div class="warn-list" id="warn-list"></div>
+    <p style="color:#555;font-size:11px;margin:0 0 14px">ຕ້ອງການສືບຕໍ່ Save ໂດຍບໍ່ໃສ່ຜົນ, ຫຼື ກັບໄປປ້ອນກ່ອນ?</p>
+    <div class="warn-actions">
+      <button class="warn-btn warn-btn-cancel" onclick="warnCancel()">← ກັບໄປປ້ອນ</button>
+      <button class="warn-btn warn-btn-ok"    onclick="warnContinue()">Save ເລີຍ →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LIST MANAGER MODAL ══ -->
+<div class="warn-overlay" id="listmgr-overlay">
+  <div class="warn-box" style="max-width:440px;width:94%">
+    <h3 id="listmgr-title" style="color:#1e3a5f;font-size:13px">⚙ ຈັດການລາຍຊື່</h3>
+    <div id="listmgr-items" style="max-height:260px;overflow-y:auto;margin:10px 0;display:flex;flex-direction:column;gap:5px"></div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <input id="listmgr-input" type="text" placeholder="ພິມຊື່ໃໝ່..." style="flex:1;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;font-family:inherit">
+      <button onclick="listMgrAdd()" style="padding:6px 14px;background:#1e3a5f;color:#fff;border:none;border-radius:4px;font-size:12px;cursor:pointer;font-weight:600">＋ ເພີ່ມ</button>
+    </div>
+    <div class="warn-actions">
+      <button class="warn-btn warn-btn-cancel" onclick="closeListMgr()">ປິດ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SETTINGS MODAL ══ -->
+<div class="warn-overlay" id="settings-overlay">
+  <div class="warn-box" style="max-width:420px">
+    <h3 style="color:#1e3a5f">⚙️ ັ້ງຄ່າ Unit / Ref. Range</h3>
+    <p id="settings-test-name" style="font-weight:600;color:#2c4a6e;margin:8px 0"></p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin:12px 0">
+      <div>
+        <label style="font-size:11px;color:#555;font-weight:600;display:block;margin:0 0 4px">Unit</label>
+        <input type="text" id="set-unit" placeholder="ກຣາມ/ດລ, %, ..." style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px">
+      </div>
+      <div>
+        <label style="font-size:11px;color:#555;font-weight:600;display:block;margin:0 0 4px">Ref. Range</label>
+        <input type="text" id="set-ref" placeholder="4.0–10.0, <200, >55, ..." style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px">
+      </div>
+    </div>
+    <div class="warn-actions">
+      <button class="warn-btn warn-btn-cancel" onclick="closeSettings()">✕ ປິດ</button>
+      <button class="warn-btn warn-btn-ok" onclick="saveSettings()">✓ ບັນທຶກ</button>
+    </div>
+  </div>
+</div>
+
+</body></html>

@@ -55,3 +55,6 @@ __pycache__/
 
 # CSV exports
 *.csv
+
+# Local preview/test artifacts
+tmp-test/

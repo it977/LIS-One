@@ -276,6 +276,43 @@ export async function getAllPatients(searchTerm = '') {
   }
 }
 
+function pickPatientField(record, keys) {
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) continue
+    const value = record[key]
+    if (value === null || value === undefined) continue
+    const text = String(value).trim()
+    if (text) return text
+  }
+  return ''
+}
+
+export async function getPatientReportProfile(patientId) {
+  try {
+    if (!patientId || !supabase) return {}
+
+    const { data, error } = await supabase
+      .from('Patients')
+      .select('*')
+      .eq('Patient_ID', patientId)
+      .maybeSingle()
+
+    if (error || !data) return {}
+
+    const addressLine = pickPatientField(data, ['Address', 'Current_Address', 'Patient_Address', 'Full_Address'])
+
+    return {
+      village: pickPatientField(data, ['Village', 'Village_Name', 'Ban', 'Address_Village', 'Current_Village']),
+      district: pickPatientField(data, ['District', 'District_Name', 'Muang', 'Address_District', 'Current_District']),
+      province: pickPatientField(data, ['Province', 'Province_Name', 'Khoueng', 'Address_Province', 'Current_Province']),
+      diagnosis: pickPatientField(data, ['Diagnosis', 'DX', 'Chief_Complaint', 'Clinical_Diagnosis']),
+      addressLine
+    }
+  } catch (e) {
+    return {}
+  }
+}
+
 export async function getAllTestPackages() {
   try {
     const { data, error } = await supabase
@@ -374,21 +411,106 @@ export async function getTestParameters() {
     const { data, error } = await supabase.from('lis_test_parameters').select('*').order('test_name').order('id')
     if (error) throw error
     return data.map(d => ({
+      ...parseStoredDropdownParameter(d.options),
       rowIdx: d.id, testName: d.test_name, paramName: d.param_name,
-      inputType: d.input_type, options: d.options, unit: d.unit, min: d.normal_min, max: d.normal_max
+      inputType: d.input_type, options: parseStoredDropdownParameter(d.options).optionsText, unit: d.unit, min: d.normal_min, max: d.normal_max
     }))
   } catch (e) { return [] }
 }
 
+function parseStoredDropdownParameter(rawOptions) {
+  if (Array.isArray(rawOptions)) {
+    const items = rawOptions.map(item => String(item).trim()).filter(Boolean)
+    return { optionItems: items, optionsText: items.join(', '), dropdownReference: '' }
+  }
+
+  const raw = String(rawOptions || '').trim()
+  if (!raw) return { optionItems: [], optionsText: '', dropdownReference: '' }
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      const items = parsed.map(item => String(item).trim()).filter(Boolean)
+      return { optionItems: items, optionsText: items.join(', '), dropdownReference: '' }
+    }
+    if (parsed && typeof parsed === 'object') {
+      const itemSource = Array.isArray(parsed.items)
+        ? parsed.items
+        : Array.isArray(parsed.options)
+          ? parsed.options
+          : String(parsed.items || parsed.options || '').split(/[\n,]+/)
+      const items = itemSource.map(item => String(item).trim()).filter(Boolean)
+      return {
+        optionItems: items,
+        optionsText: items.join(', '),
+        dropdownReference: String(parsed.reference || parsed.ref || parsed.range || '').trim()
+      }
+    }
+  } catch {}
+
+  const items = raw.split(/[\n,]+/).map(item => item.trim()).filter(Boolean)
+  return { optionItems: items, optionsText: items.join(', '), dropdownReference: '' }
+}
+
+function buildParameterReferenceText(param) {
+  const dropdownConfig = parseStoredDropdownParameter(param.options)
+  if (dropdownConfig.dropdownReference) return dropdownConfig.dropdownReference
+  const hasMin = param.normal_min !== '' && param.normal_min !== null && param.normal_min !== undefined
+  const hasMax = param.normal_max !== '' && param.normal_max !== null && param.normal_max !== undefined
+  if (hasMin && hasMax) return `${param.normal_min} - ${param.normal_max}`
+  if (hasMin) return `>= ${param.normal_min}`
+  if (hasMax) return `<= ${param.normal_max}`
+  if (dropdownConfig.optionsText) return dropdownConfig.optionsText
+  return '-'
+}
+
+function buildTestParameterPayload(data) {
+  const normalizedMin = data.inputType === 'Number' && data.min !== '' && data.min !== null && data.min !== undefined
+    ? Number(data.min)
+    : null
+  const normalizedMax = data.inputType === 'Number' && data.max !== '' && data.max !== null && data.max !== undefined
+    ? Number(data.max)
+    : null
+  const normalizedOptions = data.inputType === 'Dropdown'
+    ? (() => {
+      const items = String(data.options || '')
+        .split(/[\n,]+/)
+        .map(item => item.trim())
+        .filter(Boolean)
+      if (items.length === 0) return null
+      return JSON.stringify({ items, reference: String(data.dropdownReference || '').trim() })
+    })()
+    : null
+
+  return {
+    test_name: String(data.testName || '').trim(),
+    param_name: String(data.paramName || '').trim(),
+    input_type: data.inputType,
+    options: normalizedOptions,
+    unit: data.unit ? String(data.unit).trim() : null,
+    normal_min: normalizedMin,
+    normal_max: normalizedMax
+  }
+}
+
 export async function saveTestParameter(data, user) {
   try {
-    const { error } = await supabase.from('lis_test_parameters').insert([{
-      test_name: data.testName, param_name: data.paramName, input_type: data.inputType,
-      options: data.options, unit: data.unit, normal_min: data.min, normal_max: data.max
-    }])
+    const { error } = await supabase.from('lis_test_parameters').insert([buildTestParameterPayload(data)])
     if (error) throw error
     await logActivity(user, 'Setup Parameter', data.testName, 'à»€àºžàºµà»ˆàº¡àº„à»ˆàº²: ' + data.paramName)
     return { success: true, message: 'àºšàº±àº™àº—àº¶àºàºàº²àº™àº•àº±à»‰àº‡àº„à»ˆàº²àºªàº³à»€àº¥àº±àº”!' }
+  } catch (e) { return { success: false, message: e.message } }
+}
+
+export async function updateTestParameter(id, data, user) {
+  try {
+    const { error } = await supabase
+      .from('lis_test_parameters')
+      .update(buildTestParameterPayload(data))
+      .eq('id', id)
+    if (error) throw error
+    await logActivity(user, 'Update Parameter', data.testName, 'à»àºà»‰à»„àº‚àº„à»ˆàº²: ' + data.paramName)
+    return { success: true, message: 'àº­àº±àºšà»€àº”àº” Parameter àºªàº³à»€àº¥àº±àº”!' }
   } catch (e) { return { success: false, message: e.message } }
 }
 
@@ -824,13 +946,20 @@ export async function updateOrderStatus(orderId, newStatus, user, note) {
 
 export async function getRecentOrders() {
   try {
-    const { data, error } = await supabase
-      .from('lis_test_orders')
-      .select('*')
-      .neq('status', 'Cancelled')
-      .order('order_datetime', { ascending: false })
-      .limit(5000)
+    const [{ data, error }, { data: resultsData, error: resultsError }] = await Promise.all([
+      supabase
+        .from('lis_test_orders')
+        .select('*')
+        .neq('status', 'Cancelled')
+        .order('order_datetime', { ascending: false })
+        .limit(5000),
+      supabase
+        .from('lis_test_results')
+        .select('order_id')
+    ])
     if (error) throw error
+    if (resultsError) throw resultsError
+    const ordersWithResults = new Set((resultsData || []).map(row => row.order_id))
     const orderMap = {}
     const orders = []
     data.forEach(row => {
@@ -841,7 +970,7 @@ export async function getRecentOrders() {
           patientId: row.patient_id, patientName: row.patient_name, age: row.age,
           gender: row.gender, doctor: row.doctor, department: row.department,
           testType: row.test_type, labDest: row.lab_dest, sender: row.sender,
-          status: row.status, totalPrice: row.total_price, tests: []
+          status: row.status, hasResults: ordersWithResults.has(row.order_id), totalPrice: row.total_price, tests: []
         }
         orders.push(orderMap[row.order_id])
       }
@@ -885,8 +1014,14 @@ export async function getOutlabOrders() {
 export async function getParametersForOrder(orderId) {
   try {
     const { data: orderRows } = await supabase
-      .from('lis_test_orders').select('test_name, status').eq('order_id', orderId).neq('status', 'Cancelled')
-    const orderedTests = [...new Set(orderRows.map(r => r.test_name.trim()))]
+      .from('lis_test_orders').select('test_name, status, category').eq('order_id', orderId).neq('status', 'Cancelled')
+    const orderedTests = [...new Set((orderRows || []).map(r => r.test_name?.trim()).filter(Boolean))]
+    const orderedTestMeta = {}
+    ;(orderRows || []).forEach(row => {
+      const testName = row.test_name?.trim()
+      if (!testName || orderedTestMeta[testName]) return
+      orderedTestMeta[testName] = { category: row.category || '' }
+    })
 
     const { data: existingRes } = await supabase
       .from('lis_test_results').select('*').eq('order_id', orderId)
@@ -903,19 +1038,37 @@ export async function getParametersForOrder(orderId) {
         if (!formStructure[tName]) formStructure[tName] = []
         const pName = p.param_name.trim()
         const pKey = tName + '_' + pName
+        const dropdownConfig = parseStoredDropdownParameter(p.options)
         formStructure[tName].push({
-          paramName: pName, inputType: p.input_type, options: p.options,
+          paramName: pName, inputType: p.input_type, options: p.input_type === 'Dropdown' ? dropdownConfig.optionItems : p.options,
+          referenceText: dropdownConfig.dropdownReference,
           unit: p.unit, normalMin: p.normal_min, normalMax: p.normal_max,
           savedValue: existingResults[pKey] !== undefined ? existingResults[pKey] : ''
         })
       }
     })
-    return { success: true, orderId, tests: formStructure }
+    return { success: true, orderId, orderedTests, orderedTestMeta, tests: formStructure }
   } catch (e) { return { success: false, message: e.message } }
 }
 
 export async function saveLabResults(orderId, results, user, attachments = []) {
   try {
+    const normalizedResults = Array.isArray(results)
+      ? results.filter(item => item && String(item.value ?? '').trim() !== '')
+      : []
+
+    const { data: existingResults } = await supabase
+      .from('lis_test_results')
+      .select('id')
+      .eq('order_id', orderId)
+
+    if (normalizedResults.length === 0) {
+      if (existingResults && existingResults.length > 0) {
+        return { success: false, message: 'ບໍ່ພົບຄ່າຜົນກວດໃໝ່ທີ່ຈະບັນທຶກ. ລະບົບໄດ້ຮັກສາຜົນກວດເກົ່າໄວ້ ແລະ ບໍ່ໄດ້ລຶບຂໍ້ມູນ.' }
+      }
+      return { success: false, message: 'ບໍ່ພົບຄ່າຜົນກວດທີ່ຈະບັນທຶກ' }
+    }
+
     // àº”àº¶àº‡ limits
     const { data: paramData } = await supabase.from('lis_test_parameters').select('test_name, param_name, normal_min, normal_max')
     const limits = {}
@@ -925,7 +1078,7 @@ export async function saveLabResults(orderId, results, user, attachments = []) {
     await supabase.from('lis_test_results').delete().eq('order_id', orderId)
 
     // àºšàº±àº™àº—àº¶àºà»ƒà»à»ˆ
-    const rowsToInsert = results.map(r => {
+    const rowsToInsert = normalizedResults.map(r => {
       const tName = String(r.testName).trim()
       const pName = String(r.paramName).trim()
       const val = r.value
@@ -981,13 +1134,13 @@ export async function getOrderAttachments(orderId) {
 export async function getSavedResults(orderId) {
   try {
     const { data: resData } = await supabase.from('lis_test_results').select('*').eq('order_id', orderId)
-    const { data: paramData } = await supabase.from('lis_test_parameters').select('test_name, param_name, unit, normal_min, normal_max')
+    const { data: paramData } = await supabase.from('lis_test_parameters').select('test_name, param_name, unit, normal_min, normal_max, options')
     const paramLookup = {}
-    paramData.forEach(p => { paramLookup[p.test_name + '_' + p.param_name] = { unit: p.unit, min: p.normal_min, max: p.normal_max } })
+    paramData.forEach(p => { paramLookup[p.test_name + '_' + p.param_name] = { unit: p.unit, min: p.normal_min, max: p.normal_max, options: p.options } })
     return resData.map(r => {
       const key = r.test_name + '_' + r.param_name
-      const pInfo = paramLookup[key] || { unit: '', min: '', max: '' }
-      const nRange = (pInfo.min !== '' && pInfo.min !== null && pInfo.max !== '' && pInfo.max !== null) ? pInfo.min + ' - ' + pInfo.max : '-'
+      const pInfo = paramLookup[key] || { unit: '', min: '', max: '', options: '' }
+      const nRange = buildParameterReferenceText({ normal_min: pInfo.min, normal_max: pInfo.max, options: pInfo.options })
       return { testName: r.test_name, paramName: r.param_name, value: r.result_value, flag: r.flag, unit: pInfo.unit, normalRange: nRange }
     })
   } catch (e) { return [] }

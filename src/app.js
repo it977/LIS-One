@@ -14,6 +14,7 @@ let globalStockList = []
 let globalSummaryData = []
 let globalInventoryData = []
 let globalStockHistory = []
+let paramSetupRows = []
 let reagentModalInstance, invEditModalInstance, stockEditModalInstance, addLotModalInstance, resultModalInstance
 
 const inventoryCustomOrder = [
@@ -147,6 +148,7 @@ window.toggleSidebar = function() {
 window.onload = function() {
   setInterval(() => { if (document.getElementById('dashboard').classList.contains('active')) { setDashDate('today') } }, 600000) // 10 minutes
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = '')
+  bindOrderDateTimeTracking()
   setDefaultDates()
   document.getElementById('invReceiveDate').value = new Date().toISOString().split('T')[0]
   document.getElementById('maintDate').value = new Date().toISOString().split('T')[0]
@@ -154,16 +156,34 @@ window.onload = function() {
 }
 
 function setDefaultDates() {
-  const today = new Date()
-  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-  const tStr = today.toISOString().split('T')[0]
-  const fStr = firstDay.toISOString().split('T')[0]
-  document.getElementById('dashEndDate').value = tStr
-  document.getElementById('dashStartDate').value = fStr
+  const dates = calculateDateRange('today')
+  document.getElementById('dashStartDate').value = dates.start
+  document.getElementById('dashEndDate').value = dates.end
 }
 
 window.setDashDate = function(type) { const dates = calculateDateRange(type); document.getElementById('dashStartDate').value = dates.start; document.getElementById('dashEndDate').value = dates.end; loadDashboard() }
 window.setReportDate = function(type) { const dates = calculateDateRange(type); document.getElementById('repStartDate').value = dates.start; document.getElementById('repEndDate').value = dates.end; loadSummaryReport() }
+
+function getCurrentLocalDateTimeValue() {
+  return new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+
+function bindOrderDateTimeTracking() {
+  const orderDateTimeEl = document.getElementById('orderDateTime')
+  if (!orderDateTimeEl || orderDateTimeEl.dataset.bound === 'true') return
+  orderDateTimeEl.dataset.bound = 'true'
+  orderDateTimeEl.addEventListener('input', () => {
+    orderDateTimeEl.dataset.autoManaged = 'false'
+  })
+}
+
+function refreshOrderDateTimeDefault(force = false) {
+  const orderDateTimeEl = document.getElementById('orderDateTime')
+  if (!orderDateTimeEl || currentEditOrderId) return
+  if (!force && orderDateTimeEl.dataset.autoManaged === 'false') return
+  orderDateTimeEl.value = getCurrentLocalDateTimeValue()
+  orderDateTimeEl.dataset.autoManaged = 'true'
+}
 
 function calculateDateRange(type) {
   const today = new Date(); let start = new Date()
@@ -235,6 +255,7 @@ window.showPage = function(event, pageId) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'))
   document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'))
   document.getElementById(pageId).classList.add('active')
+  if (pageId === 'orderForm') refreshOrderDateTimeDefault()
   if (event && event.currentTarget) event.currentTarget.classList.add('active')
   else { const links = document.querySelectorAll(`.sidebar a[onclick*="${pageId}"]`); if (links.length > 0) links[0].classList.add('active') }
   if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('mobile-open'); document.getElementById('sidebarOverlay').classList.remove('active') }
@@ -1995,6 +2016,7 @@ window.calculateCart = function() {
 }
 
 window.submitData = async function() {
+  refreshOrderDateTimeDefault()
   if (!document.getElementById('patientId').value.trim()) { 
     Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນ Patient ID!', 'warning'); 
     return 
@@ -2060,7 +2082,7 @@ window.resetForm = function() {
   const safeSet = (id, val) => { const el = document.getElementById(id); if (el) el.value = val }
   const safeChk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val }
   
-  safeSet('orderDateTime', new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16))
+  refreshOrderDateTimeDefault(true)
   safeSet('patientId', '')
   safeSet('patientName', '')
   safeSet('age', '')
@@ -2087,6 +2109,7 @@ window.renderTable = function(orders) {
   orders.sort((a, b) => b.dateTime - a.dateTime)
   orders.forEach(order => {
     const dateStr = new Date(order.dateTime).toLocaleString('en-GB')
+    const compactDateStr = dateStr.replace(', ', ' ')
     const labDestValue = (!order.labDest || order.labDest === 'In-Lab' || order.labDest === 'In-house') ? 'In-house' : order.labDest
     const labBadge = (!order.labDest || order.labDest === 'In-Lab' || order.labDest === 'In-house') ? `<span class="badge badge-solid-success">In-house</span>` : `<span class="badge badge-solid-danger">${labDestValue}</span>`
 
@@ -2096,15 +2119,16 @@ window.renderTable = function(orders) {
       ? `<span class="badge badge-solid-primary"><i class="bi bi-box-seam me-1"></i>Package</span>`
       : `<span class="badge badge-solid-secondary"><i class="bi bi-list-check me-1"></i>Normal</span>`
     
+    const canViewResults = order.status === 'Completed' || order.hasResults
     let resultEntryBtn, viewResultBtn
-    if (order.status === 'Completed') {
+    if (canViewResults) {
       resultEntryBtn = `<button class="btn btn-sm btn-warning py-0 text-dark fw-bold shadow-sm" onclick="openResultModal('${order.orderId}')" title="ແກ້ໄຂຜົນກວດ"><i class="bi bi-pencil-square"></i></button>`
-      viewResultBtn = `<button class="btn btn-sm btn-primary py-0 shadow-sm" onclick="viewLabResults('${order.orderId}')" title="ເບິ່ງ/ພິມ ຜົນກວດ"><i class="bi bi-printer"></i></button>`
+      viewResultBtn = `<button class="btn btn-sm btn-primary py-0 shadow-sm" onclick="openResultModal('${order.orderId}', 'view')" title="ເບິ່ງ/ພິມ ຜົນກວດ"><i class="bi bi-printer"></i></button>`
     } else {
       resultEntryBtn = `<button class="btn btn-sm btn-success py-0 fw-bold shadow-sm" onclick="openResultModal('${order.orderId}')" title="ປ້ອນຜົນກວດໃໝ່"><i class="bi bi-clipboard2-pulse"></i></button>`
       viewResultBtn = `<button class="btn btn-sm btn-secondary py-0 opacity-50" disabled title="ຍັງບໍ່ມີຜົນກວດ"><i class="bi bi-printer"></i></button>`
     }
-    html += `<tr><td><small class="text-muted">${dateStr}</small></td><td><span class="fw-bold" style="color:var(--primary-med);">${order.patientId}</span><br><small class="text-muted" style="font-size: 0.7rem;">${order.orderId}</small></td><td><span class="fw-bold">${order.patientName}</span></td><td class="text-center">${order.age}</td><td class="text-center">${order.gender}</td><td>${labBadge}</td><td class="text-center">${typeBadge}</td><td class="text-end price-text text-danger">₭ ${order.totalPrice.toLocaleString()}</td><td class="text-center"><div class="d-flex justify-content-center gap-1 flex-nowrap">${resultEntryBtn}${viewResultBtn}<button class="btn btn-action btn-outline-info" onclick="viewOrder('${order.orderId}')" title="ເບິ່ງລາຍລະອຽດ"><i class="bi bi-eye"></i></button><button class="btn btn-action btn-outline-dark" onclick="editOrder('${order.orderId}')" title="ແກ້ໄຂ"><i class="bi bi-gear"></i></button><button class="btn btn-action btn-outline-danger" onclick="deleteOrder('${order.orderId}')" title="ຍົກເລີກ"><i class="bi bi-trash"></i></button></div></td></tr>`
+    html += `<tr><td><small class="history-date-time text-muted">${compactDateStr}</small></td><td><div class="history-patient-meta"><span class="history-patient-id fw-bold" style="color:var(--primary-med);">${order.patientId}</span><small class="history-order-id text-muted">${order.orderId}</small></div></td><td><span class="history-patient-name fw-bold">${order.patientName}</span></td><td class="text-center">${order.age}</td><td class="text-center">${order.gender}</td><td>${labBadge}</td><td class="text-center">${typeBadge}</td><td class="text-end price-text text-danger">₭ ${order.totalPrice.toLocaleString()}</td><td class="text-center"><div class="d-flex justify-content-center gap-1 flex-nowrap">${resultEntryBtn}${viewResultBtn}<button class="btn btn-action btn-outline-info" onclick="viewOrder('${order.orderId}')" title="ເບິ່ງລາຍລະອຽດ"><i class="bi bi-eye"></i></button><button class="btn btn-action btn-outline-dark" onclick="editOrder('${order.orderId}')" title="ແກ້ໄຂ"><i class="bi bi-gear"></i></button><button class="btn btn-action btn-outline-danger" onclick="deleteOrder('${order.orderId}')" title="ຍົກເລີກ"><i class="bi bi-trash"></i></button></div></td></tr>`
   })
   tbody.innerHTML = html; initDT('orderHistoryTable', '550px')
 }
@@ -2157,6 +2181,7 @@ window.editOrder = function(orderId) {
   document.getElementById('editAlert').classList.remove('d-none'); document.getElementById('editOrderIdDisplay').innerText = order.orderId
   document.getElementById('submitBtn').innerHTML = '<i class="bi bi-arrow-repeat me-2"></i> ອັບເດດບິນ'; document.getElementById('submitBtn').classList.replace('btn-primary', 'btn-warning')
   document.getElementById('orderDateTime').value = new Date(order.dateTime - (new Date()).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  document.getElementById('orderDateTime').dataset.autoManaged = 'false'
   document.getElementById('timeSlot').value = order.timeSlot; document.getElementById('visitType').value = order.visitType
   document.getElementById('insite').value = order.insite; document.getElementById('patientId').value = order.patientId
   document.getElementById('patientName').value = order.patientName; document.getElementById('age').value = order.age
@@ -2402,33 +2427,120 @@ window.saveMapping = async function() {
 window.deleteMapping = function(id) { Swal.fire({ title: 'ລຶບການຕັ້ງຄ່ານີ້?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(async result => { if (result.isConfirmed) { const res = await api.deleteTestReagentMapping(id, sessionStorage.getItem('lis_username')); if (res.success) { Swal.fire('ສຳເລັດ', res.message, 'success'); loadMappingData() } else { Swal.fire('ຜິດພາດ', res.message, 'error') } } }) }
 
 // ================== PARAMETERS ==================
+function escapeParamSetupHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function formatParameterRangeText(param) {
+  const hasMin = param.min !== '' && param.min !== null && param.min !== undefined
+  const hasMax = param.max !== '' && param.max !== null && param.max !== undefined
+  if (hasMin && hasMax) return `${param.min} - ${param.max}`
+  if (hasMin) return `>= ${param.min}`
+  if (hasMax) return `<= ${param.max}`
+  return '-'
+}
+
+function formatParameterOptionsText(options) {
+  return String(options || '')
+    .split(/[\n,]+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+    .join(', ') || '-'
+}
+
+function formatDropdownReferenceText(param) {
+  return String(param?.dropdownReference || '').trim() || '-'
+}
+
+function setParameterFormMode(isEdit) {
+  const title = document.getElementById('paramFormTitle')
+  const saveBtn = document.getElementById('btnSaveParameter')
+  const cancelBtn = document.getElementById('btnCancelParameter')
+  if (title) title.innerHTML = isEdit
+    ? '<i class="bi bi-pencil-square me-2 text-warning"></i> ແກ້ໄຂຄ່າ Parameter'
+    : '<i class="bi bi-plus-circle-dotted me-2 text-primary"></i> ເພີ່ມຄ່າ Parameter ໃໝ່'
+  if (saveBtn) {
+    saveBtn.innerHTML = isEdit ? '<i class="bi bi-check-lg"></i> ອັບເດດ' : '<i class="bi bi-save"></i> ບັນທຶກ'
+    saveBtn.classList.remove('btn-success', 'btn-warning')
+    saveBtn.classList.add(isEdit ? 'btn-warning' : 'btn-success')
+  }
+  if (cancelBtn) cancelBtn.classList.toggle('d-none', !isEdit)
+}
+
 window.loadParamSetupData = async function() {
   const params = await api.getTestParameters()
+  paramSetupRows = Array.isArray(params) ? params : []
   if ($.fn.DataTable.isDataTable('#paramTable')) { $('#paramTable').DataTable().clear().destroy() }
   const tbody = document.getElementById('paramTableBody'); if (!tbody) return; tbody.innerHTML = ''
-  params.forEach(p => {
-    const rangeText = p.inputType === 'Number' ? `${p.min || 0} - ${p.max || 0}` : (p.inputType === 'Dropdown' ? `<small class="text-muted">${p.options}</small>` : '-')
+  paramSetupRows.forEach(p => {
+    const detailText = p.inputType === 'Number' ? formatParameterRangeText(p) : (p.inputType === 'Dropdown' ? formatParameterOptionsText(p.options) : '-')
+    const detailHtml = p.inputType === 'Dropdown'
+      ? `<div><small class="text-muted">Options: ${escapeParamSetupHtml(detailText)}</small></div><div><small class="text-muted">Ref: ${escapeParamSetupHtml(formatDropdownReferenceText(p))}</small></div>`
+      : escapeParamSetupHtml(detailText)
     const typeBadge = p.inputType === 'Number' ? '<span class="badge bg-info text-dark">Number</span>' : (p.inputType === 'Dropdown' ? '<span class="badge bg-warning text-dark">Dropdown</span>' : '<span class="badge bg-secondary">Text</span>')
-    tbody.innerHTML += `<tr><td class="fw-bold text-primary">${p.testName}</td><td class="fw-bold">${p.paramName}</td><td>${typeBadge}</td><td>${rangeText}</td><td>${p.unit || '-'}</td><td class="text-center"><button class="btn btn-action btn-outline-danger" onclick="deleteParameter(${p.rowIdx})" title="ລຶບ"><i class="bi bi-trash"></i></button></td></tr>`
+    tbody.innerHTML += `<tr><td class="fw-bold text-primary">${escapeParamSetupHtml(p.testName)}</td><td class="fw-bold">${escapeParamSetupHtml(p.paramName)}</td><td>${typeBadge}</td><td>${detailHtml}</td><td>${escapeParamSetupHtml(p.unit || '-')}</td><td class="text-center"><div class="d-flex justify-content-center gap-1 flex-nowrap"><button class="btn btn-action btn-outline-warning" onclick="editParameter(${p.rowIdx})" title="ແກ້ໄຂ"><i class="bi bi-pencil-square"></i></button><button class="btn btn-action btn-outline-danger" onclick="deleteParameter(${p.rowIdx})" title="ລຶບ"><i class="bi bi-trash"></i></button></div></td></tr>`
   })
   initDT('paramTable', '450px')
 }
 
-window.toggleParamInputFields = function() { const type = document.getElementById('spInputType').value; document.getElementById('divNumberSetup').style.display = (type === 'Number') ? 'flex' : 'none'; document.getElementById('divDropdownSetup').style.display = (type === 'Dropdown') ? 'flex' : 'none' }
+window.toggleParamInputFields = function() {
+  const type = document.getElementById('spInputType').value
+  document.getElementById('divNumberSetup').style.display = (type === 'Number') ? '' : 'none'
+  document.getElementById('divDropdownSetup').style.display = (type === 'Dropdown') ? '' : 'none'
+}
+
+window.editParameter = function(id) {
+  const param = paramSetupRows.find(item => String(item.rowIdx) === String(id))
+  if (!param) return
+  document.getElementById('editParamId').value = param.rowIdx
+  document.getElementById('spTestName').value = param.testName
+  document.getElementById('spParamName').value = param.paramName
+  document.getElementById('spInputType').value = param.inputType || 'Number'
+  document.getElementById('spUnit').value = param.unit || ''
+  document.getElementById('spMin').value = param.min ?? ''
+  document.getElementById('spMax').value = param.max ?? ''
+  document.getElementById('spOptions').value = formatParameterOptionsText(param.options) === '-' ? '' : formatParameterOptionsText(param.options)
+  document.getElementById('spDropdownRef').value = param.dropdownReference || ''
+  window.toggleParamInputFields()
+  setParameterFormMode(true)
+}
+
+window.cancelParameterEdit = function() {
+  document.getElementById('editParamId').value = ''
+  document.getElementById('spTestName').value = ''
+  document.getElementById('spParamName').value = ''
+  document.getElementById('spInputType').value = 'Number'
+  document.getElementById('spUnit').value = ''
+  document.getElementById('spMin').value = ''
+  document.getElementById('spMax').value = ''
+  document.getElementById('spOptions').value = ''
+  document.getElementById('spDropdownRef').value = ''
+  window.toggleParamInputFields()
+  setParameterFormMode(false)
+}
 
 window.saveParameter = async function() {
+  const editId = document.getElementById('editParamId').value
   const tName = document.getElementById('spTestName').value; const pName = document.getElementById('spParamName').value.trim()
   const iType = document.getElementById('spInputType').value; const pUnit = document.getElementById('spUnit').value.trim()
-  let pMin = '', pMax = '', pOpt = ''
+  let pMin = '', pMax = '', pOpt = '', pDropdownRef = ''
   if (!tName || !pName) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາເລືອກລາຍການກວດ ແລະ ໃສ່ຊື່ Parameter!', 'warning'); return }
   if (iType === 'Number') { pMin = document.getElementById('spMin').value; pMax = document.getElementById('spMax').value }
-  else if (iType === 'Dropdown') { pOpt = document.getElementById('spOptions').value.trim(); if (!pOpt) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນ Options!', 'warning'); return } }
-  const res = await api.saveTestParameter({ testName: tName, paramName: pName, inputType: iType, unit: pUnit, min: pMin, max: pMax, options: pOpt }, sessionStorage.getItem('lis_username'))
-  if (res.success) { Swal.fire('ສຳເລັດ', res.message, 'success'); document.getElementById('spParamName').value = ''; document.getElementById('spMin').value = ''; document.getElementById('spMax').value = ''; document.getElementById('spOptions').value = ''; loadParamSetupData() }
+  else if (iType === 'Dropdown') { pOpt = document.getElementById('spOptions').value.trim(); pDropdownRef = document.getElementById('spDropdownRef').value.trim(); if (!pOpt) { Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນ Options!', 'warning'); return } }
+  const payload = { testName: tName, paramName: pName, inputType: iType, unit: pUnit, min: pMin, max: pMax, options: pOpt, dropdownReference: pDropdownRef }
+  const res = editId
+    ? await api.updateTestParameter(editId, payload, sessionStorage.getItem('lis_username'))
+    : await api.saveTestParameter(payload, sessionStorage.getItem('lis_username'))
+  if (res.success) { window.cancelParameterEdit(); Swal.fire('ສຳເລັດ', res.message, 'success'); loadParamSetupData() }
   else { Swal.fire('ຜິດພາດ', res.message, 'error') }
 }
 
-window.deleteParameter = function(id) { Swal.fire({ title: 'ລຶບການຕັ້ງຄ່ານີ້?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(async result => { if (result.isConfirmed) { const res = await api.deleteTestParameter(id, sessionStorage.getItem('lis_username')); Swal.fire('ສຳເລັດ', res.message, 'success'); loadParamSetupData() } }) }
+window.deleteParameter = function(id) { Swal.fire({ title: 'ລຶບການຕັ້ງຄ່ານີ້?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(async result => { if (result.isConfirmed) { const res = await api.deleteTestParameter(id, sessionStorage.getItem('lis_username')); if (res.success) { if (String(document.getElementById('editParamId').value || '') === String(id)) window.cancelParameterEdit(); Swal.fire('ສຳເລັດ', res.message, 'success'); loadParamSetupData() } else { Swal.fire('ຜິດພາດ', res.message, 'error') } } }) }
 
 // ================== LAB RESULTS ==================
 window.applyFastEntry = function(testName, inputEl) {
@@ -2445,57 +2557,197 @@ window.applyFastEntry = function(testName, inputEl) {
 let uploadedFiles = []  // ເກັບລາຍການໄຟລ໌ທີ່ອັບໂຫຼດ
 let allResultsData = []  // ເກັບຂໍ້ມູນຜົນກວດທັງໝົດ (Excel ເທົ່ານັ້ນ)
 let showSummaryTable = true  // ສະຖານະການສະແດງຕາຕະລາງ
+const LAB_RESULT_CONTEXT_KEY = 'lis_lab_result_context'
 
-window.openResultModal = async function(orderId) {
-  if (!resultModalInstance) { resultModalInstance = new bootstrap.Modal(document.getElementById('resultEntryModal')) }
-  document.getElementById('resOrderIdDisplay').innerText = orderId
-  document.getElementById('currentResultOrderId').value = orderId
-  
-  // Reset ຂໍ້ມູນເກົ່າ
-  uploadedFiles = []
-  allResultsData = []
-  showSummaryTable = true
-  document.getElementById('resultFileInput').value = ''
-  document.getElementById('uploadedFilesList').innerHTML = ''
-  document.getElementById('noFilesMessage').style.display = 'block'
-  document.getElementById('resultsSummaryCard').style.display = 'none'
-  
-  resultModalInstance.show()
-  
-  // ໂຫຼດໄຟລ໌ເກົ່າຈາກ Database (ຖ້າມີ)
-  try {
-    console.log('Loading attachments for order:', orderId)
-    const attachments = await api.getOrderAttachments(orderId)
-    console.log('Loaded attachments:', attachments)
-    
-    if (attachments && attachments.length > 0) {
-      attachments.forEach(att => {
-        uploadedFiles.push({
-          id: att.id || Date.now() + Math.random(),
-          name: att.file_name,
-          size: att.file_size || 0,
-          data: att.file_url,
-          type: att.file_type
-        })
-      })
+function normalizeLabResultText(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, '').replace(/[()_.\/-]/g, '').replace(/#/g, 'num').replace(/%/g, 'pct')
+}
 
-      console.log('Uploaded files:', uploadedFiles)
+const COMPATIBLE_LAB_RESULT_TEST_GROUPS = [
+  ['hdl', 'hdlc'],
+  ['ldl', 'ldlc'],
+  ['triglyceride', 'triglycerid', 'triglycirid']
+]
 
-      // ສະແດງໄຟລ໌ເກົ່າ
-      renderUploadedFiles()
+function buildCompatibleLabResultKeySet(values = []) {
+  const keys = new Set()
+  ;(values || []).forEach(value => {
+    const normalized = normalizeLabResultText(value)
+    if (!normalized) return
+    keys.add(normalized)
+    COMPATIBLE_LAB_RESULT_TEST_GROUPS.forEach(group => {
+      if (group.includes(normalized)) group.forEach(item => keys.add(item))
+    })
+  })
+  return keys
+}
 
-      // ສະແດງຕາຕະລາງຜົນກວດ (ຖ້າມີ Excel)
-      mergeAllResults()
-      if (allResultsData.length > 0 && showSummaryTable) {
-        renderResultsSummary()
-      }
-    } else {
-      console.log('No attachments found for this order')
-    }
-  } catch (err) {
-    console.error('Error loading attachments:', err)
-    Swal.fire('ຜິດພາດ', 'ບໍ່ສາມາດໂຫຼດໄຟລ໌ເກົ່າໄດ້: ' + err.message, 'error')
+function filterSavedResultsForOrderedTests(results = [], orderedTests = []) {
+  const normalizedResults = Array.isArray(results)
+    ? results.filter(item => item && String(item.value ?? '').trim() !== '')
+    : []
+
+  const allowedTests = buildCompatibleLabResultKeySet(orderedTests)
+  if (allowedTests.size === 0) return normalizedResults
+
+  return normalizedResults.filter(item => allowedTests.has(normalizeLabResultText(item.testName)))
+}
+
+function buildLabResultContext(order, parameterResponse, savedResults, patientProfile = {}) {
+  const orderedTests = Array.isArray(parameterResponse?.orderedTests) && parameterResponse.orderedTests.length > 0
+    ? parameterResponse.orderedTests
+    : order.tests.map(test => test.name)
+
+  return {
+    orderId: order.orderId,
+    orderedAt: order.dateTime,
+    patient: {
+      patientId: order.patientId,
+      patientName: order.patientName,
+      age: order.age,
+      gender: order.gender,
+      doctor: order.doctor,
+      department: order.department,
+      visitType: order.visitType,
+      insite: order.insite,
+      diagnosis: patientProfile.diagnosis || order.department || '',
+      village: patientProfile.village || patientProfile.addressLine || '',
+      district: patientProfile.district || '',
+      province: patientProfile.province || ''
+    },
+    orderedTests,
+    orderedTestMeta: parameterResponse?.orderedTestMeta || {},
+    parameters: parameterResponse.tests || {},
+    savedResults: filterSavedResultsForOrderedTests(savedResults, orderedTests)
   }
+}
+
+function getCachedSavedResults(orderId) {
+  try {
+    const raw = localStorage.getItem(LAB_RESULT_CONTEXT_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!parsed || parsed.orderId !== orderId || !Array.isArray(parsed.savedResults)) return []
+    return parsed.savedResults
+  } catch {
+    return []
+  }
+}
+
+function mergeSavedResults(primaryResults = [], fallbackResults = []) {
+  const merged = new Map()
+  ;[...fallbackResults, ...primaryResults].forEach(item => {
+    if (!item) return
+    const key = [item.testName || '', item.paramName || ''].join('::').toLowerCase()
+    if (!key || !item.value) return
+    merged.set(key, item)
+  })
+  return Array.from(merged.values())
+}
+
+window.persistLabResultEntry = async function(payload) {
+  if (!payload || !payload.orderId) {
+    return { success: false, message: 'ບໍ່ພົບຂໍ້ມູນບິນສຳລັບບັນທຶກຜົນກວດ' }
+  }
+
+  const results = Array.isArray(payload.results) ? payload.results : []
+  const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
+  const res = await api.saveLabResults(payload.orderId, results, sessionStorage.getItem('lis_username'), attachments)
+  if (res.success) {
+    const targetOrder = globalOrders.find(item => item.orderId === payload.orderId)
+    if (targetOrder) {
+      targetOrder.status = 'Completed'
+      targetOrder.hasResults = results.length > 0
+    }
+    localStorage.setItem(LAB_RESULT_CONTEXT_KEY, JSON.stringify({
+      ...(JSON.parse(localStorage.getItem(LAB_RESULT_CONTEXT_KEY) || '{}')),
+      savedResults: results.map(item => ({
+        testName: item.testName,
+        paramName: item.paramName,
+        value: item.value,
+        unit: item.unit || ''
+      }))
+    }))
+    renderTable(globalOrders)
+    loadTable()
+  }
+  return res
+}
+
+window.openResultModal = async function(orderId, mode = 'edit') {
+  try {
+    const order = globalOrders.find(item => item.orderId === orderId)
+    if (!order) {
+      Swal.fire('ຜິດພາດ', 'ບໍ່ພົບຂໍ້ມູນ Order ທີ່ເລືອກ', 'error')
+      return
+    }
+
+    Swal.fire({
+      title: 'ກຳລັງເປີດໜ້າຕີຜົນ...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    })
+
+    const [parameterResponse, savedResults, patientProfile] = await Promise.all([
+      api.getParametersForOrder(orderId),
+      api.getSavedResults(orderId),
+      api.getPatientReportProfile(order.patientId)
+    ])
+
+    if (!parameterResponse.success) {
+      throw new Error(parameterResponse.message || 'ບໍ່ສາມາດໂຫຼດລາຍການກວດສຳລັບ Order ນີ້ໄດ້')
+    }
+
+    const orderedTests = Array.isArray(parameterResponse?.orderedTests) && parameterResponse.orderedTests.length > 0
+      ? parameterResponse.orderedTests
+      : order.tests.map(test => test.name)
+    const cachedSavedResults = getCachedSavedResults(orderId)
+    const effectiveSavedResults = filterSavedResultsForOrderedTests(
+      mergeSavedResults(savedResults, cachedSavedResults),
+      orderedTests
+    )
+    const context = buildLabResultContext(order, parameterResponse, effectiveSavedResults, patientProfile)
+    localStorage.setItem(LAB_RESULT_CONTEXT_KEY, JSON.stringify(context))
+    const modalTitle = document.querySelector('#resultEntryModal .modal-title')
+    if (modalTitle) {
+      modalTitle.innerHTML = mode === 'view'
+        ? `<i class="bi bi-printer me-2"></i> ເບິ່ງ/ພິມ ຜົນກວດ - ບິນ: <span id="resOrderIdDisplay">${orderId}</span>`
+        : `<i class="bi bi-clipboard2-pulse me-2"></i> ປ້ອນຜົນກວດ - ບິນ: <span id="resOrderIdDisplay">${orderId}</span>`
+    }
+    const orderDisplay = document.getElementById('resOrderIdDisplay')
+    if (orderDisplay) orderDisplay.textContent = orderId
+    const currentOrderInput = document.getElementById('currentResultOrderId')
+    if (currentOrderInput) currentOrderInput.value = orderId
+    const resultFrame = document.getElementById('labResultFrame')
+    if (!resultModalInstance) {
+      resultModalInstance = new bootstrap.Modal(document.getElementById('resultEntryModal'))
+    }
+    if (resultFrame) {
+      resultFrame.dataset.mode = mode
+      resultFrame.src = `LabResult_System.html?orderId=${encodeURIComponent(orderId)}&embedded=1&mode=${encodeURIComponent(mode)}&t=${Date.now()}`
+    }
+    Swal.close()
+    resultModalInstance.show()
+  } catch (err) {
+    Swal.fire('ຜິດພາດ', err.message || 'ບໍ່ສາມາດເປີດໜ້າຕີຜົນກວດໄດ້', 'error')
+  }
+}
+
+window.reloadLabResultFrame = function () {
+  const orderId = document.getElementById('currentResultOrderId')?.value
+  const resultFrame = document.getElementById('labResultFrame')
+  if (!orderId || !resultFrame) return
+  const mode = resultFrame.dataset.mode || 'edit'
+  resultFrame.src = `LabResult_System.html?orderId=${encodeURIComponent(orderId)}&embedded=1&mode=${encodeURIComponent(mode)}&t=${Date.now()}`
+}
+
+window.closeLabResultModal = function () {
+  const resultFrame = document.getElementById('labResultFrame')
+  if (resultFrame) {
+    resultFrame.src = 'about:blank'
+    resultFrame.dataset.mode = 'edit'
+  }
+  if (resultModalInstance) resultModalInstance.hide()
 }
 
 window.toggleSummaryTable = function() {
