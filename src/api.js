@@ -980,6 +980,42 @@ export async function getRecentOrders() {
   } catch (e) { return [] }
 }
 
+export async function getPatientHistoryOrders() {
+  try {
+    const [{ data, error }, { data: resultsData, error: resultsError }] = await Promise.all([
+      supabase
+        .from('lis_test_orders')
+        .select('*')
+        .neq('status', 'Cancelled')
+        .order('order_datetime', { ascending: false })
+        .limit(10000),
+      supabase
+        .from('lis_test_results')
+        .select('order_id')
+    ])
+    if (error) throw error
+    if (resultsError) throw resultsError
+    const ordersWithResults = new Set((resultsData || []).map(row => row.order_id))
+    const orderMap = {}
+    const orders = []
+    data.forEach(row => {
+      if (!orderMap[row.order_id]) {
+        orderMap[row.order_id] = {
+          orderId: row.order_id, dateTime: new Date(row.order_datetime).getTime(),
+          timeSlot: row.time_slot, visitType: row.visit_type, insite: row.insite,
+          patientId: row.patient_id, patientName: row.patient_name, age: row.age,
+          gender: row.gender, doctor: row.doctor, department: row.department,
+          testType: row.test_type, labDest: row.lab_dest, sender: row.sender,
+          status: row.status, hasResults: ordersWithResults.has(row.order_id), totalPrice: row.total_price, tests: []
+        }
+        orders.push(orderMap[row.order_id])
+      }
+      if (row.test_name) orderMap[row.order_id].tests.push({ name: row.test_name, price: Number(row.price) || 0 })
+    })
+    return orders
+  } catch (e) { return [] }
+}
+
 
 export async function getOutlabOrders() {
   try {

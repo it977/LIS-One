@@ -2334,6 +2334,158 @@ span.badge[class*="badge-category-"],
   gap: 0.3rem !important;
 }
 
+#patientHistoryTable,
+#patientVisitHistoryTable {
+  font-size: 11px !important;
+}
+
+#patientHistoryTable thead th,
+#patientVisitHistoryTable thead th {
+  font-size: 10.5px !important;
+  padding: 0.5rem 0.45rem !important;
+  white-space: nowrap;
+}
+
+#patientHistoryTable tbody td,
+#patientVisitHistoryTable tbody td {
+  font-size: 11px !important;
+  line-height: 1.2;
+  padding: 0.42rem 0.45rem !important;
+  vertical-align: middle;
+}
+
+#patientHistoryTable small,
+#patientVisitHistoryTable small,
+#patientHistoryTable .text-muted,
+#patientVisitHistoryTable .text-muted {
+  font-size: 10px !important;
+  line-height: 1.15;
+}
+
+#patientHistoryTable .history-patient-meta,
+#patientVisitHistoryTable .history-patient-meta {
+  gap: 0.28rem;
+}
+
+#patientHistoryTable .history-patient-id,
+#patientVisitHistoryTable .history-patient-id,
+#patientHistoryTable .history-patient-name,
+#patientVisitHistoryTable .history-patient-name,
+#patientHistoryTable .patient-history-price,
+#patientVisitHistoryTable .price-text {
+  font-size: 11px !important;
+}
+
+#patientHistoryTable .history-date-time,
+#patientVisitHistoryTable .history-date-time {
+  font-size: 10px !important;
+}
+
+.patient-history-stat {
+  border: 1px solid #efe7ff;
+  background: linear-gradient(180deg, #ffffff 0%, #fbf8ff 100%);
+}
+
+.patient-history-stat-label {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 0.45rem;
+}
+
+.patient-history-stat-value {
+  color: var(--primary-dark);
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.patient-history-search {
+  max-width: 360px;
+}
+
+.patient-history-tests {
+  display: inline-block;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  font-size: 11px;
+}
+
+.patient-history-badge {
+  min-width: 58px;
+  font-size: 10px !important;
+  padding: 0.22rem 0.44rem;
+}
+
+.patient-history-row-active {
+  background: rgba(124, 58, 237, 0.06) !important;
+}
+
+.patient-history-empty i {
+  font-size: 1.6rem;
+  color: #7c3aed;
+}
+
+#patientHistoryTable .btn,
+#patientVisitHistoryTable .btn,
+#patientVisitHistoryTable .btn-action {
+  min-width: 26px;
+  height: 26px;
+  padding: 0.18rem 0.42rem;
+  border-radius: 9px;
+  font-size: 10px;
+}
+
+.patient-history-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  white-space: nowrap;
+}
+
+.patient-history-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 10px;
+  padding: 0.28rem 0.55rem;
+  white-space: nowrap;
+}
+
+#patientVisitHistoryCard .card-header {
+  padding-right: 1rem;
+}
+
+#orderForm .order-label-btn {
+  border-radius: 12px;
+  padding: 0.42rem 0.8rem;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.patient-history-view-btn i {
+  font-size: 0.68rem;
+}
+
+@media (max-width: 768px) {
+  .patient-history-search {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .patient-history-tests {
+    max-width: 180px;
+  }
+
+  .patient-history-stat-value {
+    font-size: 1.6rem;
+  }
+}
+
 /* Order page: align typography and density with compact table styling */
 #orderForm > .row {
   --bs-gutter-x: 1rem;
@@ -2468,4 +2620,67 @@ span.badge[class*="badge-category-"],
 
 #orderForm #submitBtn i {
   font-size: 0.95rem;
+}
+
+/* Setup page tabs */
+.setup-tab-shell {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.setup-tab-nav {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.5rem;
+  border: 1px solid #F3F4F6;
+  border-radius: 18px;
+  background: #FFFFFF;
+  box-shadow: 0 10px 30px rgba(17, 24, 39, 0.04);
+}
+
+.setup-tab-btn {
+  border: 1px solid transparent;
+  background: #F9FAFB;
+  color: #6B7280;
+  border-radius: 14px;
+  padding: 0.72rem 1rem;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  transition: all 0.18s ease;
+}
+
+.setup-tab-btn:hover {
+  background: #F5F3FF;
+  color: #7C3AED;
+  border-color: #E9D5FF;
+}
+
+.setup-tab-btn.active {
+  background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%);
+  color: #FFFFFF;
+  box-shadow: 0 0 18px rgba(124, 58, 237, 0.24);
+}
+
+.setup-tab-panel {
+  display: none;
+}
+
+.setup-tab-panel.active {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .setup-tab-nav {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 0.65rem;
+  }
+
+  .setup-tab-btn {
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
 }

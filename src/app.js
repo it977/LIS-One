@@ -9,6 +9,9 @@ let cartItems = []
 let finalTotal = 0
 let currentEditOrderId = null
 let globalOrders = []
+let patientHistoryOrders = []
+let patientHistoryPatients = []
+let selectedPatientHistoryKey = null
 let myCharts = {}
 let globalStockList = []
 let globalSummaryData = []
@@ -104,6 +107,65 @@ function getInventorySortIndex(name) {
   })
 }
 
+function escapePrintHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function getPatientHistoryKey(order) {
+  const patientId = String(order?.patientId || '').trim()
+  if (patientId) return `id:${patientId}`
+  return `name:${String(order?.patientName || '').trim().toLowerCase()}`
+}
+
+function findKnownOrder(orderId) {
+  return globalOrders.find(item => item.orderId === orderId) || patientHistoryOrders.find(item => item.orderId === orderId) || null
+}
+
+function buildPatientHistoryPatients(orders) {
+  const patientMap = new Map()
+  orders.forEach(order => {
+    const patientKey = getPatientHistoryKey(order)
+    const existing = patientMap.get(patientKey) || {
+      patientKey,
+      patientId: String(order.patientId || '').trim() || '-',
+      patientName: order.patientName || '-',
+      latestDateTime: 0,
+      latestOrderId: '',
+      latestTests: '',
+      visits: [],
+      visitCount: 0,
+      resultCount: 0,
+      totalSpent: 0
+    }
+
+    existing.visits.push(order)
+    existing.visitCount += 1
+    existing.resultCount += order.hasResults ? 1 : 0
+    existing.totalSpent += Number(order.totalPrice) || 0
+    if (order.patientId && existing.patientId === '-') existing.patientId = order.patientId
+    if (order.patientName) existing.patientName = order.patientName
+    if (order.dateTime > existing.latestDateTime) {
+      existing.latestDateTime = order.dateTime
+      existing.latestOrderId = order.orderId
+      existing.latestTests = order.tests.map(test => test.name).join(', ')
+    }
+
+    patientMap.set(patientKey, existing)
+  })
+
+  return Array.from(patientMap.values())
+    .map(patient => ({
+      ...patient,
+      visits: patient.visits.sort((a, b) => b.dateTime - a.dateTime)
+    }))
+    .sort((a, b) => b.latestDateTime - a.latestDateTime)
+}
+
 // ================== CHART.JS SETUP ==================
 Chart.register(ChartDataLabels)
 
@@ -142,6 +204,91 @@ window.toggleSidebar = function() {
   const ov = document.getElementById('sidebarOverlay')
   if (window.innerWidth <= 768) { sb.classList.toggle('mobile-open'); ov.classList.toggle('active') }
   else { sb.classList.toggle('collapsed') }
+}
+
+window.printTubeLabel = function() {
+  const patientId = document.getElementById('patientId')?.value.trim()
+  const patientName = document.getElementById('patientName')?.value.trim()
+  const age = document.getElementById('age')?.value.trim()
+
+  if (!patientId || !patientName || !age) {
+    Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນ ລະຫັດ, ຊື່ ແລະ ອາຍຸ ກ່ອນພິມປ້າຍ', 'warning')
+    return
+  }
+
+  const labelWindow = window.open('', '_blank', 'width=420,height=260')
+  if (!labelWindow) {
+    Swal.fire('ຜິດພາດ', 'ບໍ່ສາມາດເປີດໜ້າພິມໄດ້. ກະລຸນາອະນຸຍາດ pop-up ກ່ອນ', 'error')
+    return
+  }
+
+  const safePatientId = escapePrintHtml(patientId)
+  const safePatientName = escapePrintHtml(patientName)
+  const safeAge = escapePrintHtml(age)
+
+  labelWindow.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tube Label</title>
+  <style>
+    @page { size: 80mm 30mm; margin: 4mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans Lao", Arial, sans-serif;
+      background: #fff;
+      color: #111827;
+    }
+    .label {
+      width: 72mm;
+      min-height: 22mm;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 3.2mm 3.8mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 1.5mm;
+    }
+    .label-id {
+      font-size: 12pt;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      line-height: 1.1;
+    }
+    .label-name {
+      font-size: 10.5pt;
+      font-weight: 700;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+    .label-age {
+      font-size: 9pt;
+      font-weight: 700;
+      color: #475569;
+    }
+    @media print {
+      body { padding: 0; }
+      .label { border-color: #94a3b8; }
+    }
+  </style>
+</head>
+<body>
+  <div class="label">
+    <div class="label-id">${safePatientId}</div>
+    <div class="label-name">${safePatientName}</div>
+    <div class="label-age">Age: ${safeAge}</div>
+  </div>
+  <script>
+    window.onload = function () {
+      window.print();
+      window.onafterprint = function () { window.close(); };
+    };
+  <\/script>
+</body>
+</html>`)
+  labelWindow.document.close()
 }
 
 // ================== INIT ==================
@@ -256,10 +403,24 @@ window.showPage = function(event, pageId) {
   document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'))
   document.getElementById(pageId).classList.add('active')
   if (pageId === 'orderForm') refreshOrderDateTimeDefault()
+  if (pageId === 'patientHistoryPage') loadPatientHistoryPage()
+  if (pageId === 'testSetup') window.setSetupTab(window.currentSetupTab || 'tests')
   if (event && event.currentTarget) event.currentTarget.classList.add('active')
   else { const links = document.querySelectorAll(`.sidebar a[onclick*="${pageId}"]`); if (links.length > 0) links[0].classList.add('active') }
   if (window.innerWidth <= 768) { document.getElementById('sidebar').classList.remove('mobile-open'); document.getElementById('sidebarOverlay').classList.remove('active') }
   setTimeout(() => { $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust() }, 200)
+}
+
+window.currentSetupTab = 'tests'
+window.setSetupTab = function(tabId = 'tests') {
+  window.currentSetupTab = tabId
+  document.querySelectorAll('#testSetup .setup-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.setupTab === tabId)
+  })
+  document.querySelectorAll('#testSetup .setup-tab-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.dataset.setupPanel === tabId)
+  })
+  setTimeout(() => { $.fn.dataTable.tables({ visible: true, api: true }).columns.adjust() }, 120)
 }
 
 // ================== PATIENT SEARCH ==================
@@ -2134,7 +2295,7 @@ window.renderTable = function(orders) {
 }
 
 window.viewOrder = function(orderId) {
-  const order = globalOrders.find(o => o.orderId === orderId); if (!order) return
+  const order = findKnownOrder(orderId); if (!order) return
   let testList = '<ul class="list-group list-group-flush border rounded mb-0">'
   order.tests.forEach(t => { testList += `<li class="list-group-item d-flex justify-content-between align-items-center py-1 px-2"><span class="small">${t.name}</span> <span class="fw-bold price-text small">₭ ${t.price.toLocaleString()}</span></li>` })
   testList += '</ul>'
@@ -2151,7 +2312,7 @@ window.viewOrder = function(orderId) {
 }
 
 window.viewLabResults = async function(orderId) {
-  const order = globalOrders.find(o => o.orderId === orderId); if (!order) return
+  const order = findKnownOrder(orderId); if (!order) return
   Swal.fire({ title: 'ກຳລັງໂຫຼດ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() })
   const savedResults = await api.getSavedResults(orderId)
   const labDestValue = (!order.labDest || order.labDest === 'In-Lab' || order.labDest === 'In-house') ? 'In-house' : order.labDest
@@ -2175,8 +2336,121 @@ window.viewLabResults = async function(orderId) {
 window.filterTable = function() { const d = document.getElementById('searchDate').value; const filtered = globalOrders.filter(o => d ? new Date(o.dateTime).toISOString().startsWith(d) : true); renderTable(filtered) }
 window.deleteOrder = function(orderId) { Swal.fire({ title: 'ຢືນຢັນຍົກເລີກບິນ?', text: 'ປ່ຽນສະຖານະ ' + orderId + ' ເປັນ Cancelled?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33' }).then(async result => { if (result.isConfirmed) { const res = await api.deleteOrder(orderId, sessionStorage.getItem('lis_username')); Swal.fire('ສຳເລັດ!', res.message, 'success'); loadTable() } }) }
 
+function updatePatientHistorySummaryCards(patients, orders) {
+  const totalPatientsEl = document.getElementById('patientHistoryTotalPatients')
+  const totalVisitsEl = document.getElementById('patientHistoryTotalVisits')
+  const resultsReadyEl = document.getElementById('patientHistoryResultsReady')
+  if (totalPatientsEl) totalPatientsEl.textContent = patients.length.toLocaleString()
+  if (totalVisitsEl) totalVisitsEl.textContent = orders.length.toLocaleString()
+  if (resultsReadyEl) resultsReadyEl.textContent = orders.filter(order => order.hasResults).length.toLocaleString()
+}
+
+function getFilteredPatientHistoryPatients() {
+  const query = document.getElementById('patientHistorySearch')?.value.trim().toLowerCase() || ''
+  return patientHistoryPatients.filter(patient => {
+    if (!query) return true
+    return [patient.patientId, patient.patientName, patient.latestOrderId].some(value => String(value || '').toLowerCase().includes(query))
+  })
+}
+
+function setPatientHistoryDetailMode(showDetail) {
+  const masterSection = document.getElementById('patientHistoryMasterSection')
+  const detailCard = document.getElementById('patientVisitHistoryCard')
+  if (masterSection) masterSection.classList.toggle('d-none', showDetail)
+  if (detailCard) detailCard.classList.toggle('d-none', !showDetail)
+}
+
+window.renderPatientHistoryTable = function(patients) {
+  if ($.fn.DataTable.isDataTable('#patientHistoryTable')) { $('#patientHistoryTable').DataTable().clear().destroy() }
+  const tbody = document.getElementById('patientHistoryTableBody')
+  if (!tbody) return
+  let html = ''
+  patients.forEach((patient, index) => {
+    const latestVisit = patient.latestDateTime ? new Date(patient.latestDateTime).toLocaleString('en-GB').replace(', ', ' ') : '-'
+    html += `<tr class="${selectedPatientHistoryKey === patient.patientKey ? 'patient-history-row-active' : ''}"><td><div class="history-patient-meta"><span class="history-patient-id fw-bold" style="color:var(--primary-med);">${patient.patientId}</span><small class="history-order-id text-muted">${patient.latestOrderId}</small></div></td><td><span class="history-patient-name fw-bold">${patient.patientName}</span></td><td class="text-center"><span class="badge badge-solid-primary patient-history-badge">${patient.visitCount} ຄັ້ງ</span></td><td class="text-center"><span class="badge badge-solid-success patient-history-badge">${patient.resultCount}</span></td><td><small class="history-date-time text-muted">${latestVisit}</small></td><td><span class="patient-history-tests">${patient.latestTests || '-'}</span></td><td class="text-end price-text text-danger patient-history-price">₭ ${patient.totalSpent.toLocaleString()}</td><td class="text-center"><button class="btn btn-sm btn-primary shadow-sm patient-history-view-btn" onclick="showPatientHistoryDetailByIndex(${index})" title="ເບິ່ງປະຫວັດ"><i class="bi bi-clock-history"></i><span>ເບິ່ງ</span></button></td></tr>`
+  })
+  tbody.innerHTML = html
+  initDT('patientHistoryTable', '470px')
+}
+
+window.renderPatientVisitTable = function(patient) {
+  if ($.fn.DataTable.isDataTable('#patientVisitHistoryTable')) { $('#patientVisitHistoryTable').DataTable().clear().destroy() }
+  const tbody = document.getElementById('patientVisitHistoryTableBody')
+  if (!tbody) return
+  let html = ''
+  patient.visits.forEach(order => {
+    const dateStr = new Date(order.dateTime).toLocaleString('en-GB').replace(', ', ' ')
+    const labDestValue = (!order.labDest || order.labDest === 'In-Lab' || order.labDest === 'In-house') ? 'In-house' : order.labDest
+    const labBadge = (!order.labDest || order.labDest === 'In-Lab' || order.labDest === 'In-house')
+      ? `<span class="badge badge-solid-success">In-house</span>`
+      : `<span class="badge badge-solid-danger">${labDestValue}</span>`
+    const typeBadge = order.testType === 'Package'
+      ? `<span class="badge badge-solid-primary"><i class="bi bi-box-seam me-1"></i>Package</span>`
+      : `<span class="badge badge-solid-secondary"><i class="bi bi-list-check me-1"></i>Normal</span>`
+    const resultBtn = order.hasResults
+      ? `<button class="btn btn-sm btn-result-saved shadow-sm" onclick="openResultModal('${order.orderId}', 'view')" title="ເບິ່ງຜົນກວດເກົ່າ"><i class="bi bi-journal-medical me-1"></i> ຜົນກວດ</button>`
+      : `<button class="btn btn-sm btn-outline-secondary shadow-sm" onclick="openResultModal('${order.orderId}', '${(order.status === 'Completed' || order.status === 'Received') ? 'view' : 'edit'}')" title="ເປີດໜ້າຜົນກວດຂອງບິນນີ້"><i class="bi bi-clipboard2-pulse me-1"></i> ເປີດ</button>`
+    html += `<tr><td><small class="history-date-time text-muted">${dateStr}</small></td><td><div class="history-patient-meta"><span class="history-patient-id fw-bold" style="color:var(--primary-med);">${order.orderId}</span><small class="history-order-id text-muted">${order.tests.length} tests</small></div></td><td><span class="patient-history-tests">${order.tests.map(test => test.name).join(', ') || '-'}</span></td><td class="text-center">${typeBadge}</td><td>${labBadge}</td><td class="text-center"><span class="badge ${order.status === 'Completed' ? 'badge-solid-success' : 'badge-solid-secondary'}">${order.status || 'Pending'}</span></td><td class="text-end price-text text-danger">₭ ${Number(order.totalPrice || 0).toLocaleString()}</td><td class="text-center"><div class="d-flex justify-content-center gap-1 flex-nowrap">${resultBtn}<button class="btn btn-action btn-outline-info" onclick="viewOrder('${order.orderId}')" title="ເບິ່ງ order"><i class="bi bi-eye"></i></button></div></td></tr>`
+  })
+  tbody.innerHTML = html
+  initDT('patientVisitHistoryTable', '390px')
+}
+
+window.showPatientHistoryDetailByKey = function(encodedKey) {
+  const patientKey = decodeURIComponent(encodedKey)
+  selectedPatientHistoryKey = patientKey
+  const patient = patientHistoryPatients.find(item => item.patientKey === patientKey)
+  const detailCard = document.getElementById('patientVisitHistoryCard')
+  const patientNameEl = document.getElementById('patientVisitHistoryName')
+  const patientMetaEl = document.getElementById('patientVisitHistoryMeta')
+  const visitCountEl = document.getElementById('patientVisitHistoryCount')
+  if (!patient || !detailCard || !patientNameEl || !patientMetaEl || !visitCountEl) return
+  patientNameEl.textContent = patient.patientName || '-'
+  patientMetaEl.textContent = `${patient.patientId || '-'} | ເຂົ້າມາກວດ ${patient.visitCount} ຄັ້ງ | ມີຜົນກວດ ${patient.resultCount} ຄັ້ງ`
+  visitCountEl.textContent = `${patient.visitCount} ຄັ້ງ`
+  setPatientHistoryDetailMode(true)
+  renderPatientVisitTable(patient)
+  detailCard.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+window.showPatientHistoryDetailByIndex = function(index) {
+  const filtered = getFilteredPatientHistoryPatients()
+  const patient = filtered[index]
+  if (!patient) return
+  showPatientHistoryDetailByKey(encodeURIComponent(patient.patientKey))
+}
+
+window.filterPatientHistory = function() {
+  const filtered = getFilteredPatientHistoryPatients()
+  renderPatientHistoryTable(filtered)
+}
+
+window.closePatientHistoryDetail = function() {
+  setPatientHistoryDetailMode(false)
+  selectedPatientHistoryKey = null
+}
+
+window.loadPatientHistoryPage = async function(force = false) {
+  const refreshBtn = document.getElementById('patientHistoryRefreshBtn')
+  if (refreshBtn) {
+    refreshBtn.disabled = true
+    refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ໂຫຼດ...'
+  }
+  if (force || patientHistoryOrders.length === 0) {
+    patientHistoryOrders = await api.getPatientHistoryOrders()
+    patientHistoryPatients = buildPatientHistoryPatients(patientHistoryOrders)
+  }
+  updatePatientHistorySummaryCards(patientHistoryPatients, patientHistoryOrders)
+  setPatientHistoryDetailMode(false)
+  filterPatientHistory()
+  if (refreshBtn) {
+    refreshBtn.disabled = false
+    refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> ໂຫຼດໃໝ່'
+  }
+}
+
 window.editOrder = function(orderId) {
-  const order = globalOrders.find(o => o.orderId === orderId); if (!order) return
+  const order = findKnownOrder(orderId); if (!order) return
   currentEditOrderId = order.orderId; showPage(null, 'orderForm')
   document.getElementById('editAlert').classList.remove('d-none'); document.getElementById('editOrderIdDisplay').innerText = order.orderId
   document.getElementById('submitBtn').innerHTML = '<i class="bi bi-arrow-repeat me-2"></i> ອັບເດດບິນ'; document.getElementById('submitBtn').classList.replace('btn-primary', 'btn-warning')
@@ -2654,11 +2928,13 @@ window.persistLabResultEntry = async function(payload) {
   const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
   const res = await api.saveLabResults(payload.orderId, results, sessionStorage.getItem('lis_username'), attachments)
   if (res.success) {
-    const targetOrder = globalOrders.find(item => item.orderId === payload.orderId)
-    if (targetOrder) {
-      targetOrder.status = 'Completed'
-      targetOrder.hasResults = results.length > 0
-    }
+    ;[globalOrders, patientHistoryOrders].forEach(orderList => {
+      const targetOrder = orderList.find(item => item.orderId === payload.orderId)
+      if (targetOrder) {
+        targetOrder.status = 'Completed'
+        targetOrder.hasResults = results.length > 0
+      }
+    })
     localStorage.setItem(LAB_RESULT_CONTEXT_KEY, JSON.stringify({
       ...(JSON.parse(localStorage.getItem(LAB_RESULT_CONTEXT_KEY) || '{}')),
       savedResults: results.map(item => ({
@@ -2669,6 +2945,12 @@ window.persistLabResultEntry = async function(payload) {
       }))
     }))
     renderTable(globalOrders)
+    if (patientHistoryOrders.length > 0) {
+      patientHistoryPatients = buildPatientHistoryPatients(patientHistoryOrders)
+      updatePatientHistorySummaryCards(patientHistoryPatients, patientHistoryOrders)
+      filterPatientHistory()
+      if (selectedPatientHistoryKey) showPatientHistoryDetailByKey(encodeURIComponent(selectedPatientHistoryKey))
+    }
     loadTable()
   }
   return res
@@ -2676,7 +2958,7 @@ window.persistLabResultEntry = async function(payload) {
 
 window.openResultModal = async function(orderId, mode = 'edit') {
   try {
-    const order = globalOrders.find(item => item.orderId === orderId)
+    const order = findKnownOrder(orderId)
     if (!order) {
       Swal.fire('ຜິດພາດ', 'ບໍ່ພົບຂໍ້ມູນ Order ທີ່ເລືອກ', 'error')
       return
