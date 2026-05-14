@@ -136,3 +136,11 @@ window.performLogout = function() {
         console.log('No stored session');
     }
 })();
+// Final Layout Fallback
+document.addEventListener('DOMContentLoaded', () => {
+    const mainApp = document.getElementById('mainApp');
+    if(mainApp && sessionStorage.getItem('lis_user')) {
+        console.log('Layout Fallback: Ensuring flex display');
+        mainApp.style.setProperty('display', 'flex', 'important');
+    }
+});
