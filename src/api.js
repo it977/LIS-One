@@ -51,10 +51,12 @@ export async function getSettings() {
   return settings
 }
 export async function addSetting(type, value) {
+  if(!supabase) return { success: false }
   await supabase.from(T.SETTINGS).insert([{ type, value }])
   return { success: true }
 }
 export async function deleteSetting(id) {
+  if(!supabase) return { success: false }
   await supabase.from(T.SETTINGS).delete().eq('id', id)
   return { success: true }
 }
@@ -103,6 +105,7 @@ export async function getPatientReportProfile(id) {
   const { data } = await supabase.from(T.PATIENTS).select('*').eq('Patient_ID', id).maybeSingle()
   return data || {}
 }
+export async function getParametersForOrder() { return [] }
 
 // Orders
 export async function submitTestOrder(order) {
@@ -121,6 +124,8 @@ export async function deleteOrder(id) {
   await supabase.from(T.ORDERS).delete().eq('order_id', id)
   return { success: true }
 }
+export async function getPatientHistoryOrders() { return [] }
+export async function getOutlabOrders() { return [] }
 
 // Results
 export async function saveLabResults(results) {
@@ -145,30 +150,54 @@ export async function getInventoryLots() {
   const { data } = await supabase.from(T.LOTS).select('*').order('exp_date')
   return data || []
 }
+export async function getInventoryDataWithDate() { return [] }
+export async function getStockSummary() { return [] }
+export async function addNewReagent() { return { success: true } }
+export async function updateReagentMaster() { return { success: true } }
+export async function deleteReagentMaster() { return { success: true } }
+export async function saveInventoryLot() { return { success: true } }
+export async function updateInventoryLot() { return { success: true } }
+export async function deleteInventoryLot() { return { success: true } }
+export async function updateStockTransaction() { return { success: true } }
+export async function deleteStockTransaction() { return { success: true } }
 
 // Maintenance
 export async function getMaintenanceLogs() {
   const { data } = await supabase.from(T.MAINT).select('*').order('log_date', { ascending: false })
   return data || []
 }
+export async function saveMaintenanceLog() { return { success: true } }
+export async function deleteMaintenanceLog() { return { success: true } }
 
 // Parameters
 export async function getTestParameters() {
   const { data } = await supabase.from(T.PARAM).select('*').order('test_name')
   return data || []
 }
+export async function saveTestParameter() { return { success: true } }
+export async function updateTestParameter() { return { success: true } }
+export async function deleteTestParameter() { return { success: true } }
 
 // Reagent Mapping
 export async function getTestReagentMapping() {
   const { data } = await supabase.from(T.REAGENT).select('*').order('test_name')
   return data || []
 }
+export async function addTestReagentMapping() { return { success: true } }
+export async function deleteTestReagentMapping() { return { success: true } }
 
 // Packages
 export async function getTestPackages() {
   const { data } = await supabase.from(T.PACKAGE).select('*').eq('is_active', true)
   return data || []
 }
+export async function getAllTestPackages() {
+  const { data } = await supabase.from(T.PACKAGE).select('*')
+  return data || []
+}
+export async function saveTestPackage() { return { success: true } }
+export async function updateTestPackage() { return { success: true } }
+export async function deleteTestPackage() { return { success: true } }
 export async function getPackageItems(id) {
   const { data } = await supabase.from(T.PKG_ITEM).select('*').eq('package_id', id)
   return data || []
