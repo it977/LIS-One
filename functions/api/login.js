@@ -4,68 +4,49 @@ export async function onRequestPost({ request, env }) {
     const url = env.SUPABASE_URL;
     const key = env.SUPABASE_SERVICE_ROLE_KEY;
 
-    console.log('[DEBUG] SUPABASE_URL present:', !!url);
-    console.log('[DEBUG] SUPABASE_SERVICE_ROLE_KEY present:', !!key);
-
     if (!url || !key) {
       return new Response(JSON.stringify({ 
         success: false, 
-        message: 'Server configuration missing',
-        debug: { hasUrl: !!url, hasKey: !!key }
+        message: 'Server configuration missing'
       }), { 
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    // Using .single() logic via PostgREST headers
-    const queryUrl = `${url}/rest/v1/lis_users?username=eq.${encodeURIComponent(username)}&password=eq.${encodeURIComponent(password)}&select=*`;
+    // UPDATED TABLE: lis_one_users (Verified from schema audit)
+    const queryUrl = `${url}/rest/v1/lis_one_users?username=eq.${encodeURIComponent(username)}&password=eq.${encodeURIComponent(password)}&select=username,id,role`;
 
     const response = await fetch(queryUrl, {
-      method: 'GET',
       headers: {
         'apikey': key,
         'Authorization': `Bearer ${key}`,
-        'Accept': 'application/vnd.pgrst.object+json' // This tells PostgREST to return a single object
+        'Accept': 'application/vnd.pgrst.object+json'
       }
     });
 
-    const status = response.status;
-    const body = await response.text();
-    let json = {};
-    try { json = JSON.parse(body); } catch(e) {}
-
-    console.log('[DEBUG] Supabase Response Status:', status);
-    console.log('[DEBUG] Supabase Response Body:', body);
-
     if (response.ok) {
+      const user = await response.json();
       return new Response(JSON.stringify({
         success: true,
-        username: json.username,
-        role: json.role,
-        row: json // return row for debug as requested
+        username: user.username,
+        role: user.role
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
+    const errorBody = await response.text();
     return new Response(JSON.stringify({ 
       success: false, 
-      message: 'Supabase Error',
-      error: json,
-      debug_status: status
+      message: 'Invalid credentials or matching user not found',
+      error: errorBody
     }), { 
-      status: 401,
+      status: response.status,
       headers: { 'Content-Type': 'application/json' }
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ 
-      success: false, 
-      message: err.message 
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return new Response(JSON.stringify({ success: false, message: err.message }), { status: 500 });
   }
 }
