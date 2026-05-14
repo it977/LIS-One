@@ -37,6 +37,7 @@ export async function logActivityFrontend(user, action, target, details) {
 }
 
 // Auth
+console.log("[API] EXECUTING loginUser v2.1")
 export async function loginUser(username, password) {
   const { data, error } = await supabase.from(T.USERS).select('*').eq('username', username.trim()).eq('password', password.trim()).single()
   if (error || !data) return { success: false, message: 'Invalid credentials' }
