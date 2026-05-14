@@ -7,7 +7,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-// Table Constants - Reverting to 'lis_' as validated in active DB
+// Table Constants - Using 'lis_' as confirmed 
 const T = {
   AUDIT: 'lis_audit_log',
   USERS: 'lis_users',
@@ -62,11 +62,39 @@ export async function deleteSetting(id) {
 }
 
 // Analytics / Dashboard
-export async function getDashboardData() {
+export async function getDashboardData(sDate, eDate, filters = {}) {
   try {
-    const { data } = await supabase.from(T.ORDERS).select('order_datetime, status')
-    return { orders: data || [] }
-  } catch (e) { return { orders: [] } }
+    let q = supabase.from(T.ORDERS).select('*')
+    if (sDate) q = q.gte('order_datetime', sDate + 'T00:00:00')
+    if (eDate) q = q.lte('order_datetime', eDate + 'T23:59:59')
+    
+    if (filters.department && filters.department !== 'ທັງໝົດ') q = q.eq('department', filters.department)
+    if (filters.doctor && filters.doctor !== 'ທັງໝົດ') q = q.eq('doctor', filters.doctor)
+    if (filters.testType && filters.testType !== 'ທັງໝົດ') q = q.eq('test_type', filters.testType)
+    if (filters.category && filters.category !== 'ທັງໝົດ') q = q.eq('category', filters.category)
+
+    const { data, error } = await q
+    if (error) throw error
+
+    const orders = data || []
+    const kpis = { 
+      totalPatients: new Set(orders.map(o => o.patient_id)).size,
+      totalRevenue: orders.reduce((sum, o) => sum + (Number(o.total_price) || 0), 0),
+      inlabRev: orders.filter(o => o.lab_dest === 'In-house').reduce((sum, o) => sum + (Number(o.total_price) || 0), 0),
+      outlabRev: orders.filter(o => o.lab_dest !== 'In-house').reduce((sum, o) => sum + (Number(o.total_price) || 0), 0)
+    }
+
+    // Chart aggregations
+    const charts = {
+      gender: { Male: orders.filter(o => o.gender === 'Male').length, Female: orders.filter(o => o.gender === 'Female').length },
+      timeSlot: { morning: orders.filter(o => o.time_slot === 'ເຊົ້າ').length, evening: orders.filter(o => o.time_slot === 'ແລງ').length, night: orders.filter(o => o.time_slot === 'ກະລາງ').length }
+    }
+
+    return { success: true, orders, kpis, charts, alerts: { expired: 0, expiringSoon: 0 } }
+  } catch (e) { 
+    console.error('API Error:', e)
+    return { success: false, orders: [], kpis: { totalPatients: 0, totalRevenue: 0, inlabRev: 0, outlabRev: 0 }, charts: {}, alerts: { expired: 0, expiringSoon: 0 } }
+  }
 }
 
 // Master Data
