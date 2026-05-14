@@ -7,21 +7,30 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 export { supabase }
 
 async function fetchProxy(table, options = {}) {
-  const res = await fetch('/api/data', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ table, ...options })
-  });
-  return await res.json();
+  try {
+    const res = await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table, ...options })
+    });
+    if (!res.ok) return { success: false, data: [] };
+    const json = await res.json();
+    return { success: json.success, data: Array.isArray(json.data) ? json.data : [] };
+  } catch (e) {
+    console.error('API Fetch Error:', e);
+    return { success: false, data: [] };
+  }
 }
 
 export async function loginUser(username, password) {
-  const res = await fetch('/api/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
-  });
-  return await res.json();
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    return await res.json();
+  } catch (e) { return { success: false }; }
 }
 
 export async function getDashboardData(sDate, eDate, filters = {}) {
@@ -29,11 +38,11 @@ export async function getDashboardData(sDate, eDate, filters = {}) {
   if (sDate) filterStr += `order_datetime=gte.${sDate}T00:00:00`;
   if (eDate) filterStr += `&order_datetime=lte.${eDate}T23:59:59`;
   
-  const data = await fetchProxy('lis_test_orders', { filter: filterStr });
-  const orders = data || [];
+  const res = await fetchProxy('lis_test_orders', { filter: filterStr });
+  const orders = res.data;
   
-  return {
-    success: true,
+  return { 
+    success: true, 
     orders,
     kpis: {
       totalPatients: new Set(orders.map(o => o.patient_id)).size,
@@ -49,47 +58,48 @@ export async function getDashboardData(sDate, eDate, filters = {}) {
   };
 }
 
-export async function getRecentOrders() { return await fetchProxy('lis_test_orders', { order: 'order_datetime.desc', limit: 200 }); }
+export async function getRecentOrders() { const res = await fetchProxy('lis_test_orders', { order: 'order_datetime.desc', limit: 200 }); return res.data; }
 export async function getSettings() { 
-  const data = await fetchProxy('lis_settings', { order: 'id.asc' });
+  const res = await fetchProxy('lis_settings', { order: 'id.asc' });
   const settings = { VisitType: [], Insite: [], Doctor: [], Department: [], Sender: [], LabDest: [] };
-  if(data) data.forEach(r => { if(settings[r.type]) settings[r.type].push({ row: r.id, val: r.value }) });
+  if(res.data) res.data.forEach(r => { if(settings[r.type]) settings[r.type].push({ row: r.id, val: r.value }) });
   return settings;
 }
-export async function getStockMaster() { return await fetchProxy('lis_stock_master', { order: 'reagent_name.asc' }); }
-export async function getStockHistory() { return await fetchProxy('lis_stock_transactions', { order: 'created_at.desc' }); }
-export async function getInventoryLots() { return await fetchProxy('lis_inventory_lots', { order: 'exp_date.asc' }); }
-export async function getMaintenanceLogs() { return await fetchProxy('lis_maintenance_log', { order: 'log_date.desc' }); }
-export async function getTestParameters() { return await fetchProxy('lis_test_parameters', { order: 'test_name.asc' }); }
-export async function getTestReagentMapping() { return await fetchProxy('lis_test_reagent_mapping', { order: 'test_name.asc' }); }
-export async function getTestMaster() { return await fetchProxy('lis_test_master', { order: 'test_name.asc' }); }
-export async function getTestPackages() { return await fetchProxy('lis_test_packages', { filter: 'is_active=eq.true' }); }
-export async function getAllTestPackages() { return await fetchProxy('lis_test_packages'); }
-export async function getPackageItems(id) { return await fetchProxy('lis_test_package_items', { filter: `package_id=eq.${id}` }); }
+export async function getStockMaster() { const res = await fetchProxy('lis_stock_master', { order: 'reagent_name.asc' }); return res.data; }
+export async function getStockHistory() { const res = await fetchProxy('lis_stock_transactions', { order: 'created_at.desc' }); return res.data; }
+export async function getInventoryLots() { const res = await fetchProxy('lis_inventory_lots', { order: 'exp_date.asc' }); return res.data; }
+export async function getMaintenanceLogs() { const res = await fetchProxy('lis_maintenance_log', { order: 'log_date.desc' }); return res.data; }
+export async function getTestParameters() { const res = await fetchProxy('lis_test_parameters', { order: 'test_name.asc' }); return res.data; }
+export async function getTestReagentMapping() { const res = await fetchProxy('lis_test_reagent_mapping', { order: 'test_name.asc' }); return res.data; }
+export async function getTestMaster() { const res = await fetchProxy('lis_test_master', { order: 'test_name.asc' }); return res.data; }
+export async function getTestPackages() { const res = await fetchProxy('lis_test_packages', { filter: 'is_active=eq.true' }); return res.data; }
+export async function getAllTestPackages() { const res = await fetchProxy('lis_test_packages'); return res.data; }
+export async function getPackageItems(id) { const res = await fetchProxy('lis_test_package_items', { filter: `package_id=eq.${id}` }); return res.data; }
 
 export async function searchPatientById(id) {
-  const data = await fetchProxy('Patients', { filter: `Patient_ID=eq.${id}` });
+  const res = await fetchProxy('Patients', { filter: `Patient_ID=eq.${id}` });
+  const data = res.data;
   return data?.[0] ? { patientId: data[0].Patient_ID, fullName: `${data[0].First_Name} ${data[0].Last_Name}`, gender: data[0].Gender, age: data[0].Age } : null;
 }
 export async function getAllPatients(term) {
-  return (await fetchProxy('Patients', { filter: `Patient_ID=ilike.${term}%`, limit: 10 }) || []).map(d => ({ patientId: d.Patient_ID, fullName: `${d.First_Name} ${d.Last_Name}` }));
+  const res = await fetchProxy('Patients', { filter: `Patient_ID=ilike.${term}%`, limit: 10 });
+  return (res.data || []).map(d => ({ patientId: d.Patient_ID, fullName: `${d.First_Name} ${d.Last_Name}` }));
 }
 export async function getPatientReportProfile(id) {
-  const data = await fetchProxy('Patients', { filter: `Patient_ID=eq.${id}` });
-  return data?.[0] || {};
+  const res = await fetchProxy('Patients', { filter: `Patient_ID=eq.${id}` });
+  return res.data?.[0] || {};
 }
 
-// Write/Mutate operations (Stay direct via Supabase client as they are usually protected by App logic, 
-// but for LIS restore safety we can wrap later if needed)
+// Write/Mutate operations 
 export async function addSetting(t, v) { await supabase.from('lis_settings').insert([{type:t, value:v}]); return {success:true}; }
 export async function deleteSetting(id) { await supabase.from('lis_settings').delete().eq('id', id); return {success:true}; }
 export async function submitTestOrder(o) { await supabase.from('lis_test_orders').insert([o]); return {success:true}; }
 export async function updateOrderStatus(id, s) { await supabase.from('lis_test_orders').update({status:s}).eq('order_id', id); return {success:true}; }
 export async function deleteOrder(id) { await supabase.from('lis_test_orders').delete().eq('order_id', id); return {success:true}; }
 export async function saveLabResults(r) { await supabase.from('lis_test_results').insert(r); return {success:true}; }
-export async function getSavedResults(id) { return await fetchProxy('lis_test_results', { filter: `order_id=eq.${id}` }); }
+export async function getSavedResults(id) { const res = await fetchProxy('lis_test_results', { filter: `order_id=eq.${id}` }); return res.data; }
 
-// Empty stubs for missing features
+// Stubs
 export async function logActivity() {}
 export async function logActivityFrontend() {}
 export async function getParametersForOrder() { return [] }
