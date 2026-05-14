@@ -1,16 +1,36 @@
+// ==========================================
+// SUPABASE API LAYER
+// ==========================================
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+// Table Constants - Reverting to 'lis_' as validated in active DB
+const T = {
+  AUDIT: 'lis_audit_log',
+  USERS: 'lis_users',
+  SETTINGS: 'lis_settings',
+  TESTS: 'lis_test_master',
+  ORDERS: 'lis_test_orders',
+  RESULTS: 'lis_test_results',
+  PARAM: 'lis_test_parameters',
+  PACKAGE: 'lis_test_packages',
+  PKG_ITEM: 'lis_test_package_items',
+  STOCK: 'lis_stock_master',
+  TRANS: 'lis_stock_transactions',
+  LOTS: 'lis_inventory_lots',
+  MAINT: 'lis_maintenance_log',
+  REAGENT: 'lis_test_reagent_mapping',
+  PATIENTS: 'Patients'
+}
+
 export { supabase }
 
-// Activity Log
+// HELPER: Log
 export async function logActivity(user, action, target, details) {
-  try {
-    await supabase.from('lis_one_audit_log').insert([{ user_name: user, action, target, details }])
-  } catch (e) { console.error(e) }
+  try { await supabase.from(T.AUDIT).insert([{ user_name: user, action, target, details }]) } catch (e) {}
 }
 export async function logActivityFrontend(user, action, target, details) {
   await logActivity(user, action, target, details)
@@ -18,125 +38,138 @@ export async function logActivityFrontend(user, action, target, details) {
 
 // Auth
 export async function loginUser(username, password) {
-  const { data, error } = await supabase.from('lis_one_users').select('*').eq('username', username.trim()).eq('password', password.trim()).single()
+  const { data, error } = await supabase.from(T.USERS).select('*').eq('username', username.trim()).eq('password', password.trim()).single()
   if (error || !data) return { success: false, message: 'Invalid credentials' }
   return { success: true, username: data.username, role: data.role }
 }
 
 // Settings
 export async function getSettings() {
-  const { data, error } = await supabase.from('lis_one_settings').select('*').order('id')
-  if (error) return {}
+  const { data } = await supabase.from(T.SETTINGS).select('*').order('id')
   const settings = { VisitType: [], Insite: [], Doctor: [], Department: [], Sender: [], LabDest: [] }
-  data.forEach(row => { if (settings[row.type]) settings[row.type].push({ row: row.id, val: row.value }) })
+  if (data) data.forEach(row => { if (settings[row.type]) settings[row.type].push({ row: row.id, val: row.value }) })
   return settings
 }
 export async function addSetting(type, value) {
-  await supabase.from('lis_one_settings').insert([{ type, value }])
+  await supabase.from(T.SETTINGS).insert([{ type, value }])
   return { success: true }
 }
 export async function deleteSetting(id) {
-  await supabase.from('lis_one_settings').delete().eq('id', id)
+  await supabase.from(T.SETTINGS).delete().eq('id', id)
   return { success: true }
 }
 
-// Test Master
+// Analytics / Dashboard
+export async function getDashboardData() {
+  try {
+    const { data } = await supabase.from(T.ORDERS).select('order_datetime, status')
+    return { orders: data || [] }
+  } catch (e) { return { orders: [] } }
+}
+
+// Master Data
 export async function getTestMaster() {
-  const { data, error } = await supabase.from('lis_one_test_master').select('*').order('category').order('name')
+  const { data } = await supabase.from(T.TESTS).select('*').order('category').order('test_name')
   return data || []
 }
 export async function saveTestMaster(entry) {
-  await supabase.from('lis_one_test_master').insert([entry])
+  await supabase.from(T.TESTS).insert([entry])
   return { success: true }
 }
 export async function updateTestMaster(id, name, price, category) {
-  await supabase.from('lis_one_test_master').update({ name, price, category }).eq('id', id)
+  await supabase.from(T.TESTS).update({ test_name: name, price, category }).eq('id', id)
   return { success: true }
 }
 export async function deleteTestMaster(id) {
-  await supabase.from('lis_one_test_master').delete().eq('id', id)
+  await supabase.from(T.TESTS).delete().eq('id', id)
   return { success: true }
 }
 export async function importTestMasterFromCSV(csvData) {
-  await supabase.from('lis_one_test_master').delete().neq('id', 0)
-  await supabase.from('lis_one_test_master').insert(csvData)
+  await supabase.from(T.TESTS).delete().neq('id', 0)
+  await supabase.from(T.TESTS).insert(csvData)
   return { success: true }
 }
 
-// Patients (HIS)
+// Patients
 export async function searchPatientById(id) {
-  const { data } = await supabase.from('HIS_One_Patients').select('*').eq('Patient_ID', id).maybeSingle()
-  return data ? { patientId: data.Patient_ID, fullName: `${data.First_Name} ${data.Last_Name}`, gender: data.Gender, age: data.Age } : null
+  const { data } = await supabase.from(T.PATIENTS).select('*').eq('Patient_ID', id).maybeSingle()
+  return data ? { patientId: data.Patient_ID, fullName: `${data.First_Name || ''} ${data.Last_Name || ''}`.trim(), gender: data.Gender, age: data.Age } : null
 }
 export async function getAllPatients(term) {
-  const { data } = await supabase.from('HIS_One_Patients').select('*').ilike('Patient_ID', term + '%').limit(10)
-  return (data || []).map(d => ({ patientId: d.Patient_ID, fullName: `${d.First_Name} ${d.Last_Name}` }))
+  const { data } = await supabase.from(T.PATIENTS).select('Patient_ID, First_Name, Last_Name').ilike('Patient_ID', term + '%').limit(10)
+  return (data || []).map(d => ({ patientId: d.Patient_ID, fullName: `${d.First_Name || ''} ${d.Last_Name || ''}`.trim() }))
 }
 export async function getPatientReportProfile(id) {
-  const { data } = await supabase.from('HIS_One_Patients').select('*').eq('Patient_ID', id).maybeSingle()
+  const { data } = await supabase.from(T.PATIENTS).select('*').eq('Patient_ID', id).maybeSingle()
   return data || {}
+}
+
+// Orders
+export async function submitTestOrder(order) {
+  await supabase.from(T.ORDERS).insert([order])
+  return { success: true }
+}
+export async function getRecentOrders() {
+  const { data } = await supabase.from(T.ORDERS).select('*').order('order_datetime', { ascending: false }).limit(200)
+  return data || []
+}
+export async function updateOrderStatus(id, status) {
+  await supabase.from(T.ORDERS).update({ status }).eq('order_id', id)
+  return { success: true }
+}
+export async function deleteOrder(id) {
+  await supabase.from(T.ORDERS).delete().eq('order_id', id)
+  return { success: true }
+}
+
+// Results
+export async function saveLabResults(results) {
+  await supabase.from(T.RESULTS).insert(results)
+  return { success: true }
+}
+export async function getSavedResults(orderId) {
+  const { data } = await supabase.from(T.RESULTS).select('*').eq('order_id', orderId)
+  return data || []
+}
+
+// Inventory
+export async function getStockMaster() {
+  const { data } = await supabase.from(T.STOCK).select('*').order('reagent_name')
+  return data || []
+}
+export async function getStockHistory() {
+  const { data } = await supabase.from(T.TRANS).select('*').order('created_at', { ascending: false })
+  return data || []
+}
+export async function getInventoryLots() {
+  const { data } = await supabase.from(T.LOTS).select('*').order('exp_date')
+  return data || []
+}
+
+// Maintenance
+export async function getMaintenanceLogs() {
+  const { data } = await supabase.from(T.MAINT).select('*').order('log_date', { ascending: false })
+  return data || []
+}
+
+// Parameters
+export async function getTestParameters() {
+  const { data } = await supabase.from(T.PARAM).select('*').order('test_name')
+  return data || []
+}
+
+// Reagent Mapping
+export async function getTestReagentMapping() {
+  const { data } = await supabase.from(T.REAGENT).select('*').order('test_name')
+  return data || []
 }
 
 // Packages
 export async function getTestPackages() {
-  const { data } = await supabase.from('lis_one_test_packages').select('*').eq('is_active', true)
+  const { data } = await supabase.from(T.PACKAGE).select('*').eq('is_active', true)
   return data || []
-}
-export async function getAllTestPackages() {
-  const { data } = await supabase.from('lis_one_test_packages').select('*')
-  return data || []
-}
-export async function saveTestPackage(pkg) {
-  const { data } = await supabase.from('lis_one_test_packages').insert([pkg]).select().single()
-  return { success: true, data }
-}
-export async function updateTestPackage(id, pkg) {
-  await supabase.from('lis_one_test_packages').update(pkg).eq('id', id)
-  return { success: true }
-}
-export async function deleteTestPackage(id) {
-  await supabase.from('lis_one_test_packages').delete().eq('id', id)
-  return { success: true }
 }
 export async function getPackageItems(id) {
-  const { data } = await supabase.from('lis_one_test_package_items').select('*').eq('package_id', id)
+  const { data } = await supabase.from(T.PKG_ITEM).select('*').eq('package_id', id)
   return data || []
 }
-
-// Inventory/Stock (Placeholders for missing exports)
-export async function getStockMaster() { return [] }
-export async function addNewReagent() { return { success: true } }
-export async function updateReagentMaster() { return { success: true } }
-export async function deleteReagentMaster() { return { success: true } }
-export async function saveInventoryLot() { return { success: true } }
-export async function getInventoryDataWithDate() { return [] }
-export async function updateInventoryLot() { return { success: true } }
-export async function deleteInventoryLot() { return { success: true } }
-export async function getStockHistory() { return [] }
-export async function getStockSummary() { return [] }
-export async function updateStockTransaction() { return { success: true } }
-export async function deleteStockTransaction() { return { success: true } }
-
-// Maintenance
-export async function getMaintenanceLogs() { return [] }
-export async function saveMaintenanceLog() { return { success: true } }
-export async function deleteMaintenanceLog() { return { success: true } }
-
-// Orders/Results
-export async function submitTestOrder() { return { success: true } }
-export async function getRecentOrders() { return [] }
-export async function getOutlabOrders() { return [] }
-export async function updateOrderStatus() { return { success: true } }
-export async function deleteOrder() { return { success: true } }
-export async function getPatientHistoryOrders() { return [] }
-export async function getSavedResults() { return [] }
-export async function saveLabResults() { return { success: true } }
-export async function getTestParameters() { return [] }
-export async function saveTestParameter() { return { success: true } }
-export async function updateTestParameter() { return { success: true } }
-export async function deleteTestParameter() { return { success: true } }
-export async function getParametersForOrder() { return [] }
-export async function getTestReagentMapping() { return [] }
-export async function addTestReagentMapping() { return { success: true } }
-export async function deleteTestReagentMapping() { return { success: true } }
-export async function getDashboardData() { return {} }
