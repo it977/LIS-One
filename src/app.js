@@ -43,7 +43,7 @@ function updateKPIs(kpis) {
     };
     for(const [id, val] of Object.entries(targets)) {
         const el = document.getElementById(id);
-        if(el) el.innerText = val;
+        if(el) if(val !== undefined && val !== null) el.innerText = val;
     }
 }
 
