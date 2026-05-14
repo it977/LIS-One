@@ -1,36 +1,74 @@
 import * as api from './api.js';
 
-// Global error tracking
-window.errors = [];
-window.onerror = function(msg) { window.errors.push(msg); console.error('[APP]', msg); };
-
-// Initialization
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('LIS-One Initialize...');
-    if(window.location.pathname === '/' || window.location.pathname.includes('index.html')) {
-        initDashboard();
+// --- AUTH LOGIC ---
+window.performLogin = async function() {
+    const u = document.getElementById('loginUser').value;
+    const p = document.getElementById('loginPass').value;
+    const btn = document.getElementById('btnLogin');
+    
+    if(!u || !p) return Swal.fire('Error', 'Please enter username and password', 'error');
+    
+    btn.disabled = true;
+    btn.innerText = 'Logging in...';
+    
+    try {
+        const res = await api.loginUser(u, p);
+        if(res.success) {
+            sessionStorage.setItem('lis_user', JSON.stringify(res));
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            document.getElementById('displayRole').innerText = res.role || 'User';
+            initDashboard();
+        } else {
+            Swal.fire('Login Failed', res.message || 'Invalid credentials', 'error');
+        }
+    } catch(e) {
+        console.error(e);
+        Swal.fire('System Error', 'Could not connect to auth server', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'ເຂົ້າສູ່ລະບົບ (Login)';
     }
-});
+};
 
+window.performLogout = function() {
+    sessionStorage.removeItem('lis_user');
+    window.location.reload();
+};
+
+// --- UI NAVIGATION ---
+window.showPage = function(event, id) {
+    if(event) event.preventDefault();
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    
+    const target = document.getElementById(id);
+    if(target) target.classList.add('active');
+    
+    const activeLink = event?.currentTarget;
+    if(activeLink) activeLink.classList.add('active');
+    
+    if(id === 'dashboard') initDashboard();
+    if(id === 'trackResult') window.loadOutlabTable();
+    if(id === 'inventoryPage') window.loadInventoryDataWithDate();
+};
+
+window.toggleSidebar = function() {
+    document.getElementById('sidebar').classList.toggle('collapsed');
+};
+
+// --- DASHBOARD ---
 async function initDashboard() {
     const loader = document.getElementById('dashLoader');
     if(loader) loader.style.display = 'block';
     
     try {
         const data = await api.getDashboardData();
-        console.log('Dashboard Data Loaded:', data);
-        
         if(data.success) {
             updateKPIs(data.kpis);
-            renderDashboardCharts(data.charts);
         }
-    } catch(e) {
-        console.error('Dash Init Failed:', e);
-    } finally {
-        if(loader) loader.style.display = 'none';
-        const content = document.getElementById('dashContent');
-        if(content) content.style.display = 'block';
-    }
+    } catch(e) { console.error(e); }
+    finally { if(loader) loader.style.display = 'none'; }
 }
 
 function updateKPIs(kpis) {
@@ -47,37 +85,27 @@ function updateKPIs(kpis) {
     });
 }
 
-function renderDashboardCharts(charts) {
-    // Placeholder - assuming Chart.js is used or simple bars
-    console.log('Charts to render:', charts);
-}
-
-// Global Exports
-window.loadOutlabTable = async () => {
+// --- DATA LOADERS ---
+window.loadOutlabTable = async function() {
     const orders = await api.getRecentOrders();
     const outlab = Array.isArray(orders) ? orders.filter(o => o.lab_dest !== 'In-house') : [];
-    renderTable('outlabTableBody', outlab);
+    // DataTable rendering should go here
+    console.log('Outlab Data:', outlab);
 };
 
-window.loadInventoryDataWithDate = async () => {
+window.loadInventoryDataWithDate = async function() {
     const lots = await api.getInventoryLots();
-    renderTable('inventoryTableBody', Array.isArray(lots) ? lots : []);
+    console.log('Inventory Data:', lots);
 };
 
-window.loadPackagesTable = async () => {
-    const pkgs = await api.getAllTestPackages();
-    renderTable('packagesTableBody', Array.isArray(pkgs) ? pkgs : []);
-};
-
-function renderTable(id, data) {
-    const body = document.getElementById(id);
-    if(!body) return;
-    if(!Array.isArray(data)) {
-        body.innerHTML = '<tr><td colspan="100%" class="text-center">No data found</td></tr>';
-        return;
+// --- STARTUP ---
+document.addEventListener('DOMContentLoaded', () => {
+    const user = sessionStorage.getItem('lis_user');
+    if(user) {
+        const u = JSON.parse(user);
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainApp').style.display = 'block';
+        document.getElementById('displayRole').innerText = u.role || 'User';
+        initDashboard();
     }
-    body.innerHTML = data.length ? '' : '<tr><td colspan="100%" class="text-center">No data loaded</td></tr>';
-    // Table content generation logic goes here
-}
-
-export { initDashboard };
+});
