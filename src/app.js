@@ -32,6 +32,8 @@ window.showPage = (e, id) => {
     const target = document.getElementById(id);
     if(target) target.classList.add('active');
     if(e?.currentTarget) e.currentTarget.classList.add('active');
+    
+    if(id === 'dashboard') loadDashboard();
 };
 
 window.toggleSidebar = () => {
@@ -48,6 +50,19 @@ function bootApp(user) {
     const mainApp = document.getElementById('mainApp');
     mainApp.style.display = 'flex';
     document.getElementById('displayRole').innerText = user.role || 'User';
+    loadDashboard();
+}
+
+async function loadDashboard() {
+    console.log('Loading Dashboard Data...');
+    try {
+        const data = await api.getDashboardData();
+        if(data && data.success) {
+            const kpis = data.kpis;
+            if(document.getElementById('kpiPatients')) document.getElementById('kpiPatients').innerText = kpis.totalPatients.toLocaleString();
+            if(document.getElementById('kpiRev')) document.getElementById('kpiRev').innerText = '₭ ' + kpis.totalRevenue.toLocaleString();
+        }
+    } catch(e) { console.error('Dashboard Load Error:', e); }
 }
 
 // Check session on load
