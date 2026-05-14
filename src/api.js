@@ -39,4 +39,5 @@ export async function getMaintenanceLogs() { return [] }
 export async function getTestParameters() { return [] }
 export async function getTestReagentMapping() { return [] }
 export async function getTestPackages() { return [] }
+console.error("[CRITICAL-API-LOCK] ACTIVE BUNDLE DETECTED. PROJECT: " + SUPABASE_URL);
 export async function getPackageItems() { return [] }
