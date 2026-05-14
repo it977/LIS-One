@@ -3963,3 +3963,13 @@ window.removeFromCart = function(idx) {
   }
   document.getElementById('totalPriceDisplay').innerText = '₭ ' + finalTotal.toLocaleString()
 }
+
+// Global UI Exports for LIS Recovery stabilization
+window.loadOutlabTable = async function() { console.log('UI: Loading Outlab...'); loadTable(); };
+window.loadInventoryDataWithDate = async function() { 
+  const s = document.getElementById('invStartDate')?.value;
+  const e = document.getElementById('invEndDate')?.value;
+  console.log('UI: Loading Inventory...', s, e);
+  loadInventoryTable(s, e); 
+};
+window.loadPackagesTable = async function() { console.log('UI: Loading Packages...'); };
