@@ -1,62 +1,37 @@
 import * as api from './api.js';
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('App Initializing...');
+// Global exports for index.html
+window.performLogin = async () => {
+    const u = document.getElementById('loginUser').value;
+    const p = document.getElementById('loginPass').value;
+    const btn = document.getElementById('btnLogin');
     
-    // Bind Login
-    const btnLogin = document.getElementById('btnLogin');
-    if (btnLogin) {
-        btnLogin.addEventListener('click', performLogin);
-    }
-
-    // Check existing session
-    const user = JSON.parse(sessionStorage.getItem('lis_user') || 'null');
-    if (user) {
-        showMainApp(user);
-    }
-});
-
-async function performLogin() {
-    const username = document.getElementById('loginUser').value;
-    const password = document.getElementById('loginPass').value;
-    if (!username || !password) return;
+    if(!u || !p) return;
+    btn.disabled = true;
 
     try {
-        const res = await api.loginUser(username, password);
-        if (res.success) {
+        const res = await api.loginUser(u, p);
+        if (res && res.success) {
             sessionStorage.setItem('lis_user', JSON.stringify(res));
-            showMainApp(res);
+            bootApp(res);
         } else {
-            alert(res.message || 'Login Failed');
+            alert(res?.message || 'Login failed');
         }
     } catch (e) {
-        console.error('Login Error:', e);
+        console.error(e);
+    } finally {
+        btn.disabled = false;
     }
-}
+};
 
-function showMainApp(user) {
-    document.getElementById('loginScreen').style.display = 'none';
-    const mainApp = document.getElementById('mainApp');
-    mainApp.style.display = 'flex';
-    document.getElementById('displayRole').innerText = user.role || 'User';
-    
-    // Default to dashboard
-    loadDashboard();
-}
-
-async function loadDashboard() {
-    console.log('Loading Dashboard...');
-    const res = await api.getDashboardData();
-    // For now, just ensure UI is stable.
-}
-
-// Sidebar Navigation
 window.showPage = (e, id) => {
     if (e) e.preventDefault();
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    
     const target = document.getElementById(id);
-    if (target) target.classList.add('active');
+    if(target) target.classList.add('active');
+    if(e?.currentTarget) e.currentTarget.classList.add('active');
 };
 
 window.toggleSidebar = () => {
@@ -65,5 +40,18 @@ window.toggleSidebar = () => {
 
 window.performLogout = () => {
     sessionStorage.removeItem('lis_user');
-    location.reload();
+    window.location.reload();
 };
+
+function bootApp(user) {
+    document.getElementById('loginScreen').style.display = 'none';
+    const mainApp = document.getElementById('mainApp');
+    mainApp.style.display = 'flex';
+    document.getElementById('displayRole').innerText = user.role || 'User';
+}
+
+// Check session on load
+document.addEventListener('DOMContentLoaded', () => {
+    const user = JSON.parse(sessionStorage.getItem('lis_user') || 'null');
+    if (user) bootApp(user);
+});
