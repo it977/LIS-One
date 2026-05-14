@@ -3,8 +3,8 @@
 // ==========================================
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+const SUPABASE_URL = 'https://vblyqilhmkybzbakcyyl.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZibHlxaWxobWt5YnpiYWtjeXlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NTM4OTQ0OTcsImV4cCI6MTk2OTQ3MDQ5N30.C43S9eN5mY8X-YIDD5X1u_uT347M_E_Z7M6f_H4s7Y'
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 // Table Constants - Using 'lis_' as confirmed 
@@ -37,8 +37,6 @@ export async function logActivityFrontend(user, action, target, details) {
 }
 
 // Auth
-import { loginUser as debugLogin } from "./debug_login.js";
-export const loginUser = debugLogin;
 
 // Settings
 export async function getSettings() {
@@ -229,3 +227,10 @@ export async function getPackageItems(id) {
 }
 // Refresh: Thu May 14 13:24:09 +07 2026
 // Cache Bust: 1778741307
+
+export async function loginUser(u, p) {
+  console.log('[PROD-FORCE-V5] Attempting login on:', SUPABASE_URL)
+  const { data, error } = await supabase.from('lis_users').select('*').eq('username', u.trim()).eq('password', p.trim()).single()
+  if (error || !data) return { success: false, message: 'Invalid credentials' }
+  return { success: true, username: data.username, role: data.role }
+}
