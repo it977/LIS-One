@@ -7,9 +7,18 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 export { supabase }
 
 export async function loginUser(u, p) {
-  console.log('[PROD-FORCE-V7] AUTH ON:', SUPABASE_URL)
-  const { data, error } = await supabase.from('lis_users').select('*').eq('username', u.trim()).eq('password', p.trim()).single()
-  if (error || !data) return { success: false, message: 'Invalid credentials' }
+  console.log('[PROD-FINAL-V10] ATTEMPTING LOGIN ON: ' + SUPABASE_URL);
+  const { data, error } = await supabase
+    .from('lis_users')
+    .select('username, password, role')
+    .eq('username', u.trim())
+    .eq('password', p.trim())
+    .single()
+  
+  if (error || !data) {
+     console.error('[PROD-FINAL-V10] LOGIN REJECTED:', error);
+     return { success: false, message: 'Invalid credentials' }
+  }
   return { success: true, username: data.username, role: data.role }
 }
 
@@ -17,6 +26,7 @@ export async function getDashboardData() {
   const { data } = await supabase.from('lis_test_orders').select('*')
   return { success: true, orders: data || [], kpis: { totalPatients: 0, totalRevenue: 0, inlabRev: 0, outlabRev: 0 }, charts: {} }
 }
+
 export async function logActivity() {}
 export async function logActivityFrontend() {}
 export async function getSettings() { return { VisitType: [], Insite: [], Doctor: [], Department: [], Sender: [], LabDest: [] } }
@@ -39,5 +49,4 @@ export async function getMaintenanceLogs() { return [] }
 export async function getTestParameters() { return [] }
 export async function getTestReagentMapping() { return [] }
 export async function getTestPackages() { return [] }
-console.error("[CRITICAL-API-LOCK] ACTIVE BUNDLE DETECTED. PROJECT: " + SUPABASE_URL);
 export async function getPackageItems() { return [] }
