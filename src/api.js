@@ -6,20 +6,27 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 export { supabase }
 
-export async function loginUser(u, p) {
-  console.log('[PROD-FINAL-V10] ATTEMPTING LOGIN ON: ' + SUPABASE_URL);
-  const { data, error } = await supabase
-    .from('lis_users')
-    .select('username, password, role')
-    .eq('username', u.trim())
-    .eq('password', p.trim())
-    .single()
-  
-  if (error || !data) {
-     console.error('[PROD-FINAL-V10] LOGIN REJECTED:', error);
-     return { success: false, message: 'Invalid credentials' }
+// ==========================================
+// NEW SECURE LOGIN (VIA CLOUDFLARE FUNCTIONS)
+// ==========================================
+export async function loginUser(username, password) {
+  try {
+    console.log('[PROD-SECURE] Logging in via Cloudflare Function...');
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    if (!response.ok) {
+        const err = await response.json();
+        return { success: false, message: err.message || 'Invalid' };
+    }
+    
+    return await response.json();
+  } catch (e) {
+    return { success: false, message: 'Server error: ' + e.message };
   }
-  return { success: true, username: data.username, role: data.role }
 }
 
 export async function getDashboardData() {
