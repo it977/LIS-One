@@ -6,14 +6,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 export { supabase }
 
-// Check if we are running locally to use production API base
-const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-  ? 'https://lis-one.pages.dev' 
-  : '';
-
 async function fetchProxy(table, options = {}) {
   try {
-    const res = await fetch(`${API_BASE}/api/data`, {
+    const res = await fetch('/api/data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ table, ...options })
@@ -29,7 +24,7 @@ async function fetchProxy(table, options = {}) {
 
 async function mutateProxy(action, table, payload) {
   try {
-    const res = await fetch(`${API_BASE}/api/data`, {
+    const res = await fetch('/api/data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, table, payload })
@@ -40,7 +35,7 @@ async function mutateProxy(action, table, payload) {
 
 export async function loginUser(username, password) {
   try {
-    const res = await fetch(`${API_BASE}/api/login`, {
+    const res = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
