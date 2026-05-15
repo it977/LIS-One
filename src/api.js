@@ -65,3 +65,8 @@ export async function getAllTestPackages() { const res = await fetchProxy('lis_o
 // Mutators using Supabase (Requires key bypass or Proxy logic)
 // For now we keep them using supabase client - but these might fail if no key set.
 export async function addSetting(t, v) { await supabase.from('lis_one_settings').insert([{type:t, value:v}]); return {success:true}; }
+
+export async function getTestReagentMapping() { 
+  const res = await fetchProxy('lis_one_test_reagent_mapping', { order: 'test_name.asc' }); 
+  return res.data; 
+}
