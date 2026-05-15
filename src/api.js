@@ -44,7 +44,7 @@ export async function loginUser(username, password) {
   } catch (e) { return { success: false }; }
 }
 
-export async function getDashboardData(sDate, eDate, filters = {}) {
+export async function getDashboardData(sDate, eDate) {
   let filterStr = "";
   if (sDate) filterStr += `order_datetime=gte.${sDate}T00:00:00`;
   if (eDate) filterStr += `&order_datetime=lte.${eDate}T23:59:59`;
@@ -66,16 +66,25 @@ export async function getDashboardData(sDate, eDate, filters = {}) {
 
 export async function getRecentOrders() { const res = await fetchProxy('lis_one_test_orders', { order: 'order_datetime.desc', limit: 200 }); return res.data; }
 export async function getSettings() { const res = await fetchProxy('lis_one_settings', { order: 'id.asc' }); return res.data; }
-export async function getStockMaster() { const res = await fetchProxy('lis_one_stock_master', { order: 'name.asc' }); return res.data; }
 export async function getInventoryLots() { const res = await fetchProxy('lis_one_inventory_lots', { order: 'exp_date.asc' }); return res.data; }
-export async function getMaintenanceLogs() { const res = await fetchProxy('lis_one_maintenance_log', { order: 'log_date.desc' }); return res.data; }
-export async function getTestParameters() { const res = await fetchProxy('lis_one_test_parameters', { order: 'test_name.asc' }); return res.data; }
 export async function getTestMaster() { const res = await fetchProxy('lis_one_test_master', { order: 'name.asc' }); return res.data; }
 export async function getAllTestPackages() { const res = await fetchProxy('lis_one_test_packages'); return res.data; }
 export async function getTestReagentMapping() { const res = await fetchProxy('lis_one_test_reagent_mapping', { order: 'test_name.asc' }); return res.data; }
 
-// Mutators via Proxy
-export async function addSetting(t, v) { return await mutateProxy('insert', 'lis_one_settings', [{type:t, value:v}]); }
-export async function deleteSetting(id) { return await mutateProxy('delete', 'lis_one_settings', { id }); }
-export async function saveTestMaster(data) { return await mutateProxy('insert', 'lis_one_test_master', [data]); }
-
+export async function saveOrder(orderData, items) {
+  // Items are saved as results or in a separate table if available.
+  // The schema shows lis_one_test_results for test items.
+  const orderRes = await mutateProxy('insert', 'lis_one_test_orders', [orderData]);
+  if (!orderRes.success) return orderRes;
+  
+  if (items && items.length > 0) {
+    const itemData = items.map(it => ({
+      order_id: orderData.order_id,
+      test_name: it.name,
+      param_name: 'Status',
+      result_value: 'Pending'
+    }));
+    await mutateProxy('insert', 'lis_one_test_results', itemData);
+  }
+  return { success: true, message: 'ລົງທະບຽນສັ່ງກວດສຳເລັດ' };
+}
