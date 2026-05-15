@@ -6,9 +6,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 export { supabase }
 
+// Check if we are running locally to use production API base
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+  ? 'https://lis-one.pages.dev' 
+  : '';
+
 async function fetchProxy(table, options = {}) {
   try {
-    const res = await fetch('/api/data', {
+    const res = await fetch(`${API_BASE}/api/data`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ table, ...options })
@@ -24,7 +29,7 @@ async function fetchProxy(table, options = {}) {
 
 async function mutateProxy(action, table, payload) {
   try {
-    const res = await fetch('/api/data', {
+    const res = await fetch(`${API_BASE}/api/data`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, table, payload })
@@ -35,7 +40,7 @@ async function mutateProxy(action, table, payload) {
 
 export async function loginUser(username, password) {
   try {
-    const res = await fetch('/api/login', {
+    const res = await fetch(`${API_BASE}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
@@ -66,14 +71,13 @@ export async function getDashboardData(sDate, eDate) {
 
 export async function getRecentOrders() { const res = await fetchProxy('lis_one_test_orders', { order: 'order_datetime.desc', limit: 200 }); return res.data; }
 export async function getSettings() { const res = await fetchProxy('lis_one_settings', { order: 'id.asc' }); return res.data; }
+export async function getStockMaster() { const res = await fetchProxy('lis_one_stock_master', { order: 'name.asc' }); return res.data; }
 export async function getInventoryLots() { const res = await fetchProxy('lis_one_inventory_lots', { order: 'exp_date.asc' }); return res.data; }
 export async function getTestMaster() { const res = await fetchProxy('lis_one_test_master', { order: 'name.asc' }); return res.data; }
 export async function getAllTestPackages() { const res = await fetchProxy('lis_one_test_packages'); return res.data; }
 export async function getTestReagentMapping() { const res = await fetchProxy('lis_one_test_reagent_mapping', { order: 'test_name.asc' }); return res.data; }
 
 export async function saveOrder(orderData, items) {
-  // Items are saved as results or in a separate table if available.
-  // The schema shows lis_one_test_results for test items.
   const orderRes = await mutateProxy('insert', 'lis_one_test_orders', [orderData]);
   if (!orderRes.success) return orderRes;
   
