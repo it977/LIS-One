@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 export { supabase }
 
-async function console.log("Fetching table:", table); fetchProxy(table, options = {}) {
+async function fetchProxy(table, options = {}) {
   try {
     const res = await fetch('/api/data', {
       method: 'POST',
@@ -46,8 +46,8 @@ export async function loginUser(username, password) {
 
 export async function getDashboardData(sDate, eDate) {
   let filterStr = "";
-  if (sDate) filterStr += `order_datetime=gte.${sDate}T00:00:00`;
-  if (eDate) filterStr += `&order_datetime=lte.${eDate}T23:59:59`;
+  if (sDate) filterStr += \`order_datetime=gte.\${sDate}T00:00:00\`;
+  if (eDate) filterStr += \`&order_datetime=lte.\${eDate}T23:59:59\`;
   
   const res = await fetchProxy('lis_one_test_orders', { filter: filterStr });
   const orders = res.data;
