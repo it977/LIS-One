@@ -22,6 +22,17 @@ async function fetchProxy(table, options = {}) {
   }
 }
 
+async function mutateProxy(action, table, payload) {
+  try {
+    const res = await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, table, payload })
+    });
+    return await res.json();
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
 export async function loginUser(username, password) {
   try {
     const res = await fetch('/api/login', {
@@ -61,12 +72,10 @@ export async function getMaintenanceLogs() { const res = await fetchProxy('lis_o
 export async function getTestParameters() { const res = await fetchProxy('lis_one_test_parameters', { order: 'test_name.asc' }); return res.data; }
 export async function getTestMaster() { const res = await fetchProxy('lis_one_test_master', { order: 'name.asc' }); return res.data; }
 export async function getAllTestPackages() { const res = await fetchProxy('lis_one_test_packages'); return res.data; }
+export async function getTestReagentMapping() { const res = await fetchProxy('lis_one_test_reagent_mapping', { order: 'test_name.asc' }); return res.data; }
 
-// Mutators using Supabase (Requires key bypass or Proxy logic)
-// For now we keep them using supabase client - but these might fail if no key set.
-export async function addSetting(t, v) { await supabase.from('lis_one_settings').insert([{type:t, value:v}]); return {success:true}; }
+// Mutators via Proxy
+export async function addSetting(t, v) { return await mutateProxy('insert', 'lis_one_settings', [{type:t, value:v}]); }
+export async function deleteSetting(id) { return await mutateProxy('delete', 'lis_one_settings', { id }); }
+export async function saveTestMaster(data) { return await mutateProxy('insert', 'lis_one_test_master', [data]); }
 
-export async function getTestReagentMapping() { 
-  const res = await fetchProxy('lis_one_test_reagent_mapping', { order: 'test_name.asc' }); 
-  return res.data; 
-}
