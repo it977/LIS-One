@@ -6,7 +6,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 export { supabase }
 
-async function fetchProxy(table, options = {}) {
+async function console.log("Fetching table:", table); fetchProxy(table, options = {}) {
   try {
     const res = await fetch('/api/data', {
       method: 'POST',
