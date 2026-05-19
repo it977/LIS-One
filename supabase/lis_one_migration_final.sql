@@ -1,18 +1,21 @@
 -- ============================================================
 -- LIS System - Supabase PostgreSQL Schema
--- VersionMatch: aligned with src/api.js column names
 -- ============================================================
--- Run this in the Supabase SQL Editor
+-- LIS-One Final Migration
+-- ============================================================
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ============================================================
 -- 1. USERS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.lis_one_users (
-  id         BIGSERIAL PRIMARY KEY,
-  username   TEXT NOT NULL UNIQUE,
-  password   TEXT NOT NULL,
-  role       TEXT NOT NULL DEFAULT 'User',  -- 'Admin' or 'User'
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  id            BIGSERIAL PRIMARY KEY,
+  username      TEXT NOT NULL UNIQUE,
+  password      TEXT,
+  password_hash TEXT,
+  role          TEXT NOT NULL DEFAULT 'User',  -- 'Admin' or 'User'
+  created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================
@@ -249,8 +252,8 @@ CREATE POLICY "lis_one_anon_all_al"       ON public.lis_one_audit_log           
 -- ============================================================
 -- SEED: Default admin user
 -- ============================================================
-INSERT INTO public.lis_one_users (username, password, role)
-VALUES ('admin', 'admin1234', 'Admin')
+INSERT INTO public.lis_one_users (username, password, password_hash, role)
+VALUES ('admin', NULL, crypt('admin1234', gen_salt('bf')), 'Admin')
 ON CONFLICT (username) DO NOTHING;
 
 -- ============================================================

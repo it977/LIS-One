@@ -1,10 +1,12 @@
 -- LIS Database Seed Data
 BEGIN;
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- users
-INSERT INTO users (id, username, password, role) VALUES
-  (1, 'admin', '1234', 'Admin'),
-  (2, 'user1', '1234', 'User');
+INSERT INTO users (id, username, password, password_hash, role) VALUES
+  (1, 'admin', NULL, crypt('1234', gen_salt('bf')), 'Admin'),
+  (2, 'user1', NULL, crypt('1234', gen_salt('bf')), 'User');
 
 -- settings
 INSERT INTO settings (id, type, value) VALUES

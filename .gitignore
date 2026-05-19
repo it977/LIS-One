@@ -58,3 +58,5 @@ __pycache__/
 
 # Local preview/test artifacts
 tmp-test/
+test-results/
+tmp_dashboard_report_page.jpg

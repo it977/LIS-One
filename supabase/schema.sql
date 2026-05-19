@@ -4,15 +4,18 @@
 -- ============================================================
 -- Run this in the Supabase SQL Editor
 
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- ============================================================
 -- 1. USERS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.users (
-  id         BIGSERIAL PRIMARY KEY,
-  username   TEXT NOT NULL UNIQUE,
-  password   TEXT NOT NULL,
-  role       TEXT NOT NULL DEFAULT 'User',  -- 'Admin' or 'User'
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  id            BIGSERIAL PRIMARY KEY,
+  username      TEXT NOT NULL UNIQUE,
+  password      TEXT,
+  password_hash TEXT,
+  role          TEXT NOT NULL DEFAULT 'User',  -- 'Admin' or 'User'
+  created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================

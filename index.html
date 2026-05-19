@@ -24,6 +24,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
   <link rel="stylesheet" href="/src/style.css">
 </head>
@@ -31,13 +32,14 @@
 <body>
 
   <div id="loginScreen">
-    <div class="login-box">
+    <form id="loginForm" class="login-box">
       <h2 class="mb-2"><i class="bi bi-hospital text-primary"></i> LIS Test By No V2</h2>
       <p class="text-muted mb-4 small">Laboratory Information System</p>
-      <input type="text" id="loginUser" class="form-control mb-3 py-2 bg-light" placeholder="Username">
-      <input type="password" id="loginPass" class="form-control mb-4 py-2 bg-light" placeholder="Password" onkeyup="if(event.key==='Enter') performLogin()">
-      <button class="btn btn-primary w-100 py-2 fw-bold" onclick="performLogin()" id="btnLogin">[V6_FIX] [SECURE_API] ເຂົ້າສູ່ລະບົບ (Login)</button>
-    </div>
+      <input type="text" id="loginUser" name="username" class="form-control mb-3 py-2 bg-light" placeholder="Username" autocomplete="username">
+      <input type="password" id="loginPass" name="password" class="form-control mb-4 py-2 bg-light" placeholder="Password" autocomplete="current-password">
+      <div id="loginError" class="alert alert-danger py-2 small mb-3" style="display: none;"></div>
+      <button type="submit" class="btn btn-primary w-100 py-2 fw-bold" id="btnLogin"><i class="bi bi-box-arrow-in-right me-1"></i> ເຂົ້າສູ່ລະບົບ (Login)</button>
+    </form>
   </div>
 
   <div id="mainApp">
@@ -52,19 +54,22 @@
       <div class="user-info">
         <div class="mb-1">ດຳເນີນການໂດຍ:</div>
         <span id="displayRole" class="fw-bold text-white fs-6"></span>
+        <div class="mt-1"><span id="userRoleBadge" class="badge role-badge">-</span></div>
       </div>
 
-      <a class="nav-link active admin-only" onclick="showPage(event, 'dashboard')" title="Dashboard"><i class="bi bi-grid-1x2"></i> <span class="nav-text">ພາບລວມ (Dashboard)</span></a>
-      <a class="nav-link" onclick="showPage(event, 'orderForm')" title="Test Order"><i class="bi bi-file-earmark-medical"></i> <span class="nav-text">ສັ່ງກວດແລັບ (Order)</span></a>
-      <a class="nav-link" onclick="showPage(event, 'historyPage')" title="Order History"><i class="bi bi-clock-history"></i> <span class="nav-text">ປະຫວັດສັ່ງກວດ</span></a>
-      <a class="nav-link" onclick="showPage(event, 'patientHistoryPage')" title="Patient Test History"><i class="bi bi-journal-medical"></i> <span class="nav-text">ປະຫວັດການກວດ</span></a>
-      <a class="nav-link admin-only" onclick="showPage(event, 'trackResult')" title="Track Results"><i class="bi bi-truck"></i> <span class="nav-text">ຕິດຕາມສົ່ງນອກ (Outlab)</span></a>
-      <a class="nav-link" onclick="showPage(event, 'inventoryPage')" title="Inventory Lots"><i class="bi bi-boxes"></i> <span class="nav-text">ສາງນ້ຳຢາ (Inventory)</span></a>
-      <a class="nav-link" onclick="showPage(event, 'maintenancePage')" title="Equipment Maintenance"><i class="bi bi-tools"></i> <span class="nav-text">ບຳລຸງຮັກສາເຄື່ອງຈັກ</span></a>
-      <a class="nav-link admin-only" onclick="showPage(event, 'testSetup')" title="Setup Master"><i class="bi bi-sliders"></i> <span class="nav-text">ຕັ້ງຄ່າລະບົບ (Setup)</span></a>
-      <a class="nav-link admin-only" onclick="showPage(event, 'paramSetupPage')" title="Test Parameters"><i class="bi bi-ui-radios"></i> <span class="nav-text">ຕັ້ງຄ່າຜົນກວດ (Parameters)</span></a>
+      <a class="nav-link active admin-only" onclick="showPage(event, 'dashboard')" title="Dashboard" aria-label="Dashboard"><i class="bi bi-grid-1x2"></i><span class="nav-text">ພາບລວມ (Dashboard)</span></a>
+      <a class="nav-link" onclick="showPage(event, 'orderForm')" title="Order" aria-label="Order" data-perm-table="lis_one_test_orders" data-perm-action="insert"><i class="bi bi-file-earmark-medical"></i><span class="nav-text">ສັ່ງກວດເລືອດ (Order)</span></a>
+      <a class="nav-link" onclick="showPage(event, 'patientMasterPage')" title="Patients" aria-label="Patients" data-perm-table="lis_one_patients" data-perm-action="select"><i class="bi bi-people-fill"></i><span class="nav-text">ຄົນເຈັບ (Patients)</span></a>
+      <a class="nav-link" onclick="showPage(event, 'historyPage')" title="Order History" aria-label="Order History"><i class="bi bi-clock-history"></i><span class="nav-text">ປະຫວັດສັ່ງກວດ</span></a>
+      <a class="nav-link" onclick="showPage(event, 'patientHistoryPage')" title="Patient History" aria-label="Patient History"><i class="bi bi-journal-medical"></i><span class="nav-text">ປະຫວັດການກວດຄົນເຈັບ</span></a>
+      <a class="nav-link admin-only" onclick="showPage(event, 'trackResult')" title="Outlab" aria-label="Outlab"><i class="bi bi-truck"></i><span class="nav-text">ຕິດຕາມສົ່ງນອກ (Outlab)</span></a>
+      <a class="nav-link" onclick="showPage(event, 'inventoryPage')" title="Inventory" aria-label="Inventory"><i class="bi bi-boxes"></i><span class="nav-text">ສາງນ້ຳຢາ (Inventory)</span></a>
+      <a class="nav-link" onclick="showPage(event, 'maintenancePage')" title="Maintain" aria-label="Maintain"><i class="bi bi-tools"></i><span class="nav-text">ບຳລຸງຮັກສາ</span></a>
+      <a class="nav-link admin-only" onclick="showPage(event, 'testSetup')" title="Setup" aria-label="Setup"><i class="bi bi-sliders"></i><span class="nav-text">ຕັ້ງຄ່າລະບົບ (Setup)</span></a>
+      <a class="nav-link admin-only" onclick="showPage(event, 'paramSetupPage')" title="Parameters" aria-label="Parameters"><i class="bi bi-ui-radios"></i><span class="nav-text">ຕັ້ງຄ່າເມນກວດ (Parameters)</span></a>
+      <a class="nav-link admin-only" onclick="showPage(event, 'auditLogPage')" title="Audit" aria-label="Audit"><i class="bi bi-shield-check"></i><span class="nav-text">Audit</span></a>
 
-      <a class="nav-link mt-auto border-top border-secondary" onclick="performLogout()" style="color: #ef4444;" title="Logout"><i class="bi bi-power"></i> <span class="nav-text">ອອກຈາກລະບົບ</span></a>
+      <a class="nav-link mt-auto border-top border-secondary" onclick="performLogout()" style="color: #ef4444;" title="Logout" aria-label="Logout"><i class="bi bi-power"></i><span class="nav-text">ອອກຈາກລະບົບ</span></a>
     </div>
 
     <div class="content">
@@ -288,11 +293,11 @@
               <div class="card h-100 border-top border-primary border-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
                   <span><i class="bi bi-table me-2 text-primary"></i>ລາຍງານສະຫຼຸບລາຍການກວດ (Summary Report)</span>
-                  <button class="btn btn-sm btn-outline-primary" onclick="toggleSummaryTableDashboard()" id="btnToggleSummaryDash">
-                    <i class="bi bi-eye me-1"></i> <span id="summaryTableTextDash">ສະແດງ</span>
+                  <button class="btn btn-sm btn-outline-primary" type="button" disabled id="btnToggleSummaryDash">
+                    <i class="bi bi-eye me-1"></i> <span id="summaryTableTextDash">Always On</span>
                   </button>
                 </div>
-                <div class="card-body" id="dashboardSummaryTableContainer" style="display: none;">
+                <div class="card-body" id="dashboardSummaryTableContainer" style="display: block;">
                   <div class="table-responsive">
                     <table class="table table-hover table-sm" id="dashboardSummaryTable">
                       <thead class="table-light">
@@ -339,10 +344,11 @@
                 </div>
                 <div class="row g-3 mb-3">
                   <div class="col-md-3 col-12">
-                    <label class="form-label small fw-bold text-primary required-label">Patient ID</label>
-                    <input type="text" class="form-control form-control-sm required-field" id="patientId" placeholder="HN-XXXX"
-                      list="patientList" autocomplete="off">
-                    <datalist id="patientList"></datalist>
+                    <label class="form-label small fw-bold text-primary required-label">Patient ID (HN)</label>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control form-control-sm required-field" id="patientId" placeholder="HN-XXXX" autocomplete="off">
+                      <button class="btn btn-outline-primary" type="button" onclick="openPatientPicker(applyPickedPatient)" title="ຄົ້ນຫາຄົນເຈັບ"><i class="bi bi-search"></i></button>
+                    </div>
                   </div>
                   <div class="col-md-5 col-12"><label class="form-label small fw-bold text-primary required-label">ຊື່ ແລະ ນາມສະກຸນ</label><input type="text" class="form-control form-control-sm required-field" id="patientName" placeholder="Full Name"></div>
                   <div class="col-md-2 col-6"><label class="form-label small fw-bold text-primary required-label">ອາຍຸ</label><input type="number" class="form-control form-control-sm required-field" id="age" placeholder="ປີ"></div>
@@ -429,7 +435,7 @@
           <div class="card-body p-3">
             <div class="table-responsive mt-3">
               <table class="table table-hover table-sm align-middle mb-0 w-100" id="orderHistoryTable" style="font-size: 0.85rem;">
-                <thead class="table-dark">
+                <thead class="table-light">
                   <tr>
                     <th>1. ວັນເວລາກວດ</th>
                     <th>2. ລະຫັດຄົນເຈັບ</th>
@@ -437,9 +443,9 @@
                     <th class="text-center">4. ອາຍຸ</th>
                     <th class="text-center">5. ເພດ</th>
                     <th>6. ບ່ອນສົ່ງກວດ</th>
-                    <th class="text-center">7. ປະເພດ</th>
-                    <th class="text-end" style="min-width: 100px;">8. ຍອດລວມ</th>
-                    <th class="text-center" style="min-width: 180px;">9. ຈັດການ</th>
+                    <th>7. ລະຫັດບິນ</th>
+                    <th class="text-end" style="min-width: 110px;">8. ຍອດລວມ</th>
+                    <th class="text-center" style="min-width: 220px;">9. ຈັດການ</th>
                   </tr>
                 </thead>
                 <tbody id="orderTableBody"></tbody>
@@ -450,9 +456,9 @@
       </div>
 
       <div id="patientHistoryPage" class="page">
-        <h4 class="fw-bold mb-4" style="color: var(--primary-dark)"><i class="bi bi-journal-medical me-2 text-primary"></i> ປະຫວັດການກວດ</h4>
+        <h4 class="fw-bold mb-4" style="color: var(--primary-dark)"><i class="bi bi-journal-medical me-2 text-primary"></i> ປະຫວັດການກວດຄົນເຈັບ</h4>
 
-        <div class="row g-3 mb-3">
+        <div class="row g-3 mb-3 d-none" id="patientHistoryStatsRow">
           <div class="col-md-4">
             <div class="card shadow-sm border-0 h-100 patient-history-stat">
               <div class="card-body">
@@ -469,14 +475,6 @@
               </div>
             </div>
           </div>
-          <div class="col-md-4">
-            <div class="card shadow-sm border-0 h-100 patient-history-stat">
-              <div class="card-body">
-                <div class="patient-history-stat-label"><i class="bi bi-clipboard2-check me-2"></i>ມີຜົນກວດແລ້ວ</div>
-                <div class="patient-history-stat-value" id="patientHistoryResultsReady">0</div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div id="patientHistoryMasterSection">
@@ -487,7 +485,6 @@
                 <input type="text" class="form-control border-0 bg-light" id="patientHistorySearch" placeholder="ຄົ້ນຫາລະຫັດ ຫຼື ຊື່ຄົນເຈັບ" oninput="filterPatientHistory()">
               </div>
               <button class="btn btn-outline-primary btn-sm" id="patientHistoryRefreshBtn" onclick="loadPatientHistoryPage(true)" title="ໂຫຼດຂໍ້ມູນອີກຄັ້ງ"><i class="bi bi-arrow-clockwise"></i> ໂຫຼດໃໝ່</button>
-              <div class="small text-muted ms-auto">ກົດເບິ່ງແຕ່ລະຄົນເຈັບເພື່ອດູຈຳນວນຄັ້ງກວດ ແລະ ຜົນກວດເກົ່າ</div>
             </div>
           </div>
 
@@ -498,12 +495,12 @@
                   <thead class="table-dark">
                     <tr>
                       <th>1. ລະຫັດຄົນເຈັບ</th>
-                      <th>2. ຊື່ຄົນເຈັບ</th>
-                      <th class="text-center">3. ມາກວດຈັກຄັ້ງ</th>
-                      <th class="text-center">4. ມີຜົນກວດ</th>
-                      <th>5. ມາຫຼ້າສຸດ</th>
-                      <th>6. ລາຍການຫຼ້າສຸດ</th>
-                      <th class="text-end">7. ຍອດລວມ</th>
+                      <th>2. ຄຳນຳໜ້າ</th>
+                      <th>3. ຊື່ຄົນເຈັບ</th>
+                      <th class="text-center">4. ອາຍຸ</th>
+                      <th>5. ບ້ານ</th>
+                      <th>6. ເບີໂທລະສັບ</th>
+                      <th class="text-center">7. ມາກວດຈັກຄັ້ງ</th>
                       <th class="text-center">8. ຈັດການ</th>
                     </tr>
                   </thead>
@@ -588,9 +585,12 @@
         <div class="card shadow-sm border-0">
           <div class="card-body p-3">
             <div class="table-responsive">
-              <table class="table table-hover align-middle mb-0 w-100" id="outlabTable">
-                <thead class="table-dark">
-                  <tr><th>Order ID</th><th>Date/Time</th><th>Patient</th><th>Lab Dest</th><th>ຜູ້ສົ່ງ</th><th>Tests</th><th>Status</th><th>ເວລາຮັບຜົນ</th><th>ໝາຍເຫດ</th><th>Update</th></tr>
+              <div class="d-flex justify-content-end mb-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="exportOutlabCSV()"><i class="bi bi-filetype-csv"></i> Export</button>
+              </div>
+              <table class="table table-hover align-middle mb-0 w-100 table-sm" id="outlabTable">
+                <thead class="table-light">
+                  <tr><th>Order ID</th><th>Date/Time</th><th>Patient</th><th>Lab Dest</th><th>ຜູ້ສົ່ງ</th><th>Tests</th><th>Status</th><th>ເວລາຮັບຜົນ</th><th>ໝາຍເຫດ</th><th>Action</th></tr>
                 </thead>
                 <tbody id="outlabTableBody"></tbody>
               </table>
@@ -618,97 +618,298 @@
           </div>
         </div>
 
-        <!-- KPI Cards -->
-        <div class="row g-2 mb-3">
-          <div class="col-6 col-md-3"><div class="kpi-card bg-success"><h6><i class="bi bi-check-circle"></i> ລາຍການທັງໝົດ</h6><h4 id="invTotalLots">0</h4></div></div>
-          <div class="col-6 col-md-3"><div class="kpi-card bg-warning"><h6><i class="bi bi-exclamation-triangle"></i> ໃກ້ໝົດອາຍຸ</h6><h4 id="invExpiringSoon">0</h4></div></div>
-          <div class="col-6 col-md-3"><div class="kpi-card bg-info"><h6><i class="bi bi-arrow-down-circle"></i> ຮັບເຂົ້າ (ຊ່ວງນີ້)</h6><h4 id="invTotalIn">0</h4></div></div>
-          <div class="col-6 col-md-3"><div class="kpi-card bg-danger"><h6><i class="bi bi-arrow-up-circle"></i> ເບີກອອກ (ຊ່ວງນີ້)</h6><h4 id="invTotalOut">0</h4></div></div>
+        <!-- ===== Inventory: 3-tab simplified layout ===== -->
+        <div class="inventory-tabbar mb-3" role="tablist" aria-label="Inventory sections">
+          <button type="button" class="inventory-tab-btn active" data-inventory-tab="report" onclick="setInventoryTab('report')">
+            <i class="bi bi-bar-chart-line-fill"></i>
+            <span class="inv-tab-text"><span class="inv-tab-lao">ລາຍງານ</span><span class="inv-tab-en">Report</span></span>
+          </button>
+          <button type="button" class="inventory-tab-btn" data-inventory-tab="stock" onclick="setInventoryTab('stock')">
+            <i class="bi bi-boxes"></i>
+            <span class="inv-tab-text"><span class="inv-tab-lao">ສາງ</span><span class="inv-tab-en">Stock</span></span>
+          </button>
+          <button type="button" class="inventory-tab-btn admin-only" data-inventory-tab="settings" onclick="setInventoryTab('settings')">
+            <i class="bi bi-sliders"></i>
+            <span class="inv-tab-text"><span class="inv-tab-lao">ຕັ້ງຄ່າ</span><span class="inv-tab-en">Settings</span></span>
+          </button>
         </div>
 
-        <!-- Date Filter -->
-        <div class="card shadow-sm border-0 mb-3" style="border-radius: var(--radius-lg);">
-          <div class="card-body py-2 px-3">
-            <div class="row g-2 align-items-center">
-              <div class="col-auto">
-                <span class="fw-bold small" style="color: var(--text-primary);"><i class="bi bi-calendar3"></i> ກອງຕາມຊ່ວງວັນທີ:</span>
+        <!-- ============ REPORT TAB (default) ============ -->
+        <div id="inventoryTabReport" class="inventory-tab-panel active">
+          <div class="inventory-page-desc">
+            <div class="ipd-lao">ລາຍງານ — ການໃຊ້ນ້ຳຢາຕາມຊ່ວງເວລາ</div>
+            <div class="ipd-sub">ເລືອກຊ່ວງເວລາ ແລ້ວເບິ່ງວ່າແຕ່ລະນ້ຳຢາ ຮັບເຂົ້າ-ໃຊ້ໄປ-ຍັງເຫຼືອ ເທົ່າໃດ <span class="ipd-en">— Pick a date range; see in / used / remaining per reagent</span></div>
+          </div>
+
+          <!-- Date range bar -->
+          <div class="report-date-bar">
+            <div class="rdb-quick">
+              <button type="button" class="rdb-btn" data-period="today" onclick="setInventoryPeriod('today')">ມື້ນີ້<small>Today</small></button>
+              <button type="button" class="rdb-btn" data-period="week" onclick="setInventoryPeriod('week')">ອາທິດນີ້<small>This week</small></button>
+              <button type="button" class="rdb-btn active" data-period="month" onclick="setInventoryPeriod('month')">ເດືອນນີ້<small>This month</small></button>
+            </div>
+            <div class="rdb-custom">
+              <span class="rdb-label">ກຳນົດເອງ</span>
+              <input type="date" id="invStartDate" class="form-control form-control-sm" onchange="loadInventoryDataWithDate()">
+              <span class="rdb-sep">→</span>
+              <input type="date" id="invEndDate" class="form-control form-control-sm" onchange="loadInventoryDataWithDate()">
+              <button class="btn btn-sm btn-outline-secondary" onclick="resetInventoryDateFilter()" title="ລ້າງຊ່ວງວັນທີ"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+            <div class="rdb-export">
+              <button class="btn btn-sm btn-success" onclick="exportInventoryUsageReport('excel')" title="ດາວໂຫຼດເປັນ Excel"><i class="bi bi-file-earmark-excel"></i> Excel</button>
+              <button class="btn btn-sm btn-primary" onclick="exportInventoryUsageReport('csv')" title="ດາວໂຫຼດເປັນ CSV"><i class="bi bi-filetype-csv"></i> CSV</button>
+              <button class="btn btn-sm btn-danger" onclick="exportInventoryUsageReport('pdf')" title="ດາວໂຫຼດເປັນ PDF / ພິມ"><i class="bi bi-file-earmark-pdf"></i> PDF</button>
+            </div>
+          </div>
+
+          <!-- Main per-reagent report table -->
+          <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+              <span class="fw-bold"><i class="bi bi-table me-2 text-primary"></i>ການເຄື່ອນໄຫວແຕ່ລະນ້ຳຢາ <span class="text-muted small fw-normal">Per-reagent movement</span></span>
+              <div class="d-flex gap-2 align-items-center">
+                <input type="search" id="reportSearch" class="form-control form-control-sm" placeholder="ຄົ້ນຫາ ນ້ຳຢາ / Lot" style="width:220px" oninput="renderInventoryReport()">
+                <select id="inventoryCategoryFilter" class="form-select form-select-sm" onchange="renderInventoryReport()" style="width:160px">
+                  <option value="">ທຸກໝວດ (All)</option>
+                </select>
               </div>
-              <div class="col-auto">
-                <input type="date" id="invStartDate" class="form-control form-control-sm" style="width: 130px;">
+            </div>
+            <div class="card-body p-2">
+              <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle mb-0 w-100 report-main-table">
+                  <thead class="table-light">
+                    <tr>
+                      <th class="ps-3">ນ້ຳຢາ<br><small class="text-muted fw-normal">Reagent</small></th>
+                      <th>Lot</th>
+                      <th class="text-end">ຍອດເລີ່ມ<br><small class="text-muted fw-normal">Opening</small></th>
+                      <th class="text-end col-received">ຮັບເຂົ້າ<br><small class="fw-normal" style="color:#059669">Received</small></th>
+                      <th class="text-end col-used">ໃຊ້ໄປ<br><small class="fw-normal" style="color:#dc2626">Used</small></th>
+                      <th class="text-end">ຍອດເຫຼືອ<br><small class="text-muted fw-normal">Ending</small></th>
+                      <th class="text-end">Usable</th>
+                      <th class="text-center">ສະຖານະ<br><small class="text-muted fw-normal">Status</small></th>
+                    </tr>
+                  </thead>
+                  <tbody id="reportMainTableBody"></tbody>
+                </table>
               </div>
-              <div class="col-auto">
-                <span class="text-muted">→</span>
+            </div>
+          </div>
+
+          <!-- Movement timeline (always visible) -->
+          <div class="card border-0 shadow-sm mt-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <span class="fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i>ປະຫວັດການເຄື່ອນໄຫວທັງໝົດ <span class="text-muted small fw-normal">Full movement log (in selected period)</span></span>
+              <div class="d-flex gap-2 align-items-center">
+                <select id="inventoryMovementTypeFilter" class="form-select form-select-sm" onchange="renderStockMovementRows()" style="width:180px">
+                  <option value="">ທຸກປະເພດ (All)</option>
+                  <option value="IN">ຮັບເຂົ້າ (IN)</option>
+                  <option value="OUT">ເບີກໃຊ້ (OUT)</option>
+                  <option value="ADJUST">ປັບ stock (ADJUST)</option>
+                  <option value="EXPIRED">ໝົດອາຍຸ (EXPIRED)</option>
+                  <option value="WASTE">ເສຍ (WASTE)</option>
+                </select>
+                <span class="small text-muted">500 ລາຍການລ່າສຸດ</span>
               </div>
-              <div class="col-auto">
-                <input type="date" id="invEndDate" class="form-control form-control-sm" style="width: 130px;">
-              </div>
-              <div class="col-auto">
-                <button class="btn btn-sm fw-bold" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); color: white; border: none;" onclick="loadInventoryDataWithDate()">
-                  <i class="bi bi-search"></i> ຄົ້ນຫາ
-                </button>
-              </div>
-              <div class="col-auto">
-                <button class="btn btn-sm btn-outline-secondary" onclick="resetInventoryDateFilter()">
-                  <i class="bi bi-arrow-clockwise"></i> ລ້າງ
-                </button>
-              </div>
-              <div class="col-auto">
-                <button class="btn btn-sm fw-bold" style="background: linear-gradient(135deg, #06B6D4 0%, #0891B2 100%); color: white; border: none;" onclick="loadAllInventoryData()" title="ໂຫຼດຂໍ້ມູນທັງໝົດ ບໍ່ຈຳກັດວັນທີ">
-                  <i class="bi bi-database"></i> ໂຫຼດທັງໝົດ
-                </button>
+            </div>
+            <div class="card-body p-2">
+              <div class="table-responsive" style="max-height:360px;overflow:auto">
+                <table class="table table-hover table-sm align-middle mb-0 w-100 inventory-lab-table" style="font-size:0.82rem">
+                  <thead class="inventory-sticky-head">
+                    <tr><th class="ps-3">ວັນທີ</th><th>ນ້ຳຢາ</th><th>Lot</th><th class="text-center">ປະເພດ</th><th class="text-end">ຈຳນວນ</th><th class="text-end">ຍັງເຫຼືອ</th><th>ໂດຍ</th><th>ໝາຍເຫດ</th></tr>
+                  </thead>
+                  <tbody id="stockMovementTableBody"></tbody>
+                </table>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="row g-4 mb-4">
-          <div class="col-12">
-            <div class="card h-100 border-0 shadow-sm">
-              <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <span class="fw-bold"><i class="bi bi-table me-2 text-primary"></i>ລາຍການນ້ຳຢາໃນສາງ (Inventory List)</span>
-                <div class="d-flex gap-2">
-                  <select id="inventorySortOrder" class="form-select form-select-sm" style="width: auto;" onchange="sortInventoryData()">
-                    <option value="custom" selected>⭐ ລຽງຕາມ Excel</option>
-                    <option value="default">ລຽງຕາມຄ່າເລີ່ມ</option>
-                    <option value="name">ລຽງຕາມຊື່ (A-Z)</option>
-                    <option value="name-desc">ລຽງຕາມຊື່ (Z-A)</option>
-                    <option value="exp">ລຽງຕາມວັນໝົດອາຍຸ (ເກົ່າສຸດ)</option>
-                    <option value="exp-new">ລຽງຕາມວັນໝົດອາຍຸ (ໃໝ່ສຸດ)</option>
-                    <option value="qty">ລຽງຕາມຈຳນວນ (ຫຼາຍ→ໜ້ອຍ)</option>
-                    <option value="qty-asc">ລຽງຕາມຈຳນວນ (ໜ້ອຍ→ຫຼາຍ)</option>
+        <!-- ============ STOCK TAB ============ -->
+        <div id="inventoryTabStock" class="inventory-tab-panel">
+          <div class="inventory-page-desc">
+            <div class="ipd-lao">ສາງ — ສະຖານະນ້ຳຢາປະຈຸບັນ</div>
+            <div class="ipd-sub">ຮັບເຂົ້າ, ເບີກອອກ ແລະ ກວດເບິ່ງ stock ທີ່ມີຢູ່ໃນຫ້ອງແລັບ <span class="ipd-en">— Receive, issue, and check current stock</span></div>
+          </div>
+
+          <!-- Attention strip (only shows if urgent) -->
+          <div class="inventory-attention" id="inventoryAttention"></div>
+
+          <!-- Big action buttons -->
+          <div class="stock-actions mb-3">
+            <button type="button" class="sa-btn sa-green" onclick="openAddLotModal()" title="ໃຊ້ເມື່ອມີນ້ຳຢາມາສົ່ງ — ໃສ່ Lot, ວັນໝົດອາຍຸ, ຈຳນວນ">
+              <i class="bi bi-box-arrow-in-down"></i>
+              <span><b>ຮັບເຂົ້າ</b><small>Receive new stock</small></span>
+            </button>
+            <button type="button" class="sa-btn sa-red" onclick="openStockOutModal()" title="ໃຊ້ສະເພາະການເບີກດ້ວຍມື — ບໍ່ແມ່ນຈາກ order">
+              <i class="bi bi-box-arrow-up"></i>
+              <span><b>ເບີກອອກ</b><small>Manual issue</small></span>
+            </button>
+            <button type="button" class="sa-btn sa-blue" onclick="document.getElementById('inventoryExcelInput')?.click()" title="ນຳເຂົ້າຫຼາຍລາຍການພ້ອມກັນຈາກ Excel">
+              <i class="bi bi-file-earmark-spreadsheet"></i>
+              <span><b>Import Excel</b><small>Bulk receive</small></span>
+            </button>
+            <input type="file" id="inventoryExcelInput" class="d-none" accept=".xlsx,.xls" onchange="importInventoryExcel(event)">
+            <button type="button" class="sa-btn sa-grey" onclick="openStockHistoryModal()" title="ເບິ່ງປະຫວັດການເຂົ້າ-ອອກສາງທັງໝົດ">
+              <i class="bi bi-clock-history"></i>
+              <span><b>ປະຫວັດ</b><small>Full history</small></span>
+            </button>
+          </div>
+
+          <!-- KPI strip (lean) -->
+          <div class="row g-2 mb-3">
+            <div class="col-6 col-md-3"><div class="kpi-card bg-success"><h6><i class="bi bi-check-circle"></i> ນ້ຳຢາທັງໝົດ</h6><h4 id="invTotalLots">0</h4></div></div>
+            <div class="col-6 col-md-3"><div class="kpi-card bg-warning"><h6><i class="bi bi-exclamation-triangle"></i> ໃກ້ໝົດອາຍຸ / Stock ຕ່ຳ</h6><h4 id="invExpiringSoon">0</h4></div></div>
+            <div class="col-6 col-md-3"><div class="kpi-card bg-info"><h6><i class="bi bi-arrow-down-circle"></i> ຮັບເຂົ້າ (ຊ່ວງນີ້)</h6><h4 id="invTotalIn">0</h4></div></div>
+            <div class="col-6 col-md-3"><div class="kpi-card bg-danger"><h6><i class="bi bi-arrow-up-circle"></i> ເບີກອອກ (ຊ່ວງນີ້)</h6><h4 id="invTotalOut">0</h4></div></div>
+          </div>
+
+          <!-- Filter row -->
+          <div class="card border-0 shadow-sm mb-2">
+            <div class="card-body py-2 px-3">
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                    <input type="search" id="inventorySearch" class="form-control" placeholder="ຄົ້ນຫາ ນ້ຳຢາ / Lot / ບ່ອນເກັບ / Supplier" oninput="applyInventoryFilters()">
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <select id="inventoryStatusFilter" class="form-select form-select-sm" onchange="applyInventoryFilters()">
+                    <option value="">ສະຖານະທັງໝົດ</option>
+                    <option value="ok">ພ້ອມໃຊ້</option>
+                    <option value="low">Stock ຕ່ຳ</option>
+                    <option value="expiring">ໃກ້ໝົດອາຍຸ</option>
+                    <option value="expired">ໝົດອາຍຸ</option>
+                    <option value="empty">ໝົດ Stock</option>
                   </select>
-                  <button class="btn btn-sm fw-bold shadow-sm" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; border: none;" onclick="openAddLotModal()">
-                    <i class="bi bi-box-arrow-in-down fs-6 align-middle me-1"></i> ຮັບເຂົ້າສາງ
-                  </button>
-                  <button class="btn btn-sm btn-outline-secondary" onclick="loadInventoryTable()" title="ໂຫຼດໃໝ່">
-                    <i class="bi bi-arrow-clockwise"></i>
-                  </button>
+                </div>
+                <div class="col-md-3">
+                  <select id="inventorySortOrder" class="form-select form-select-sm" onchange="sortInventoryData()">
+                    <option value="custom" selected>⭐ ລຽງຕາມ Excel</option>
+                    <option value="name">ຊື່ A-Z</option>
+                    <option value="name-desc">ຊື່ Z-A</option>
+                    <option value="exp">ໝົດອາຍຸ (ໃກ້ສຸດ)</option>
+                    <option value="exp-new">ໝົດອາຍຸ (ໄກສຸດ)</option>
+                    <option value="qty">ຈຳນວນ ຫຼາຍ→ໜ້ອຍ</option>
+                    <option value="qty-asc">ຈຳນວນ ໜ້ອຍ→ຫຼາຍ</option>
+                  </select>
                 </div>
               </div>
-              <div class="card-body p-2">
-                <div class="table-responsive">
-                  <table class="table table-hover table-sm align-middle mb-0 w-100" id="inventoryTable" style="font-size: 0.85rem;">
-                    <thead style="background: #F8FAFC; border-bottom: 2px solid #E2E8F0;">
-                      <tr>
-                        <th class="ps-3" style="color: #64748B; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border: none;">Reagent</th>
-                        <th style="color: #64748B; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border: none;">Lot No.</th>
-                        <th style="color: #64748B; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border: none;">Exp Date</th>
-                        <th style="color: #64748B; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border: none;">Location</th>
-                        <th style="color: #64748B; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border: none;">Supplier</th>
-                        <th class="text-center" style="color: #10B981; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border: none;">IN</th>
-                        <th class="text-center" style="color: #EF4444; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border: none;">OUT</th>
-                        <th class="text-center" style="color: #0891B2; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border: none;">QTY</th>
-                        <th class="text-center" style="color: #64748B; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border: none;">Status</th>
-                        <th class="text-center admin-only" style="color: #64748B; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; border: none;">ຈັດການ</th>
-                      </tr>
-                    </thead>
-                    <tbody id="inventoryTableBody"></tbody>
-                  </table>
+              <div class="small text-muted mt-1"><i class="bi bi-info-circle"></i> FIFO auto deduct: ລະບົບຫັກຈາກ Lot ໃກ້ໝົດອາຍຸກ່ອນສະເໝີ.</div>
+            </div>
+          </div>
+
+          <!-- Stock table -->
+          <div class="card border-0 shadow-sm">
+            <div class="card-body p-2">
+              <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle mb-0 w-100 inventory-lab-table" id="inventoryTable" style="font-size:0.85rem">
+                  <thead class="inventory-sticky-head">
+                    <tr>
+                      <th class="ps-3 col-cat"></th>
+                      <th class="col-reagent">ຊື່ນ້ຳຢາ<br><small class="text-muted fw-normal">Reagent</small></th>
+                      <th>Lot</th>
+                      <th class="col-components">ສ່ວນປະກອບ<br><small class="text-muted fw-normal">Components</small></th>
+                      <th class="text-end">Usable<br><small class="text-muted fw-normal">tests</small></th>
+                      <th class="text-end col-hide-sm">ກ່ອງ/ຂວດ<br><small class="text-muted fw-normal">Box/Bottle</small></th>
+                      <th class="col-hide-sm">ວັນໝົດອາຍຸ<br><small class="text-muted fw-normal">Exp Date</small></th>
+                      <th class="text-center">ມື້ເຫຼືອ<br><small class="text-muted fw-normal">Days</small></th>
+                      <th class="text-center">ສະຖານະ<br><small class="text-muted fw-normal">Status</small></th>
+                      <th class="col-hide-md">ບ່ອນເກັບ</th>
+                      <th class="text-center" style="min-width:180px">ຈັດການ<br><small class="text-muted fw-normal">Actions</small></th>
+                    </tr>
+                  </thead>
+                  <tbody id="inventoryTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============ SETTINGS TAB (admin only) ============ -->
+        <div id="inventoryTabSettings" class="inventory-tab-panel">
+          <div class="inventory-page-desc">
+            <div class="ipd-lao">ຕັ້ງຄ່າລະບົບ</div>
+            <div class="ipd-sub">ການແບ່ງໝວດ, FIFO, ສູດ usable, ຂີດແຈ້ງເຕືອນ <span class="ipd-en">— Categories, FIFO, formulas, thresholds</span></div>
+          </div>
+
+          <div class="inventory-section-card">
+            <div class="settings-group-title"><i class="bi bi-collection"></i> ການແບ່ງໝວດ &amp; ການເຊື່ອມໂຍງ <span class="sgt-en">Categories &amp; Mapping</span></div>
+            <div class="row g-3">
+              <div class="col-xl-6">
+                <div class="lab-settings-panel">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="fw-bold"><i class="bi bi-tags me-2 text-primary"></i>ການແບ່ງໝວດ <span class="text-muted small fw-normal">Category Management</span></div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="openReagentModal()">ຈັດການນ້ຳຢາ</button>
+                  </div>
+                  <div class="small text-muted mb-2"><i class="bi bi-info-circle"></i> ກຳນົດໝວດເຊັ່ນ Chemistry, Hematology, Serology ເພື່ອໃຫ້ສະຫຼຸບງ່າຍຂຶ້ນ.</div>
+                  <div class="table-responsive">
+                    <table class="table table-sm inventory-lab-table mb-0">
+                      <thead class="inventory-sticky-head"><tr><th>ໝວດ</th><th class="text-end">ລາຍການ</th><th class="text-end">ໃກ້ໝົດ</th><th class="text-end">ໃກ້ໝົດອາຍຸ</th><th class="text-end">Usable</th></tr></thead>
+                      <tbody id="inventoryCategorySettingsBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div class="col-xl-6">
+                <div class="lab-settings-panel">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="fw-bold"><i class="bi bi-diagram-3 me-2 text-primary"></i>ການເຊື່ອມໂຍງ test ⇄ ນ້ຳຢາ <span class="text-muted small fw-normal">Test–Reagent Mapping</span></div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="showPage(null,'testSetup');setSetupTab('mapping')"><i class="bi bi-link-45deg"></i> ເປີດໜ້າເຊື່ອມໂຍງ</button>
+                  </div>
+                  <div class="mapping-explainer mb-2">
+                    <div class="me-line"><b>ມັນແມ່ນຫຍັງ?</b> ບອກລະບົບວ່າ "test ໃດ" ໃຊ້ "ນ້ຳຢາໃດ"</div>
+                    <div class="me-example">
+                      <span class="me-tag me-test">test: AST/GOT</span>
+                      <i class="bi bi-arrow-right"></i>
+                      <span class="me-tag me-reagent">ນ້ຳຢາ: AST reagent (R1+R2)</span>
+                    </div>
+                    <div class="me-why">ເມື່ອມີ order "AST/GOT" → ລະບົບ <b>ຫັກ stock</b> ໃຫ້ອັດຕະໂນມັດ. <b>ບໍ່ໄດ້ map = ບໍ່ຫັກ.</b></div>
+                  </div>
+                  <div class="small text-muted mb-1"><b>ວິທີໃຊ້:</b> 1️⃣ ກົດ <i>ເປີດໜ້າເຊື່ອມໂຍງ</i> · 2️⃣ ເລືອກ test · 3️⃣ ເລືອກນ້ຳຢາ · 4️⃣ ບັນທຶກ</div>
+                  <div class="table-responsive">
+                    <table class="table table-sm inventory-lab-table mb-0">
+                      <thead class="inventory-sticky-head"><tr><th>ນ້ຳຢາ</th><th>ໝວດ</th><th>ສູດ</th><th class="text-end">ຂີດຕ່ຳ</th></tr></thead>
+                      <tbody id="inventoryMappingSettingsBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="settings-group-title mt-3"><i class="bi bi-sliders2"></i> ກົດເກນຄຳນວນ &amp; ການແຈ້ງເຕືອນ <span class="sgt-en">Calculation rules &amp; alerts</span></div>
+              </div>
+              <div class="col-xl-4">
+                <div class="lab-settings-panel h-100">
+                  <div class="fw-bold mb-2"><i class="bi bi-calculator me-2 text-primary"></i>ສູດ usable tests</div>
+                  <select class="form-select form-select-sm mb-2">
+                    <option>SINGLE = remaining_tests</option>
+                    <option selected>R1/R2/R3 = MIN(component remaining)</option>
+                  </select>
+                  <div class="small text-muted"><i class="bi bi-info-circle"></i> ສູດນີ້ໃຊ້ສຳລັບສະແດງຜົນ ບໍ່ມີຜົນຕໍ່ການຫັກ stock ຕົວຈິງ.</div>
+                </div>
+              </div>
+              <div class="col-xl-4">
+                <div class="lab-settings-panel h-100">
+                  <div class="fw-bold mb-2"><i class="bi bi-arrow-down-up me-2 text-primary"></i>FIFO &amp; ວັນໝົດອາຍຸ</div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" checked>
+                    <label class="form-check-label">ຫັກ Lot ໃກ້ໝົດອາຍຸກ່ອນ</label>
+                  </div>
+                  <label class="form-label small mt-3 mb-1">ແຈ້ງເຕືອນກ່ອນໝົດອາຍຸ (ມື້)</label>
+                  <input type="number" class="form-control form-control-sm" value="30">
+                </div>
+              </div>
+              <div class="col-xl-4">
+                <div class="lab-settings-panel h-100">
+                  <div class="fw-bold mb-2"><i class="bi bi-speedometer me-2 text-primary"></i>ຂີດ Stock ຕ່ຳ</div>
+                  <label class="form-label small mb-1">ຂີດເລີ່ມຕົ້ນ (tests)</label>
+                  <input type="number" class="form-control form-control-sm mb-2" value="10">
+                  <div class="small text-muted"><i class="bi bi-info-circle"></i> ຄ່າສະເພາະຂອງແຕ່ລະນ້ຳຢາຍັງເອົາມາຈາກຂໍ້ມູນ reagent / lot.</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
       </div>
 
       <!-- ================= MAINTENANCE ================= -->
@@ -815,7 +1016,8 @@
         <h5 class="fw-bold text-secondary mb-3 mt-4"><i class="bi bi-diagram-3 me-2"></i>ຕັ້ງຄ່າການຕັດນ້ຳຢາອັດຕະໂນມັດ (Auto Deduct Mapping)</h5>
         <div class="card mb-4 border-top border-primary border-3">
           <div class="card-body bg-light">
-            <div class="row g-2 mb-3">
+            <div id="mappingEditBanner" class="mapping-edit-banner d-none mb-2"></div>
+            <div class="row g-2 mb-3"><input type="hidden" id="editMappingId">
               <div class="col-md-3">
                 <label class="form-label small fw-bold">ລາຍການກວດ (Test Item)</label>
                 <select id="mapTestName" class="form-select form-select-sm bg-white border-primary"></select>
@@ -825,17 +1027,28 @@
                 <select id="mapReagent" class="form-select form-select-sm bg-white border-primary"></select>
               </div>
               <div class="col-md-2">
+                <label class="form-label small fw-bold">Component</label>
+                <select id="mapComponentType" class="form-select form-select-sm bg-white border-primary">
+                  <option value="Single">Single</option>
+                  <option value="R1">R1</option>
+                  <option value="R2">R2</option>
+                  <option value="R3">R3</option>
+                  <option value="ALL_COMPONENTS">R1 + R2/R3</option>
+                </select>
+              </div>
+              <div class="col-md-2">
                 <label class="form-label small fw-bold">ຈຳນວນທີ່ໃຊ້ / 1 ເທື່ອ</label>
                 <input type="number" id="mapQty" class="form-control form-control-sm bg-white border-primary" placeholder="Qty">
               </div>
-              <div class="col-md-3 d-flex align-items-end">
-                <button class="btn btn-success btn-sm w-100 fw-bold" onclick="saveMapping()"><i class="bi bi-plus-circle"></i> ເພີ່ມການຕັ້ງຄ່າ</button>
+              <div class="col-md-1 d-flex align-items-end gap-1">
+                <button class="btn btn-secondary btn-sm w-100 fw-bold" id="btnSaveMapping" onclick="saveMapping()" title="ບັນທຶກ Mapping"><i class="bi bi-plus-lg"></i> ເພີ່ມ</button>
+                <button class="btn btn-outline-secondary btn-sm d-none" id="btnCancelMapping" onclick="cancelEditMapping()" title="ຍົກເລີກແກ້ໄຂ"><i class="bi bi-x-lg"></i></button>
               </div>
             </div>
             <div class="table-responsive bg-white border rounded p-2">
               <table class="table table-sm table-hover mb-0 w-100" id="mappingTable">
                 <thead class="table-light">
-                  <tr><th>ລາຍການກວດ (Test)</th><th>ຊື່ນ້ຳຢາ (Reagent)</th><th class="text-center">ຈຳນວນຕັດ (Qty)</th><th class="text-center">ຈັດການ</th></tr>
+                  <tr><th>ລາຍການກວດ (Test)</th><th>ຊື່ນ້ຳຢາ (Reagent)</th><th class="text-center">Component</th><th class="text-center">ຈຳນວນຕັດ (Qty)</th><th class="text-center">ຈັດການ</th></tr>
                 </thead>
                 <tbody id="mappingTableBody"></tbody>
               </table>
@@ -880,6 +1093,171 @@
           <div class="col-md-4 col-sm-6"><div class="card"><div class="card-header py-1 small">Lab Destination</div><div class="card-body p-2"><div class="input-group input-group-sm mb-2"><input type="text" id="addLabDest" class="form-control"><button class="btn btn-secondary" onclick="addSetting('LabDest', 'addLabDest')">+</button></div><ul class="list-group list-group-sm custom-table-scroll" id="listLabDest"></ul></div></div></div>
         </div>
 
+        </div>
+      </div>
+
+      <!-- ================= PATIENT MASTER ================= -->
+      <div id="patientMasterPage" class="page">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <h4 class="fw-bold m-0" style="color: var(--primary-dark)">
+            <i class="bi bi-people-fill me-2 text-primary"></i> ຄົນເຈັບ (Patient Master)
+          </h4>
+          <div class="d-flex gap-2">
+            <input type="text" id="patientMasterSearch" class="form-control form-control-sm" placeholder="ຄົ້ນຫາ HN / ຊື່ / ເບີໂທ..." style="width:260px" oninput="filterPatientMaster()">
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadPatientMaster()" title="ໂຫຼດໃໝ່"><i class="bi bi-arrow-clockwise"></i></button>
+            <button class="btn btn-sm btn-success" onclick="openPatientModal()" data-perm-table="lis_one_patients" data-perm-action="insert">
+              <i class="bi bi-person-plus"></i> ເພີ່ມຄົນເຈັບ
+            </button>
+          </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+          <div class="card-body p-2">
+            <div class="table-responsive">
+              <table class="table table-hover table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>HN</th><th>ຊື່</th>
+                    <th class="text-center">ເພດ</th>
+                    <th class="text-center">ອາຍຸ</th>
+                    <th>ເບີໂທ</th>
+                    <th>ທີ່ຢູ່</th>
+                    <th>ສ້າງເມື່ອ</th>
+                    <th class="text-center">ການກະທຳ</th>
+                  </tr>
+                </thead>
+                <tbody id="patientMasterTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= RESULT ENTRY ================= -->
+      <div id="resultEntryPage" class="page">
+        <!-- LIST VIEW -->
+        <div id="reListView">
+          <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h4 class="fw-bold m-0" style="color: var(--primary-dark)">
+              <i class="bi bi-clipboard2-pulse me-2 text-primary"></i> ປ້ອນຜົນກວດ (Result Entry)
+            </h4>
+            <div class="d-flex gap-2 align-items-center">
+              <select id="reFilterStatus" class="form-select form-select-sm" style="width:140px" onchange="loadResultEntryOrders()">
+                <option value="Pending" selected>Pending</option>
+                <option value="Received">Received</option>
+                <option value="Completed">Completed</option>
+                <option value="all">ທັງໝົດ</option>
+              </select>
+              <input type="text" id="reSearchOrder" class="form-control form-control-sm" placeholder="ຄົ້ນຫາ Order / HN / ຊື່..." style="width:240px" oninput="loadResultEntryOrders()">
+              <button class="btn btn-sm btn-primary" onclick="loadResultEntryOrders()"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+          </div>
+
+          <div class="card border-0 shadow-sm">
+            <div class="card-body p-2">
+              <div class="table-responsive">
+                <table class="table table-hover table-sm align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Order ID</th><th>HN</th><th>ຄົນເຈັບ</th>
+                      <th class="text-center">ລາຍການ</th><th>ວັນທີ</th>
+                      <th>ສະຖານະ</th><th class="text-center">ການກະທຳ</th>
+                    </tr>
+                  </thead>
+                  <tbody id="reOrdersBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- WORKSPACE VIEW -->
+        <div id="reWorkspaceView" class="d-none">
+          <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <div>
+              <button class="btn btn-sm btn-outline-secondary" onclick="backToResultList()"><i class="bi bi-arrow-left"></i> ກັບໄປ</button>
+              <span class="ms-2 fw-bold">Order:</span> <span id="reHeaderOrderId" class="text-primary fw-bold"></span>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-primary" onclick="printResultFromEntry()"><i class="bi bi-printer"></i> ໃບລາຍງານ</button>
+              <button class="btn btn-sm btn-secondary" onclick="saveResultEntry(false)"><i class="bi bi-save"></i> ບັນທຶກ (Draft)</button>
+              <button class="btn btn-sm btn-success" onclick="saveResultEntry(true)"><i class="bi bi-check2-all"></i> ບັນທຶກ &amp; ປິດໃບກວດ</button>
+            </div>
+          </div>
+
+          <div class="card border-0 shadow-sm mb-2">
+            <div class="card-body py-2 px-3" id="rePatientHeader"></div>
+          </div>
+
+          <div id="reTestsContainer"></div>
+        </div>
+      </div>
+
+      <!-- ================= AUDIT LOG ================= -->
+      <div id="auditLogPage" class="page">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <h4 class="fw-bold m-0" style="color: var(--primary-dark)">
+            <i class="bi bi-shield-check me-2 text-primary"></i> ບັນທຶກການໃຊ້ງານ (Audit Log)
+          </h4>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-secondary" onclick="exportAuditCSV()"><i class="bi bi-filetype-csv"></i> Export CSV</button>
+            <button class="btn btn-sm btn-primary" onclick="loadAuditLog()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+          </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-body py-2 px-3">
+            <div class="row g-2 align-items-end">
+              <div class="col-md-2">
+                <label class="form-label">ຈາກວັນທີ</label>
+                <input type="date" id="alStart" class="form-control form-control-sm">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">ຫາວັນທີ</label>
+                <input type="date" id="alEnd" class="form-control form-control-sm">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">User</label>
+                <input type="text" id="alUser" class="form-control form-control-sm" placeholder="username">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Action</label>
+                <select id="alAction" class="form-select form-select-sm">
+                  <option value="">ທັງໝົດ</option>
+                  <option value="INSERT">INSERT</option>
+                  <option value="UPDATE">UPDATE</option>
+                  <option value="DELETE">DELETE</option>
+                  <option value="COMPLETE">COMPLETE</option>
+                  <option value="SAVE">SAVE</option>
+                  <option value="DEDUCT">DEDUCT</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Target table</label>
+                <input type="text" id="alTarget" class="form-control form-control-sm" placeholder="test_master...">
+              </div>
+              <div class="col-md-2 d-flex gap-1">
+                <button class="btn btn-sm btn-primary w-100" onclick="loadAuditLog()"><i class="bi bi-search"></i> Search</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="resetAuditFilters()"><i class="bi bi-x"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+          <div class="card-body p-2">
+            <div class="table-responsive">
+              <table class="table table-hover table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>ເວລາ</th><th>User</th><th>Action</th>
+                    <th>Target</th><th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="auditTableBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -968,68 +1346,135 @@
 
   <!-- ================= MODALS ================= -->
   <div class="modal fade" id="addLotModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog">
       <div class="modal-content border-0 shadow-lg">
-        <div class="modal-header bg-primary text-white">
-          <h5 class="modal-title fw-bold"><i class="bi bi-box-arrow-in-down me-2"></i> ບັນທຶກນ້ຳຢາເຂົ້າສາງ (Add New Lot)</h5>
+        <div class="modal-header py-2 px-3" style="background:#2563eb;color:#fff">
+          <h6 class="modal-title fw-bold m-0"><i class="bi bi-box-arrow-in-down me-2"></i> ຮັບນ້ຳຢາເຂົ້າສາງ <span class="opacity-75 fw-normal" style="font-size:11px">Receive new stock</span></h6>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body bg-light p-4">
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label small fw-bold">ເລືອກນ້ຳຢາ (ຈາກ Master)</label>
+        <div class="modal-body p-3 add-lot-body">
+          <!-- Required (essentials) -->
+          <div class="row g-2 mb-2">
+            <div class="col-12">
+              <label class="form-label small fw-bold mb-1">ນ້ຳຢາ <span class="text-danger">*</span> <span class="text-muted fw-normal">Reagent</span></label>
               <div class="input-group input-group-sm">
-                <select class="form-select bg-white border-0" id="invSelectReagent"></select>
-                <button class="btn btn-outline-primary bg-white admin-only" type="button" onclick="openReagentModal()"><i class="bi bi-plus-circle-fill"></i></button>
+                <select class="form-select" id="invSelectReagent"></select>
+                <button class="btn btn-outline-primary admin-only" type="button" onclick="openReagentModal()" title="ເພີ່ມນ້ຳຢາໃໝ່ໃນ Master"><i class="bi bi-plus-lg"></i></button>
               </div>
             </div>
-            <div class="col-md-6">
-              <label class="form-label small fw-bold">ໝາຍເລກ Lot (Lot No.)</label>
-              <input type="text" class="form-control form-control-sm bg-white border-0" id="invLotNo">
+            <div class="col-7">
+              <label class="form-label small fw-bold mb-1">ໝາຍເລກ Lot <span class="text-muted fw-normal">Lot No.</span></label>
+              <input type="text" class="form-control form-control-sm" id="invLotNo" placeholder="ເຊັ່ນ L2025-001">
             </div>
-            <div class="col-md-6">
-              <label class="form-label small fw-bold text-danger">ວັນໝົດອາຍຸ (Exp Date)</label>
+            <div class="col-5">
+              <label class="form-label small fw-bold mb-1 text-danger">ວັນໝົດອາຍຸ <span class="fw-normal">Exp</span></label>
               <input type="date" class="form-control form-control-sm border-danger" id="invExpDate">
             </div>
-            <div class="col-md-6">
-              <label class="form-label small fw-bold">ວັນຮັບເຂົ້າ</label>
-              <input type="date" class="form-control form-control-sm bg-white border-0" id="invReceiveDate">
+            <div class="col-5">
+              <label class="form-label small fw-bold mb-1 text-primary">ຈຳນວນ tests <span class="text-danger">*</span></label>
+              <input type="number" class="form-control form-control-sm border-primary" id="invQty" placeholder="0" min="0">
             </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-bold">ບ່ອນຈັດເກັບ (Location)</label>
-              <input type="text" class="form-control form-control-sm bg-white border-0" id="invLocation">
+            <div class="col-4">
+              <label class="form-label small fw-bold mb-1">ສ່ວນປະກອບ</label>
+              <select class="form-select form-select-sm" id="invComponentType">
+                <option value="Single">Single / Kit</option>
+                <option value="R1">R1</option>
+                <option value="R2">R2</option>
+                <option value="R3">R3</option>
+                <option value="Control">Control</option>
+                <option value="Calibrator">Calibrator</option>
+              </select>
             </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-bold">ບໍລິສັດຜູ້ສະໜອງ (Supplier)</label>
-              <input type="text" class="form-control form-control-sm bg-white border-0" id="invSupplier">
+            <div class="col-3">
+              <label class="form-label small fw-bold mb-1">ໜ່ວຍ</label>
+              <select class="form-select form-select-sm" id="invUnitType">
+                <option value="box">box</option>
+                <option value="bottle">bottle</option>
+                <option value="kit">kit</option>
+                <option value="test">test</option>
+              </select>
             </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-bold text-primary">ຈຳນວນຮັບເຂົ້າ (Qty)</label>
-              <input type="number" class="form-control form-control-sm border-primary bg-white" id="invQty" placeholder="0">
+            <div class="col-6">
+              <label class="form-label small fw-bold mb-1">ບ່ອນເກັບ <span class="text-muted fw-normal">Location</span></label>
+              <input type="text" class="form-control form-control-sm" id="invLocation" placeholder="ເຊັ່ນ ຕູ້ເຢັນ 1">
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-bold mb-1">Supplier</label>
+              <input type="text" class="form-control form-control-sm" id="invSupplier" placeholder="ບໍລິສັດຜູ້ສະໜອງ">
             </div>
           </div>
-          <div class="mt-4">
-            <button class="btn btn-primary w-100 fw-bold py-2 fs-6" onclick="submitInventoryLot()" id="btnSubmitInv"><i class="bi bi-check-circle me-1"></i> ບັນທຶກເຂົ້າສາງ</button>
-          </div>
+
+          <!-- Advanced (collapsed) -->
+          <details class="add-lot-advanced">
+            <summary><i class="bi bi-gear"></i> ຕັ້ງຄ່າຂັ້ນສູງ <span class="text-muted small fw-normal">(unit qty, threshold, pack size)</span></summary>
+            <div class="row g-2 mt-1">
+              <div class="col-4">
+                <label class="form-label small mb-1">ວັນຮັບເຂົ້າ</label>
+                <input type="date" class="form-control form-control-sm" id="invReceiveDate">
+              </div>
+              <div class="col-4">
+                <label class="form-label small mb-1">Unit Qty</label>
+                <input type="number" class="form-control form-control-sm" id="invUnitQty" placeholder="0">
+              </div>
+              <div class="col-4">
+                <label class="form-label small mb-1">Tests / Unit</label>
+                <input type="number" class="form-control form-control-sm" id="invTestsPerUnit" value="1">
+              </div>
+              <div class="col-6">
+                <label class="form-label small mb-1">ຂີດ Stock ຕ່ຳ</label>
+                <input type="number" class="form-control form-control-sm" id="invLowThreshold" value="10">
+              </div>
+              <div class="col-6">
+                <label class="form-label small mb-1">Pack Size</label>
+                <input type="text" class="form-control form-control-sm" id="invDetails" placeholder="R1: 2 x 100ml">
+              </div>
+            </div>
+          </details>
+
+          <button class="btn btn-primary w-100 fw-bold py-2 mt-3" onclick="submitInventoryLot()" id="btnSubmitInv"><i class="bi bi-check-circle me-1"></i> ບັນທຶກເຂົ້າສາງ</button>
         </div>
       </div>
     </div>
   </div>
 
   <div class="modal fade" id="reagentMasterModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
       <div class="modal-content border-0 shadow-lg">
-        <div class="modal-header bg-primary text-white">
-          <h5 class="modal-title fw-bold"><i class="bi bi-box-seam me-2"></i> ຈັດການລາຍຊື່ນ້ຳຢາ</h5>
+        <div class="modal-header py-2 px-3" style="background:#2563eb;color:#fff">
+          <h6 class="modal-title fw-bold m-0"><i class="bi bi-box-seam me-2"></i> ຈັດການລາຍຊື່ນ້ຳຢາ <span class="opacity-75 fw-normal" style="font-size:11px">Reagent Master</span></h6>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <div class="modal-body bg-light">
-          <div class="card shadow-sm border-0 mb-3"><div class="card-body p-3"><div class="row g-2 align-items-end"><input type="hidden" id="editReagentId">
-            <div class="col-md-5"><label class="form-label small fw-bold">ຊື່ນ້ຳຢາ</label><input type="text" class="form-control form-control-sm border-primary" id="newReagentName" placeholder="ຊື່ນ້ຳຢາ..."></div>
-            <div class="col-md-4"><label class="form-label small fw-bold">ຫົວໜ່ວຍ</label><input type="text" class="form-control form-control-sm border-primary" id="newReagentUnit" placeholder="ເຊັ່ນ: ປ໋ອງ, Test"></div>
-            <div class="col-md-3 d-flex gap-1"><button class="btn btn-success btn-sm w-100 fw-bold" id="btnSaveReagent" onclick="saveReagentMaster()">ບັນທຶກ</button><button class="btn btn-secondary btn-sm w-100 fw-bold d-none" id="btnCancelReagent" onclick="cancelEditReagent()">ຍົກເລີກ</button></div>
-          </div></div></div>
-          <div class="card shadow-sm border-0"><div class="card-body p-2"><div class="table-responsive"><table class="table table-hover align-middle mb-0 text-sm w-100" id="reagentMasterTable"><thead class="table-light"><tr><th class="ps-3">ລະຫັດ (ID)</th><th>ຊື່ນ້ຳຢາ (Name)</th><th>ຫົວໜ່ວຍ (Unit)</th><th class="text-center">ຈັດການ</th></tr></thead><tbody id="reagentMasterTableBody"></tbody></table></div></div></div>
+        <div class="modal-body p-3 reagent-master-body">
+          <div id="reagentEditBanner" class="alert alert-warning py-1 px-2 mb-2 d-none small"></div>
+          <div class="card border-0 shadow-sm mb-2">
+            <div class="card-body p-2">
+              <div class="row g-2 align-items-end"><input type="hidden" id="editReagentId">
+                <div class="col-md-2"><label class="form-label small mb-1">Item ID</label><input type="text" class="form-control form-control-sm" id="newReagentItemCode" placeholder="C001"></div>
+                <div class="col-md-3"><label class="form-label small mb-1">ຊື່ນ້ຳຢາ <span class="text-danger">*</span></label><input type="text" class="form-control form-control-sm" id="newReagentName" placeholder="ເຊັ່ນ Albumin"></div>
+                <div class="col-md-2"><label class="form-label small mb-1">ໜ່ວຍ</label><input type="text" class="form-control form-control-sm" id="newReagentUnit" placeholder="box / test"></div>
+                <div class="col-md-2"><label class="form-label small mb-1">ໝວດ</label><select class="form-select form-select-sm" id="newReagentCategory"><option>Chemistry</option><option>Hematology</option><option>Serology</option><option>Immunology</option><option>Blood Bank</option><option>Urinalysis</option><option>Electrolyte</option><option>Hormone</option><option>Microbiology</option><option>Consumables</option><option>Controls &amp; Calibrators</option><option selected>Other</option></select></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Manufacturer</label><input type="text" class="form-control form-control-sm" id="newReagentManufacturer" placeholder="Genrui"></div>
+                <div class="col-md-4"><label class="form-label small mb-1">Details / Pack Size</label><input type="text" class="form-control form-control-sm" id="newReagentDetails" placeholder="R1: 2 x 100ml"></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Supplier</label><input type="text" class="form-control form-control-sm" id="newReagentSupplier"></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Storage / Temp</label><input type="text" class="form-control form-control-sm" id="newReagentStorageTemp" placeholder="2-8°C"></div>
+                <div class="col-md-2 d-flex gap-1">
+                  <button class="btn btn-primary btn-sm w-100 fw-bold" id="btnSaveReagent" onclick="saveReagentMaster()"><i class="bi bi-check-lg"></i> ບັນທຶກ</button>
+                  <button class="btn btn-outline-secondary btn-sm fw-bold d-none" id="btnCancelReagent" onclick="cancelEditReagent()"><i class="bi bi-x-lg"></i></button>
+                </div>
+              </div>
+              <div class="small text-muted mt-1"><i class="bi bi-info-circle"></i> ປ່ຽນໝວດ <b>ໂດຍກົງໃນຕາຕະລາງ</b> ໄດ້ — ບໍ່ຕ້ອງກົດແກ້ໄຂກ່ອນ.</div>
+            </div>
+          </div>
+          <div class="card border-0 shadow-sm">
+            <div class="card-body p-2">
+              <div class="table-responsive" style="max-height:50vh;overflow:auto">
+                <table class="table table-hover align-middle mb-0 reagent-master-table" id="reagentMasterTable">
+                  <thead class="table-light"><tr><th class="ps-3">Item ID</th><th>ຊື່ນ້ຳຢາ</th><th>Details</th><th>ໜ່ວຍ</th><th style="min-width:160px">ໝວດ</th><th class="text-center" style="min-width:80px">ຈັດການ</th></tr></thead>
+                  <tbody id="reagentMasterTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1045,11 +1490,95 @@
         <div class="modal-body bg-light">
           <input type="hidden" id="editInvLotId">
           <div class="mb-2"><label class="form-label small fw-bold">ໝາຍເລກ Lot</label><input type="text" class="form-control form-control-sm" id="editInvLotNo"></div>
+          <div class="mb-2"><label class="form-label small fw-bold">R1 / R2 / ອື່ນໆ</label><select class="form-select form-select-sm" id="editInvComponentType"><option value="Single">Single / Kit</option><option value="R1">R1</option><option value="R2">R2</option><option value="R3">R3</option><option value="Control">Control</option><option value="Calibrator">Calibrator</option><option value="Other">Other</option></select></div>
+          <div class="mb-2"><label class="form-label small fw-bold">Unit Type</label><select class="form-select form-select-sm" id="editInvUnitType"><option value="box">box</option><option value="bottle">bottle</option><option value="kit">kit</option><option value="test">test</option></select></div>
           <div class="mb-2"><label class="form-label small fw-bold text-danger">ວັນໝົດອາຍຸ</label><input type="date" class="form-control form-control-sm border-danger" id="editInvExpDate"></div>
           <div class="mb-2"><label class="form-label small fw-bold">ບ່ອນຈັດເກັບ</label><input type="text" class="form-control form-control-sm" id="editInvLocation"></div>
           <div class="mb-2"><label class="form-label small fw-bold">ຜູ້ສະໜອງ</label><input type="text" class="form-control form-control-sm" id="editInvSupplier"></div>
-          <div class="mb-3"><label class="form-label small fw-bold text-primary">ຍອດຄົງເຫຼືອ</label><input type="number" class="form-control form-control-sm border-primary" id="editInvQty"></div>
+          <div class="mb-2"><label class="form-label small fw-bold">ລາຍລະອຽດ / Pack Size</label><input type="text" class="form-control form-control-sm" id="editInvDetails"></div>
+          <div class="row g-2 mb-3">
+            <div class="col-6"><label class="form-label small fw-bold text-primary">Remaining Tests</label><input type="number" class="form-control form-control-sm border-primary" id="editInvQty"></div>
+            <div class="col-6"><label class="form-label small fw-bold text-warning">Low Threshold</label><input type="number" class="form-control form-control-sm border-warning" id="editInvLowThreshold"></div>
+          </div>
           <button class="btn btn-warning w-100 fw-bold" onclick="saveInvLotEdit()" id="btnSaveInvEdit">ອັບເດດຂໍ້ມູນ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="stockOutModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title fw-bold"><i class="bi bi-box-arrow-up me-2"></i>ເບີກນ້ຳຢາອອກຈາກສາງ</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body bg-light">
+          <div class="mb-2">
+            <label class="form-label small fw-bold">ເລືອກ Lot ນ້ຳຢາ</label>
+            <select class="form-select form-select-sm border-danger" id="stockOutLotSelect" onchange="updateStockOutHint()"></select>
+            <div class="form-text" id="stockOutHint">-</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold text-danger">ຈຳນວນທີ່ເບີກອອກ</label>
+            <input type="number" class="form-control form-control-sm border-danger" id="stockOutQty" min="1" placeholder="0">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">ເຫດຜົນ / ໝາຍເຫດ</label>
+            <input type="text" class="form-control form-control-sm" id="stockOutNote" placeholder="ເຊັ່ນ: ໃຊ້ກັບການກວດ, QC, ເສຍຫາຍ">
+          </div>
+          <button class="btn btn-danger w-100 fw-bold" onclick="submitStockOut()" id="btnSubmitStockOut"><i class="bi bi-check2-circle me-1"></i> ຢືນຢັນເບີກອອກ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="stockAdjustModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title fw-bold"><i class="bi bi-sliders me-2"></i>ປັບຍອດ Stock</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body bg-light">
+          <input type="hidden" id="adjustLotId">
+          <div class="alert alert-info py-2 small mb-3" id="adjustLotLabel">-</div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small fw-bold">ຍອດປັດຈຸບັນ</label>
+              <input type="number" class="form-control form-control-sm" id="adjustCurrentQty" readonly>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-bold text-info">ຍອດໃໝ່</label>
+              <input type="number" class="form-control form-control-sm border-info" id="adjustNewQty" min="0">
+            </div>
+          </div>
+          <div class="mt-2 mb-3">
+            <label class="form-label small fw-bold">ເຫດຜົນ / ໝາຍເຫດ</label>
+            <input type="text" class="form-control form-control-sm" id="adjustNote" placeholder="ເຊັ່ນ: ນັບສາງ, ຂອງເສຍ, ປັບຍອດເລີ່ມຕົ້ນ">
+          </div>
+          <button class="btn btn-info text-white w-100 fw-bold" onclick="submitStockAdjust()" id="btnSubmitStockAdjust"><i class="bi bi-check2-circle me-1"></i> ບັນທຶກການປັບຍອດ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="stockHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold"><i class="bi bi-clock-history me-2"></i>ປະຫວັດການເຂົ້າ-ອອກສາງນ້ຳຢາ</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body bg-light">
+          <div class="table-responsive bg-white rounded shadow-sm">
+            <table class="table table-hover table-sm align-middle mb-0 w-100" style="font-size: 0.82rem;">
+              <thead class="table-light">
+                <tr><th class="ps-3">ວັນທີ</th><th>Item</th><th>Category</th><th>R1/R2</th><th class="text-center">Type</th><th class="text-center">ຮັບເຂົ້າ</th><th class="text-center">ເບີກອອກ</th><th class="text-center">ມີຢູ່</th><th>ໝາຍເຫດ</th></tr>
+              </thead>
+              <tbody id="stockHistoryTableBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -1195,6 +1724,164 @@
           <button type="button" class="btn btn-primary px-4" onclick="processCSVImport()">
             <i class="bi bi-check-circle me-1"></i> Import Data
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PATIENT MODAL (create/edit) ================= -->
+  <div class="modal fade" id="patientModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold"><i class="bi bi-person-vcard me-2"></i> ຂໍ້ມູນຄົນເຈັບ (Patient)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editPatientId">
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label">HN (auto)</label>
+              <input type="text" id="pHn" class="form-control form-control-sm border-primary">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label">ຊື່ ແລະ ນາມສະກຸນ *</label>
+              <input type="text" id="pName" class="form-control form-control-sm border-primary">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">ເພດ</label>
+              <select id="pGender" class="form-select form-select-sm">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">ວັນເດືອນປີເກີດ</label>
+              <input type="date" id="pDob" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">ອາຍຸ</label>
+              <input type="number" id="pAge" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">ເບີໂທ</label>
+              <input type="text" id="pPhone" class="form-control form-control-sm">
+            </div>
+            <div class="col-12">
+              <label class="form-label">ທີ່ຢູ່</label>
+              <input type="text" id="pAddress" class="form-control form-control-sm">
+            </div>
+            <div class="col-12">
+              <label class="form-label">ໝາຍເຫດ</label>
+              <textarea id="pNote" class="form-control form-control-sm" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">ຍົກເລີກ</button>
+          <button class="btn btn-success" onclick="savePatient()"><i class="bi bi-check-circle me-1"></i> ບັນທຶກ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ORDER DETAIL MODAL ================= -->
+  <div class="modal fade" id="orderDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold"><i class="bi bi-clipboard2-pulse me-2 text-primary"></i> ຂໍ້ມູນໃບສັ່ງກວດ</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="orderDetailBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= ORDER RESULT FILES MODAL ================= -->
+  <div class="modal fade" id="orderUploadModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold">
+            <i class="bi bi-cloud-arrow-up-fill me-2 text-success"></i>
+            ໄຟລ໌ຜົນກວດ — <span id="orderUploadOrderId" class="text-primary"></span>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="upload-manager-toolbar">
+            <div>
+              <div class="upload-manager-title">ຈັດການໄຟລ໌ຜົນກວດ</div>
+              <div class="upload-manager-subtitle">ອັບໄດ້ຫຼາຍໄຟລ໌: ຮູບ, PDF ແລະໄຟລ໌ຜົນກວດອື່ນໆ</div>
+            </div>
+            <button class="btn btn-success btn-sm" type="button" onclick="pickOrderResultFiles()">
+              <i class="bi bi-plus-circle me-1"></i> ເພີ່ມໄຟລ໌
+            </button>
+          </div>
+          <div id="orderUploadFilesList" class="upload-manager-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="orderResultUploadInput" class="d-none" accept="image/*,application/pdf,.pdf" multiple>
+
+  <!-- ================= PATIENT PICKER MODAL ================= -->
+  <div class="modal fade" id="patientPickerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold"><i class="bi bi-search me-2"></i> ຄົ້ນຫາ / ເລືອກຄົນເຈັບ</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group input-group-sm mb-2">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" id="patientPickerSearch" class="form-control" placeholder="HN / ຊື່ / ເບີໂທ..." onkeyup="if(event.key==='Enter')searchPatientPicker()">
+            <button class="btn btn-primary" onclick="searchPatientPicker()">ຄົ້ນຫາ</button>
+            <button class="btn btn-success" onclick="createPatientFromPicker()" data-perm-table="lis_one_patients" data-perm-action="insert"><i class="bi bi-plus-circle"></i> ໃໝ່</button>
+          </div>
+          <div id="patientPickerResults" style="max-height:50vh;overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= INVENTORY ALERTS MODAL ================= -->
+  <div class="modal fade" id="inventoryAlertsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold"><i class="bi bi-bell-fill me-2 text-warning"></i> ແຈ້ງເຕືອນ Inventory</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="inventoryAlertsBody"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal">ປິດ</button>
+          <button class="btn btn-primary" onclick="showPage(null,'inventoryPage');document.querySelector('#inventoryAlertsModal .btn-close').click();">
+            <i class="bi bi-arrow-right"></i> ໄປໜ້າ Inventory
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RESULT REPORT MODAL ================= -->
+  <div class="modal fade" id="resultReportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header">
+          <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-medical me-2"></i> ໃບລາຍງານຜົນກວດ — <span id="reportCurrentOrderId" class="text-primary"></span></h5>
+          <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-sm btn-outline-secondary" onclick="printResultReport()"><i class="bi bi-printer"></i> Print</button>
+            <button class="btn btn-sm btn-danger" onclick="exportResultReportPDF()"><i class="bi bi-file-earmark-pdf"></i> ດາວໂຫຼດ PDF</button>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+        </div>
+        <div class="modal-body" style="background:#f3f4f6">
+          <div id="reportPreviewContainer"></div>
         </div>
       </div>
     </div>
