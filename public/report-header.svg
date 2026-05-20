@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1286" height="208" viewBox="0 0 1286 208" role="img" aria-label="One Medical and Wellness Center header">
+  <rect width="1286" height="208" fill="#ffffff"/>
+  <path d="M560 0h726v50H590c-18 0-33-6-45-18-12-12-18-27-18-45V0h33z" fill="#45b8bd"/>
+
+  <g transform="translate(30 22)">
+    <text x="0" y="96" font-family="Arial, Helvetica, sans-serif" font-size="112" font-weight="700" letter-spacing="-6" fill="#39bbc4">one</text>
+    <text x="208" y="106" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="700" fill="#39bbc4">+</text>
+    <circle cx="78" cy="4" r="7" fill="#f6c21f"/>
+    <circle cx="164" cy="-6" r="12" fill="#f48b25"/>
+    <text x="0" y="138" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600" fill="#56bbc0">ສຸຂະພາບແພດ ວັນເມດິໂຄ ແອນ ແວວເນສ ເຊັນເຕີ</text>
+    <text x="26" y="162" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#8ab8ba">One Medical and Wellness Center</text>
+  </g>
+
+  <g font-family="Arial, Helvetica, sans-serif" fill="#57bec2" text-anchor="middle">
+    <text x="918" y="116" font-size="22">ປະສົມປະສານ ຂ້າມວັດທະນະທຳ ການຮັກສາສຸຂະພາບ ຄືສັນຍາທີ່ເຮົາມີ</text>
+    <text x="918" y="152" font-size="20">Bridging Cultures, Building Health, Prevention is our Promise</text>
+  </g>
+</svg>

@@ -1,0 +1,21 @@
+{
+  "watch": [
+    "index.html",
+    "src",
+    "functions",
+    "vite.config.js",
+    "package.json"
+  ],
+  "ext": "js,html,css,json,env",
+  "ignore": [
+    "dist/**",
+    "node_modules/**",
+    ".git/**",
+    ".vite/**",
+    "*.log"
+  ],
+  "delay": "300ms",
+  "exec": "npm run dev:host",
+  "signal": "SIGTERM",
+  "verbose": true
+}
