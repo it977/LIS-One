@@ -1,11 +1,16 @@
 import { verifyToken, extractToken } from '../_lib/auth.js';
 
 const ORDER_FILE_BUCKET = 'order-result-files';
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+};
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
   });
 }
 
@@ -57,7 +62,10 @@ function dataUrlToBytes(base64) {
   return bytes;
 }
 
-export async function onRequestPost({ request, env }) {
+export async function onRequest({ request, env }) {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
+  if (request.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
+
   const { url, key } = supabaseConfig(env);
   console.log('[FILES] env url', url);
   if (!key) return json({ success: false, error: 'Supabase env missing' }, 500);

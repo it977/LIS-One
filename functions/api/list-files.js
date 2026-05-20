@@ -1,9 +1,14 @@
 const ORDER_FILE_BUCKET = 'order-result-files';
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+};
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
   });
 }
 
@@ -30,13 +35,18 @@ async function supabaseRest(env, path) {
   return { resp, body };
 }
 
-export async function onRequestPost({ request, env }) {
+export async function onRequest({ request, env }) {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
+  if (!['GET', 'POST'].includes(request.method)) return json({ success: false, error: 'Method not allowed' }, 405);
+
   const { url, key } = supabaseConfig(env);
   console.log('[FILES] env url', url);
   if (!key) return json({ success: false, error: 'Supabase env missing' }, 500);
 
   try {
-    const { order_id } = await request.json();
+    const body = request.method === 'POST' ? await request.json().catch(() => ({})) : {};
+    const params = new URL(request.url).searchParams;
+    const order_id = request.method === 'GET' ? params.get('order_id') : body.order_id;
     const cleanOrderId = String(order_id || '').trim();
     console.log('[FILES] list orderId', cleanOrderId);
     if (!cleanOrderId) return json({ success: false, error: 'order_id is required' }, 400);
