@@ -222,23 +222,7 @@ async function takeAutoVerificationScreenshot() {
 
 async function loadInitialDataLazy() {
     console.log('[bootApp] lazy loading data...');
-
-    // 1. Dashboard first (visible tab)
     loadDashboard().catch(e => console.warn('[bootApp] loadDashboard failed', e));
-
-    // 2. Refresh inventory alert
-    if (typeof window.refreshInventoryAlertBadge === 'function') {
-        window.refreshInventoryAlertBadge();
-        if (!window.__lisInventoryAlertTimer) {
-            window.__lisInventoryAlertTimer = setInterval(() => window.refreshInventoryAlertBadge(), 5 * 60 * 1000);
-        }
-    }
-
-    // 3. Other modules ONLY if on dashboard or relevant page
-    // Recent orders can wait a bit
-    setTimeout(() => {
-        loadRecentOrders().catch(e => console.warn('[bootApp] loadRecentOrders failed', e));
-    }, 100);
 }
 
 async function populateDropdowns(force = false) {
@@ -246,7 +230,6 @@ async function populateDropdowns(force = false) {
         renderDropdownsFromCache(appCache.settings);
         return;
     }
-    console.log('Populating dropdowns...');
     try {
         const settings = await api.getSettings();
         appCache.settings = settings;
@@ -395,7 +378,7 @@ window.showPage = (e, id) => {
         document.querySelector('.sidebar-overlay')?.classList.remove('active');
     }
 
-    // Lazy load specific page data
+    // Lazy load specific page data - only when navigating to that page
     if(pageId === 'dashboard') loadDashboard().catch(e => console.warn('[showPage] dashboard load failed', e));
     if(pageId === 'testSetup') {
         window.loadSettings?.();
@@ -409,21 +392,35 @@ window.showPage = (e, id) => {
     if(pageId === 'historyPage') loadRecentOrders().catch(e => console.warn('[showPage] history load failed', e));
     if(pageId === 'trackResult') loadRecentOrders().catch(e => console.warn('[showPage] outlab recent orders load failed', e));
     if(pageId === 'inventoryPage') {
+        // Start inventory alert badge timer only when user visits inventory page
+        if (typeof window.refreshInventoryAlertBadge === 'function' && !window.__lisInventoryAlertTimer) {
+            window.refreshInventoryAlertBadge();
+            window.__lisInventoryAlertTimer = setInterval(() => window.refreshInventoryAlertBadge(), 5 * 60 * 1000);
+        }
         window.loadInventoryTable?.().then(() => {
-            // After data loads, render whichever inventory tab is active.
             const active = document.querySelector('.inventory-tab-btn.active')?.dataset.inventoryTab || 'report';
             window.setInventoryTab?.(active);
         }).catch(e => console.warn('[showPage] inventory load failed', e));
     }
 };
 
+let testMasterCache = null;
+let testCategoryOrder = [];
+
 window.loadTestCheckboxes = async function() {
     const container = document.getElementById('dynamicTestContainer');
     if(!container) return;
-    container.innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-primary"></div></div>';
+    container.innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted small">ກຳລັງໂຫຼດລາຍການກວດ...</div></div>';
     
     try {
-        const tests = await api.getTestMaster();
+        const t0 = performance.now();
+        if (!testMasterCache) {
+            testMasterCache = await api.getTestMaster();
+        }
+        const tests = testMasterCache;
+        const loadTime = performance.now() - t0;
+        if (loadTime > 2000) console.warn(`[PERF] loadTestCheckboxes fetch: ${loadTime.toFixed(0)}ms`);
+        
         container.innerHTML = '';
         if(!tests || tests.length === 0) {
             container.innerHTML = '<div class="col-12 text-center text-muted">ຍັງບໍ່ມີລາຍການກວດ</div>';
@@ -431,36 +428,17 @@ window.loadTestCheckboxes = async function() {
         }
         
         const grouped = {};
+        testCategoryOrder = [];
         tests.forEach(t => {
             const cat = t.category || 'Other';
-            if(!grouped[cat]) grouped[cat] = [];
+            if(!grouped[cat]) {
+                grouped[cat] = [];
+                testCategoryOrder.push(cat);
+            }
             grouped[cat].push(t);
         });
         
-        Object.keys(grouped).forEach(cat => {
-            let h = `<div class="col-12 mt-3"><h6 class="fw-bold border-bottom pb-1 text-primary"><i class="bi bi-tag-fill me-2"></i>${cat}</h6><div class="row g-2">`;
-            grouped[cat].forEach(t => {
-                const isSelected = selectedTests.some(s => s.id == t.id);
-                h += `
-                <div class="col-6 col-md-4 col-xl-2">
-                    <div class="test-item-card border p-2 rounded ${isSelected ? 'bg-primary-subtle border-primary' : 'bg-white'}" 
-                         style="cursor:pointer; transition:all 0.2s;" 
-                         onclick="window.toggleTestAndRender('${t.id}', '${t.name.replace(/'/g, "\\'")}', '${t.price}', '${t.category}')">
-                        <div class="d-flex align-items-center mb-0">
-                            <input class="form-check-input test-checkbox me-2" type="checkbox" id="chk_${t.id}" 
-                                   data-id="${t.id}" data-name="${t.name.replace(/'/g, "\\'")}" data-price="${t.price}" data-cat="${t.category}"
-                                   ${isSelected ? 'checked' : ''} onclick="event.stopPropagation()">
-                            <div class="w-100 overflow-hidden">
-                                <div class="fw-bold text-truncate" style="font-size:0.75rem;">${t.name}</div>
-                                <div class="text-danger fw-bold" style="font-size:0.7rem;">${Number(t.price).toLocaleString()} ₭</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-            });
-            h += '</div></div>';
-            container.innerHTML += h;
-        });
+        renderTestCategory(container, grouped, testCategoryOrder);
 
         document.querySelectorAll('.test-checkbox').forEach(chk => {
             chk.onchange = (e) => {
@@ -474,6 +452,67 @@ window.loadTestCheckboxes = async function() {
         console.error('Loader Error:', e);
         container.innerHTML = '<div class="alert alert-danger">Failed to load tests</div>';
     }
+};
+
+function renderTestCategory(container, grouped, categories) {
+    const fragment = document.createDocumentFragment();
+    const tempDiv = document.createElement('div');
+    
+    categories.forEach(cat => {
+        const tests = grouped[cat];
+        if (!tests || !tests.length) return;
+        
+        const col = document.createElement('div');
+        col.className = 'col-12 mt-3';
+        col.dataset.category = cat;
+        
+        const headerId = `cat-header-${cat.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const bodyId = `cat-body-${cat.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        
+        let h = `<h6 class="fw-bold border-bottom pb-1 text-primary d-flex justify-content-between align-items-center" style="cursor:pointer" onclick="toggleTestCategory('${bodyId}', '${headerId}')">
+            <span id="${headerId}"><i class="bi bi-tag-fill me-2"></i>${escapeHtml(cat)} <span class="badge bg-light text-primary ms-1">${tests.length}</span></span>
+            <i class="bi bi-chevron-down ms-2 transition-icon" id="${headerId}-icon"></i>
+        </h6>
+        <div class="row g-2" id="${bodyId}">`;
+        
+        tests.forEach(t => {
+            const isSelected = selectedTests.some(s => s.id == t.id);
+            h += `
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="test-item-card border p-2 rounded ${isSelected ? 'bg-primary-subtle border-primary' : 'bg-white'}" 
+                     style="cursor:pointer; transition:all 0.2s;" 
+                     onclick="window.toggleTestAndRender('${t.id}', '${t.name.replace(/'/g, "\\'")}', '${t.price}', '${escapeHtml(t.category)}')">
+                    <div class="d-flex align-items-center mb-0">
+                        <input class="form-check-input test-checkbox me-2" type="checkbox" id="chk_${t.id}" 
+                               data-id="${t.id}" data-name="${t.name.replace(/'/g, "\\'")}" data-price="${t.price}" data-cat="${escapeHtml(t.category)}"
+                               ${isSelected ? 'checked' : ''} onclick="event.stopPropagation()">
+                        <div class="w-100 overflow-hidden">
+                            <div class="fw-bold text-truncate" style="font-size:0.75rem;">${escapeHtml(t.name)}</div>
+                            <div class="text-danger fw-bold" style="font-size:0.7rem;">${Number(t.price).toLocaleString()} ₭</div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        });
+        
+        h += '</div>';
+        col.innerHTML = h;
+        fragment.appendChild(col);
+    });
+    
+    tempDiv.appendChild(fragment);
+    while (tempDiv.firstChild) {
+        container.appendChild(tempDiv.firstChild);
+    }
+}
+
+window.toggleTestCategory = function(bodyId, headerId) {
+    const body = document.getElementById(bodyId);
+    const icon = document.getElementById(headerId + '-icon');
+    if (!body) return;
+    const isCollapsed = body.style.display === 'none';
+    body.style.display = isCollapsed ? '' : 'none';
+    if (icon) icon.className = isCollapsed ? 'bi bi-chevron-up ms-2 transition-icon' : 'bi bi-chevron-down ms-2 transition-icon';
 };
 
 window.toggleTestAndRender = (id, name, price, cat) => {
@@ -622,19 +661,27 @@ window.removePackage = function() {
 async function loadPackageSelector() {
     const sel = document.getElementById('packageSelector');
     if (!sel) return;
+    if (loadedPackages.length > 0) {
+        renderPackageOptions(sel);
+        return;
+    }
     try {
         const pkgs = await api.getAllTestPackages();
         loadedPackages = (pkgs || []).filter(p => p.is_active !== false);
-        sel.innerHTML = '<option value="">-- ເລືອກ Package --</option>';
-        loadedPackages.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = String(p.id);
-            opt.textContent = `${p.name} (${Number(p.price || 0).toLocaleString()} )`;
-            sel.appendChild(opt);
-        });
+        renderPackageOptions(sel);
     } catch (e) {
         console.error('[packages] Failed to load packages:', e);
     }
+}
+
+function renderPackageOptions(sel) {
+    sel.innerHTML = '<option value="">-- ລືອກ Package --</option>';
+    loadedPackages.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = String(p.id);
+        opt.textContent = `${p.name} (${Number(p.price || 0).toLocaleString()} )`;
+        sel.appendChild(opt);
+    });
 }
 
 window.onPackageSelect = async function() {
@@ -850,8 +897,13 @@ function renderOrderHistoryTable(orders) {
     const body = document.getElementById('orderTableBody');
     if(!body) return;
 
-    body.innerHTML = (orders || []).map(o => `
-        <tr data-order-id="${escapeHtml(o.order_id)}">
+    const t0 = performance.now();
+    const fragment = document.createDocumentFragment();
+    
+    (orders || []).forEach(o => {
+        const tr = document.createElement('tr');
+        tr.dataset.orderId = o.order_id;
+        tr.innerHTML = `
             <td><small>${formatDateTime(o.order_datetime)}</small></td>
             <td><b class="text-primary">${escapeHtml(o.patient_id)}</b></td>
             <td><b>${escapeHtml(o.patient_name)}</b></td>
@@ -870,8 +922,16 @@ function renderOrderHistoryTable(orders) {
                     <button class="btn btn-sm order-action-btn action-delete" onclick="deleteOrder('${escapeHtml(o.order_id)}')" title="Delete order"><i class="bi bi-trash3"></i></button>
                 </div>
             </td>
-        </tr>
-    `).join('');
+        `;
+        fragment.appendChild(tr);
+    });
+    
+    body.innerHTML = '';
+    body.appendChild(fragment);
+    
+    const renderTime = performance.now() - t0;
+    if (renderTime > 500) console.warn(`[PERF] renderOrderHistoryTable: ${renderTime.toFixed(0)}ms (${orders?.length || 0} rows)`);
+    
     hydrateOrderUploadBadges(orders || []).catch(e => console.warn('[history] upload badge failed', e));
 }
 
@@ -974,14 +1034,16 @@ function fileKindIcon(file = {}) {
     return 'bi-file-earmark-medical-fill text-primary';
 }
 
-async function renderOrderUploadModal(orderId) {
+async function renderOrderUploadModal(orderId, prefetchedFiles = null) {
+    orderId = String(orderId || '').trim();
     const title = document.getElementById('orderUploadOrderId');
     const list = document.getElementById('orderUploadFilesList');
     if (title) title.textContent = orderId;
     if (!list) return;
     list.innerHTML = '<div class="text-center text-muted py-3 small">Loading...</div>';
-    const res = await api.getOrderFiles(orderId);
+    const res = prefetchedFiles ? { success: true, data: prefetchedFiles } : await api.getOrderFiles(orderId);
     const files = res.success ? (res.data || []) : [];
+    console.log('[FILES] modal render rows', { orderId, rows: files, container: list.id });
     invalidateFileCache(orderId);
     ORDER_FILE_CACHE[orderId] = files;
     if (!files.length) {
@@ -1034,6 +1096,7 @@ window.viewOrderDetail = async function(orderId) {
 };
 
 window.uploadOrderResult = async function(orderId) {
+    orderId = String(orderId || '').trim();
     const input = document.getElementById('orderResultUploadInput');
     const modal = document.getElementById('orderUploadModal');
     if (!input || !modal) return;
@@ -1058,13 +1121,19 @@ document.addEventListener('change', async (event) => {
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ກຳລັງອັບໂຫຼດ...'; }
     try {
         let uploadedCount = 0;
+        const cleanOrderId = String(orderId || '').trim();
         for (const file of input.files) {
-            const res = await api.uploadOrderFile(orderId, file);
+            const res = await api.uploadOrderFile(cleanOrderId, file);
+            console.log('[FILES] upload response', res);
             if (res.success) uploadedCount++;
         }
-        invalidateFileCache(orderId);
+        const filesRes = await api.getOrderFiles(cleanOrderId);
+        const files = filesRes.success ? (filesRes.data || []) : [];
+        console.log('[FILES] fetched rows after upload', { orderId: cleanOrderId, rows: files });
+        invalidateFileCache(cleanOrderId);
+        ORDER_FILE_CACHE[cleanOrderId] = files;
         await hydrateOrderUploadBadges(recentOrders);
-        await renderOrderUploadModal(orderId);
+        await renderOrderUploadModal(cleanOrderId, files);
         Swal.fire({
             icon: 'success',
             title: 'ສຳເລັດ',
@@ -1188,11 +1257,18 @@ window.cancelEdit = function() {
 };
 
 async function loadRecentOrders(force = false) {
-    if (!force && recentOrders.length > 0 && Date.now() - (window.__lastOrdersUpdate || 0) < 30000) {
+    if (!force && recentOrders.length > 0 && Date.now() - (window.__lastOrdersUpdate || 0) < 60000) {
         renderOrderHistoryTable(recentOrders);
         return recentOrders;
     }
+    const body = document.getElementById('orderTableBody');
+    if (body) body.innerHTML = '<tr><td colspan="9" class="text-center py-4"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted small">ກຳລັງໂຫຼດປະຫວັດສັ່ງກວດ...</div></td></tr>';
+    
+    const t0 = performance.now();
     recentOrders = groupOrdersById(await api.getRecentOrders());
+    const loadTime = performance.now() - t0;
+    if (loadTime > 2000) console.warn(`[PERF] loadRecentOrders: ${loadTime.toFixed(0)}ms (${recentOrders.length} orders)`);
+    
     window.__lastOrdersUpdate = Date.now();
     renderOrderHistoryTable(recentOrders);
     return recentOrders;
@@ -1204,11 +1280,23 @@ window.loadTable = async () => {
     await loadRecentOrders(true);
 };
 
+let searchDebounceTimer = null;
+
 window.filterTable = () => {
-    const date = document.getElementById('searchDate')?.value;
-    if (!date) return renderOrderHistoryTable(recentOrders);
-    renderOrderHistoryTable(recentOrders.filter(o => String(o.order_datetime || '').slice(0, 10) === date));
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        const date = document.getElementById('searchDate')?.value;
+        if (!date) return renderOrderHistoryTable(recentOrders);
+        renderOrderHistoryTable(recentOrders.filter(o => String(o.order_datetime || '').slice(0, 10) === date));
+    }, 300);
 };
+
+function localDateString(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
 
 window.updateOrderStatus = async (orderId, status) => {
     const res = await api.updateOrder(orderId, { status });
@@ -1327,23 +1415,28 @@ async function loadDashboard() {
     const start = document.getElementById('dashStartDate')?.value || '';
     const end = document.getElementById('dashEndDate')?.value || '';
     const filterKey = JSON.stringify({ dateStart: start, dateEnd: end, ...getDashboardFilters() });
-    // Throttle only identical dashboard requests so quick filter changes still refresh.
     if (dashboardState.lastUpdate && dashboardState.lastFilterKey === filterKey && Date.now() - dashboardState.lastUpdate < 1500) return;
 
     if (loader) loader.style.display = 'block';
     if (alerts) alerts.innerHTML = '';
 
+    const t0 = performance.now();
     try {
         const [dashboardData, results, testMaster] = await Promise.all([
             api.getDashboardData(start, end),
             api.getTestResults().catch(() => []),
             api.getTestMaster().catch(() => [])
         ]);
+        const fetchTime = performance.now() - t0;
+        if (fetchTime > 2000) console.warn(`[PERF] loadDashboard fetch: ${fetchTime.toFixed(0)}ms`);
+
         const loadedAt = Date.now();
 
         const filters = getDashboardFilters();
-        const orderRows = applyDashboardFilters(dashboardData.orders || [], filters);
+        const dateRows = filterOrdersByDashboardDate(dashboardData.orders || [], start, end);
+        const orderRows = applyDashboardFilters(dateRows, filters);
         const orders = groupDashboardOrders(orderRows);
+        console.log('[DASH] date range, total orders, order ids', { start, end, totalOrders: orders.length, orderIds: orders.map(o => o.order_id) });
         const testRows = buildDashboardTestRows(orderRows, results || [], testMaster || []);
         const analytics = calculateDashboardAnalytics(orders, testRows);
         dashboardState = {
@@ -1357,6 +1450,7 @@ async function loadDashboard() {
             lastFilterKey: filterKey
         };
 
+        const r0 = performance.now();
         renderDashboardKpis(analytics);
         renderDashboardCharts(analytics);
         renderTimeSlotReport(dashboardState.timeSlotMode || 'all');
@@ -1364,6 +1458,8 @@ async function loadDashboard() {
         renderTopTables(analytics);
         renderDashboardSummaryTable(analytics.testSummary);
         populateDashboardFilterOptions(dashboardData.orders || []);
+        const renderTime = performance.now() - r0;
+        if (renderTime > 1000) console.warn(`[PERF] loadDashboard render: ${renderTime.toFixed(0)}ms`);
     } catch (err) {
         console.error('Dashboard Error:', err);
         if (alerts) alerts.innerHTML = `<div class="alert alert-danger">Dashboard Error: ${escapeHtml(err.message)}</div>`;
@@ -1389,6 +1485,18 @@ function applyDashboardFilters(orders, filters) {
         if (filters.doctor && o.doctor !== filters.doctor) return false;
         if (filters.testType && o.test_type !== filters.testType) return false;
         if (filters.category && (o.category || 'Other') !== filters.category) return false;
+        return true;
+    });
+}
+
+function filterOrdersByDashboardDate(orders, start, end) {
+    const from = start ? `${start}T00:00:00` : '';
+    const to = end ? `${end}T23:59:59.999` : '';
+    return (orders || []).filter(order => {
+        const dt = String(order.order_datetime || '');
+        if (!dt) return false;
+        if (from && dt < from) return false;
+        if (to && dt > to) return false;
         return true;
     });
 }
@@ -1810,14 +1918,7 @@ function renderChart(id, type, labels, data, label, colors) {
 }
 
 function renderDashboardCharts(analytics) {
-    console.log('Rendering Dashboard Charts with analytics:', analytics);
-    
     const palette = ['#2563eb', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#64748b'];
-    
-    // Log the data being passed to each chart
-    console.log('Gender data:', analytics.gender);
-    console.log('Insite data:', analytics.insite);
-    
     renderObjectPie('chartGender', analytics.gender, 'Gender', ['#2563eb', '#ec4899', '#94a3b8']);
     renderObjectPie('chartInsite', analytics.insite, 'Insite', ['#10b981', '#f97316', '#94a3b8']);
     renderObjectPie('chartVisitType', analytics.visitType, 'Visit Type', palette);
@@ -1833,28 +1934,16 @@ function topEntries(obj, limit) {
 }
 
 function renderObjectPie(id, obj, label, colors) {
-    console.log(`Rendering pie chart ${id} with data:`, obj);
-    
-    // Handle empty or undefined data
-    if (!obj || typeof obj !== 'object') {
-        console.warn(`No data for chart ${id}`);
-        obj = { 'No Data': 1 };
-    }
-    
+    if (!obj || typeof obj !== 'object') return;
     const entries = Object.entries(obj).filter(([k, v]) => v > 0);
-    
-    // If no entries after filtering, show placeholder
-    if (entries.length === 0) {
-        console.warn(`No valid entries for chart ${id}`);
-        entries.push(['No Data', 1]);
-    }
-    
-    console.log(`Chart ${id} entries:`, entries);
+    if (entries.length === 0) return;
     renderChart(id, 'pie', entries.map(([k]) => k), entries.map(([, v]) => v), label, colors);
 }
 
 function renderObjectBar(id, obj, label, colors) {
+    if (!obj || typeof obj !== 'object') return;
     const entries = Object.entries(obj).filter(([, v]) => v > 0);
+    if (entries.length === 0) return;
     renderChart(id, 'bar', entries.map(([k]) => k), entries.map(([, v]) => Math.round(v)), label, colors);
 }
 
@@ -1922,11 +2011,10 @@ window.setDashDate = (period) => {
     if (period === 'week') start.setDate(now.getDate() - 6);
     if (period === 'month') start.setDate(1);
     if (period === 'year') { start.setMonth(0); start.setDate(1); }
-    const fmt = d => d.toISOString().slice(0, 10);
     const s = document.getElementById('dashStartDate');
     const e = document.getElementById('dashEndDate');
-    if (s) s.value = fmt(start);
-    if (e) e.value = fmt(now);
+    if (s) s.value = localDateString(start);
+    if (e) e.value = localDateString(now);
     loadDashboard();
 };
 
@@ -2205,7 +2293,7 @@ window.exportDashboardPDF = async () => {
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true, logging: false, letterRendering: true },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-            pagebreak: { mode: ['css'] }
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
         }).from(pdfContainer).save();
         Swal.fire({ icon: 'success', title: 'PDF Generated!', timer: 1800, showConfirmButton: false });
     } catch (error) {
@@ -2364,7 +2452,7 @@ window.exportDashboardPDF = async () => {
                 windowHeight: pdfContainer.scrollHeight
             },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape', compress: true },
-            pagebreak: { mode: ['css'], before: '.pdf-page + .pdf-page', avoid: '.pdf-chart' }
+            pagebreak: { mode: ['avoid-all', 'css', 'legacy'], before: '.pdf-page + .pdf-page', avoid: '.pdf-chart, .card, .dashboard-card, .chart-card, canvas, table, .summary-report' }
         }).from(pdfContainer).save();
         Swal.fire({ icon: 'success', title: 'PDF Generated!', timer: 1800, showConfirmButton: false });
     } catch (error) {
@@ -2625,6 +2713,16 @@ window.exportDashboardPDF = async () => {
                     font-size: 13px !important;
                     line-height: 1.35 !important;
                 }
+                .dashboard-pdf-capture .card,
+                .dashboard-pdf-capture .dashboard-card,
+                .dashboard-pdf-capture .chart-card,
+                .dashboard-pdf-capture canvas,
+                .dashboard-pdf-capture img,
+                .dashboard-pdf-capture table,
+                .dashboard-pdf-capture .summary-report {
+                    page-break-inside: avoid !important;
+                    break-inside: avoid !important;
+                }
             `;
             clone.classList.add('dashboard-pdf-capture');
             clone.prepend(exportStyle);
@@ -2681,6 +2779,16 @@ window.exportDashboardPDF = async () => {
             })
             .filter(y => y > 80 && y < canvas.height - 80)
             .sort((a, b) => a - b);
+        const avoidRects = [...dashboard.querySelectorAll('.card, .dashboard-card, .chart-card, canvas, table, .summary-report')]
+            .map(el => {
+                const rect = el.getBoundingClientRect();
+                return {
+                    top: Math.round((rect.top - dashboardRect.top) * yRatio),
+                    bottom: Math.round((rect.bottom - dashboardRect.top) * yRatio)
+                };
+            })
+            .filter(r => r.bottom > 80 && r.top < canvas.height - 80 && r.bottom > r.top)
+            .sort((a, b) => a.top - b.top);
 
         const priorityCharts = ['chartGender', 'chartInsite', 'chartVisitType', 'chartTestType'];
         const priorityCut = Math.max(0, ...priorityCharts.map(id => {
@@ -2695,6 +2803,11 @@ window.exportDashboardPDF = async () => {
         const pagePixelH = Math.floor(canvas.width * (maxH / maxW));
 
         const findSafeCut = (target, minY) => {
+            const crossing = avoidRects.find(r => r.top < target && r.bottom > target);
+            if (crossing) {
+                if (crossing.top > minY + 80) return crossing.top;
+                if (crossing.bottom < canvas.height && crossing.bottom > minY + 80) return crossing.bottom;
+            }
             const windowPx = Math.max(120, Math.round(pagePixelH * 0.16));
             const candidates = safeCuts.filter(y => y > minY + 80 && y >= target - windowPx && y <= target + windowPx);
             if (!candidates.length) return Math.min(canvas.height, target);
@@ -2750,7 +2863,7 @@ window.exportDashboardPDF = async () => {
 const requiredFns = [
     // Core CRUD
     'loadInventoryTable','loadTestMasterTable','loadMappingData','loadPackagesTable',
-    'loadSettings','loadParamSetupData','setSetupTab','performLogout','toggleSidebar',
+    'loadSettings','setSetupTab','performLogout','toggleSidebar',
     'loadMaintenanceTable',
     // Phase 2
     'loadResultEntryOrders','openResultEntry','saveResultEntry','openResultReport',

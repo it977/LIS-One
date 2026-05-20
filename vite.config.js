@@ -24,6 +24,10 @@ function readJsonBody(req) {
   })
 }
 
+function encodePostgrestFragment(fragment) {
+  return String(fragment || '').replace(/%(?![0-9A-Fa-f]{2})/g, '%25')
+}
+
 const APP_VERSION = `${process.env.npm_package_version || 'dev'}-${new Date().toISOString()}`
 const READ_ONLY_HIS_TABLES = new Set(['HIS_One_Patients'])
 
@@ -147,20 +151,21 @@ function localSupabaseApi(env) {
           } else if (action === 'update') {
             if (!match && !filter) throw new Error('update requires match or filter')
             method = 'PATCH'
-            path = `${table}?${match || filter}&select=${select || '*'}`
+            path = `${table}?${match || encodePostgrestFragment(filter)}&select=${select || '*'}`
             body = JSON.stringify(payload)
           } else if (action === 'delete') {
             if (!match && !filter) throw new Error('delete requires match or filter')
             method = 'DELETE'
-            path = `${table}?${match || filter}&select=${select || '*'}`
+            path = `${table}?${match || encodePostgrestFragment(filter)}&select=${select || '*'}`
           } else {
             path = `${table}?select=${select || '*'}`
-            if (filter) path += `&${filter}`
+            if (filter) path += `&${encodePostgrestFragment(filter)}`
             if (order) path += `&order=${order}`
             if (limit) path += `&limit=${limit}`
           }
 
           const { resp, body: data } = await supabaseRest(path, { method, body })
+          if (!resp.ok) console.warn('[api/data] Supabase upstream error:', { status: resp.status, path, body: data })
           return sendJson(res, resp.ok ? 200 : resp.status, {
             success: resp.ok,
             data: Array.isArray(data) ? data : (data ? [data] : []),
@@ -214,10 +219,14 @@ function localSupabaseApi(env) {
           const session = await verifyToken({ SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY, VITE_SUPABASE_ANON_KEY: env.VITE_SUPABASE_ANON_KEY }, token);
           if (!session) return sendJson(res, 401, { success: false, error: 'Authentication required' });
           const { order_id, file_name, file_type, file_size, base64 } = await readJsonBody(req);
-          if (!order_id || !file_name || !base64) return sendJson(res, 400, { success: false, error: 'Missing required fields' });
+          const cleanOrderId = String(order_id || '').trim();
+          console.log('[FILES] env url', supabaseUrl);
+          console.log('[FILES] upload orderId', cleanOrderId);
+          if (!cleanOrderId || !file_name || !base64) return sendJson(res, 400, { success: false, error: 'Missing required fields' });
           const timestamp = Date.now();
           const safeName = String(file_name).replace(/[^a-zA-Z0-9._-]/g, '_');
-          const storagePath = `${order_id}/${timestamp}-${safeName}`;
+          const storagePath = `${cleanOrderId}/${timestamp}-${safeName}`;
+          console.log('[FILES] upload storage path', storagePath);
           const binaryStr = atob(base64.split(',')[1] || base64);
           const bytes = new Uint8Array(binaryStr.length);
           for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
@@ -230,7 +239,7 @@ function localSupabaseApi(env) {
           const { resp: metaResp, body: metaBody } = await supabaseRest(`lis_one_order_result_files?select=*`, {
             method: 'POST',
             body: JSON.stringify([{
-              order_id: String(order_id),
+              order_id: cleanOrderId,
               file_name: String(file_name),
               file_type: String(file_type || 'application/octet-stream'),
               file_size: Number(file_size) || 0,
@@ -240,6 +249,7 @@ function localSupabaseApi(env) {
           });
           if (!metaResp.ok) return sendJson(res, metaResp.status, { success: false, error: 'Metadata insert failed', detail: metaBody });
           const inserted = Array.isArray(metaBody) ? metaBody[0] : metaBody;
+          console.log('[FILES] inserted row', inserted);
           return sendJson(res, 200, {
             success: true,
             file: inserted,
@@ -255,9 +265,12 @@ function localSupabaseApi(env) {
         if (!supabaseUrl || !supabaseKey) return sendJson(res, 500, { success: false, error: 'Supabase env missing' });
         try {
           const { order_id } = await readJsonBody(req);
-          if (!order_id) return sendJson(res, 400, { success: false, error: 'order_id is required' });
+          const cleanOrderId = String(order_id || '').trim();
+          console.log('[FILES] env url', supabaseUrl);
+          console.log('[FILES] list orderId', cleanOrderId);
+          if (!cleanOrderId) return sendJson(res, 400, { success: false, error: 'order_id is required' });
           const { resp, body } = await supabaseRest(
-            `lis_one_order_result_files?select=*&order_id=eq.${encodeURIComponent(order_id)}&order=uploaded_at.desc`,
+            `lis_one_order_result_files?select=*&order_id=eq.${encodeURIComponent(cleanOrderId)}&order=uploaded_at.desc`,
             { method: 'GET' }
           );
           if (!resp.ok) return sendJson(res, resp.status, { success: false, error: body });
@@ -265,6 +278,7 @@ function localSupabaseApi(env) {
             ...f,
             public_url: `${supabaseUrl}/storage/v1/object/public/${ORDER_FILE_BUCKET}/${f.storage_path}`
           }));
+          console.log('[FILES] list rows', files);
           return sendJson(res, 200, { success: true, data: files });
         } catch (err) {
           return sendJson(res, 500, { success: false, error: err.message });

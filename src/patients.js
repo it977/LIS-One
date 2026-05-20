@@ -49,8 +49,11 @@ const state = {
   masterPatients: [],
   patientOptions: [],
   pickerCallback: null,
-  historyCache: [],   // grouped per HN for history page
+  historyCache: [],
   historyFiltered: [],
+  acSelectedIndex: -1,
+  acResults: [],
+  acDebounceTimer: null,
 };
 
 const HIS_PATIENT_TABLE = 'HIS_One_Patients';
@@ -160,26 +163,354 @@ function mergePatientSources(masterRows = [], hisRows = []) {
   return [...map.values()].sort((a, b) => String(a.hn).localeCompare(String(b.hn)));
 }
 
-function ensurePatientDatalist() {
-  let list = $('hisPatientOptions');
-  if (!list) {
-    list = document.createElement('datalist');
-    list.id = 'hisPatientOptions';
-    document.body.appendChild(list);
-  }
-  ['patientId', 'pHn'].forEach(id => {
-    const input = $(id);
-    if (input) input.setAttribute('list', 'hisPatientOptions');
-  });
-  return list;
+/* ============================================================
+ * PATIENT AUTOCOMPLETE DROPDOWN (Order page)
+ * Optimized: priority search, column select, cache, abort, virtualize
+ * ============================================================ */
+const AC_MIN_CHARS = 2;
+const AC_DEBOUNCE_MS = 300;
+const AC_LIMIT = 20;
+const AC_VISIBLE_LIMIT = 10;
+const AC_CACHE_TTL = 5 * 60 * 1000;
+const AC_SPINNER_THRESHOLD = 150;
+const AC_SELECT_COLUMNS = 'Patient_ID,First_Name,Last_Name,Gender,Age,Phone_Number';
+
+const acCache = new Map();
+let acAbortController = null;
+let acSpinnerTimer = null;
+let acDropdownHover = false;
+let acVisible = false;
+
+window.currentACRows = [];
+
+function getACDropdown() {
+  return $('patientAutocompleteDropdown');
 }
 
-function renderPatientDatalist(rows = state.patientOptions) {
-  const list = ensurePatientDatalist();
-  list.innerHTML = rows.map(patient => {
-    const label = [patient.name, patient.gender, patient.age].filter(v => v !== '' && v != null).join(' | ');
-    return `<option value="${esc(patient.hn)}" label="${esc(label)}"></option>`;
-  }).join('');
+function positionACDropdown() {
+  const dd = getACDropdown();
+  const input = $('patientId');
+  if (!dd || !input) return;
+  if (dd.parentElement !== document.body) document.body.appendChild(dd);
+  const r = input.getBoundingClientRect();
+  dd.style.setProperty('position', 'fixed', 'important');
+  dd.style.setProperty('top', `${r.bottom + 4}px`, 'important');
+  dd.style.setProperty('left', `${r.left}px`, 'important');
+  dd.style.setProperty('right', 'auto', 'important');
+  dd.style.setProperty('width', `${r.width + 180}px`, 'important');
+  dd.style.setProperty('z-index', '999999', 'important');
+  dd.style.setProperty('margin-top', '0', 'important');
+}
+
+function showACDropdown() {
+  const dd = getACDropdown();
+  if (dd) {
+    acVisible = true;
+    positionACDropdown();
+    dd.style.display = 'block';
+    dd.style.visibility = 'visible';
+    dd.style.opacity = '1';
+  }
+}
+
+function hideACDropdown() {
+  const dd = getACDropdown();
+  acVisible = false;
+  if (dd) {
+    dd.style.display = 'none';
+    dd.innerHTML = '';
+  }
+  state.acSelectedIndex = -1;
+  window.currentACRows = [];
+  if (acSpinnerTimer) { clearTimeout(acSpinnerTimer); acSpinnerTimer = null; }
+}
+
+function showSpinner() {
+  const dd = getACDropdown();
+  if (dd) dd.innerHTML = '<div class="px-3 py-2 text-muted small"><div class="spinner-border spinner-border-sm me-1"></div>ກລັງຄົ້ນຫາ...</div>';
+  showACDropdown();
+}
+
+function selectPatient(patient) {
+  console.log('[AC] selected patient:', patient);
+  if (!patient) return;
+
+  console.log('[AC] filling form for:', patient.hn, patient.name);
+
+  const pid = $('patientId');
+  const pname = $('patientName');
+  const page = $('age');
+  const pgender = $('gender');
+
+  if (pid) pid.value = patient.hn || '';
+  if (pname) pname.value = patient.name || '';
+  if (page) page.value = patient.age ?? '';
+  if (pgender && patient.gender) pgender.value = patient.gender;
+
+  console.log('[AC] form filled - ID:', pid?.value, 'Name:', pname?.value, 'Age:', page?.value, 'Gender:', pgender?.value);
+}
+
+window._acHighlight = function(index) {
+  state.acSelectedIndex = index;
+  const dd = getACDropdown();
+  if (!dd) return;
+  dd.querySelectorAll('.ac-item').forEach((el, i) => {
+    el.classList.toggle('bg-primary-subtle', i === index);
+  });
+};
+
+window._acSelect = function(index) {
+  console.log('[AC] _acSelect called with index:', index);
+  const p = window.currentACRows[index];
+  if (!p) {
+    console.warn('[AC] no patient at index', index);
+    return;
+  }
+  selectPatient(p);
+  hideACDropdown();
+};
+
+function renderACDropdown(rows) {
+  const dd = getACDropdown();
+  console.log('[AC] renderACDropdown: dropdown exists:', !!dd, 'rows:', rows.length);
+  if (!dd) return;
+  if (dd.parentElement !== document.body) document.body.appendChild(dd);
+  positionACDropdown();
+
+  window.currentACRows = rows;
+  state.acResults = rows;
+  state.acSelectedIndex = -1;
+
+  if (!rows.length) {
+    dd.innerHTML = '<div class="px-3 py-2 text-muted small">ບໍ່ພົບຄົນເຈັບ</div>';
+    showACDropdown();
+    console.log('[AC] rendered no results');
+    return;
+  }
+
+  const visible = rows.slice(0, AC_VISIBLE_LIMIT);
+  const total = rows.length;
+
+  const fragment = document.createDocumentFragment();
+  const temp = document.createElement('div');
+  temp.innerHTML = visible.map((p, i) => `
+    <div class="ac-item px-3 py-2 small border-bottom" data-index="${i}" style="cursor:pointer" onmouseenter="window._acHighlight(${i})" onpointerdown="event.preventDefault(); window._acSelect(${i})">
+      <div class="d-flex justify-content-between">
+        <b class="text-primary">${esc(p.hn)}</b>
+        <small class="text-muted">${esc(p.gender || '')} ${p.age ?? ''}</small>
+      </div>
+      <div class="text-truncate">${esc(p.name)}${p.phone ? ' · ' + esc(p.phone) : ''}</div>
+    </div>
+  `).join('');
+  while (temp.firstChild) fragment.appendChild(temp.firstChild);
+
+  dd.innerHTML = '';
+  dd.appendChild(fragment);
+
+  if (total > AC_VISIBLE_LIMIT) {
+    const more = document.createElement('div');
+    more.className = 'px-3 py-1 text-muted small text-center fst-italic';
+    more.textContent = `... ລະ ອີກ ${total - AC_VISIBLE_LIMIT} ລາຍການ`;
+    dd.appendChild(more);
+  }
+
+  showACDropdown();
+  console.log('[AC] dropdown rendered, display:', dd.style.display, 'visibility:', dd.style.visibility);
+};
+
+function buildPriorityFilter(q) {
+  const s = encodeURIComponent(q.trim());
+  return `or=(Patient_ID.ilike.%${s}%,First_Name.ilike.%${s}%,Last_Name.ilike.%${s}%,Phone_Number.ilike.%${s}%)`;
+}
+
+async function searchPatientsAC(query) {
+  const q = (query || '').trim();
+  console.log('[AC] searchPatientsAC called, query:', q, 'length:', q.length);
+  if (q.length < AC_MIN_CHARS) { console.log('[AC] query too short'); return; }
+
+  const cacheKey = q.toLowerCase();
+  const cached = acCache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) {
+    console.log('[AC] cache hit, results:', cached.data.length);
+    renderACDropdown(cached.data);
+    return;
+  }
+
+  if (acAbortController) acAbortController.abort();
+  acAbortController = new AbortController();
+  const signal = acAbortController.signal;
+
+  acSpinnerTimer = setTimeout(() => {
+    if (!signal.aborted) showSpinner();
+  }, AC_SPINNER_THRESHOLD);
+
+  const filter = buildPriorityFilter(q);
+  console.log('[AC] sending API request, filter:', filter);
+
+  try {
+    const res = await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        table: HIS_PATIENT_TABLE,
+        select: AC_SELECT_COLUMNS,
+        filter,
+        order: 'Patient_ID.asc',
+        limit: AC_LIMIT
+      }),
+      signal
+    });
+
+    if (signal.aborted) { console.log('[AC] request aborted'); return; }
+    if (acSpinnerTimer) { clearTimeout(acSpinnerTimer); acSpinnerTimer = null; }
+
+    console.log('[AC] response status:', res.status);
+
+    if (!res.ok) {
+      console.warn('[AC] API error:', res.status);
+      if (query === q) {
+        const dd = getACDropdown();
+        if (dd) dd.innerHTML = '<div class="px-3 py-2 text-danger small">ຄົ້ນຫາລົ້ມເຫຼວ</div>';
+        showACDropdown();
+      }
+      return;
+    }
+
+    const json = await res.json();
+    if (signal.aborted) { console.log('[AC] aborted after response'); return; }
+    if (query !== q) { console.log('[AC] query changed, discarding'); return; }
+
+    const rawData = Array.isArray(json.data) ? json.data : [];
+    console.log('[AC] raw rows:', rawData.length);
+    console.log('[AC] raw row data:', rawData);
+
+    const rows = rawData.map(normalizePatientRow).filter(Boolean);
+    console.log('[AC] normalized rows:', rows.length);
+    console.log('[AC] rows:', rows);
+    if (rows.length) console.log('[AC] first result:', rows[0]);
+
+    // Auto-select if exact HN match found
+    const exactMatch = rows.find(r => String(r.hn || '').toLowerCase() === q.toLowerCase());
+    if (exactMatch) {
+      console.log('[AC] auto exact match found:', exactMatch.hn);
+      selectPatient(exactMatch);
+      hideACDropdown();
+      return;
+    }
+
+    acCache.set(cacheKey, { data: rows, expires: Date.now() + AC_CACHE_TTL });
+    if (acCache.size > 20) {
+      const firstKey = acCache.keys().next().value;
+      acCache.delete(firstKey);
+    }
+
+    console.log('[AC] calling renderACDropdown');
+    renderACDropdown(rows);
+  } catch (e) {
+    if (e.name === 'AbortError') { console.log('[AC] abort error'); return; }
+    if (acSpinnerTimer) { clearTimeout(acSpinnerTimer); acSpinnerTimer = null; }
+    console.error('[AC] search failed:', e);
+    if (query === q) {
+      const dd = getACDropdown();
+      if (dd) dd.innerHTML = '<div class="px-3 py-2 text-danger small">ຄົ້ນຫາລົ້ມເຫຼວ</div>';
+      showACDropdown();
+    }
+  }
+}
+
+function initPatientAutocomplete() {
+  const input = $('patientId');
+  const dd = getACDropdown();
+  console.log('[AC] initPatientAutocomplete: input exists:', !!input, 'dropdown exists:', !!dd);
+  if (!input) {
+    console.warn('[AC] patientId input not found, will retry on DOMContentLoaded');
+    return;
+  }
+
+  if (dd) {
+    dd.addEventListener('mouseenter', () => { acDropdownHover = true; });
+    dd.addEventListener('mouseleave', () => { acDropdownHover = false; });
+  }
+
+  input.addEventListener('input', (e) => {
+    const q = e.target.value.trim();
+    console.log('[AC] input event, value:', q);
+    if (state.acDebounceTimer) clearTimeout(state.acDebounceTimer);
+    if (q.length < AC_MIN_CHARS) { console.log('[AC] too short'); return; }
+    console.log('[AC] scheduling debounce');
+    state.acDebounceTimer = setTimeout(() => searchPatientsAC(q), AC_DEBOUNCE_MS);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    const dd = getACDropdown();
+    if (!dd || dd.style.display === 'none') return;
+    const len = window.currentACRows.length;
+    console.log('[AC] keydown:', e.key, 'selectedIndex:', state.acSelectedIndex, 'len:', len);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      state.acSelectedIndex = state.acSelectedIndex < len - 1 ? state.acSelectedIndex + 1 : 0;
+      dd.querySelectorAll('.ac-item').forEach((el, i) => el.classList.toggle('bg-primary-subtle', i === state.acSelectedIndex));
+      dd.querySelectorAll('.ac-item')[state.acSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      state.acSelectedIndex = state.acSelectedIndex > 0 ? state.acSelectedIndex - 1 : len - 1;
+      dd.querySelectorAll('.ac-item').forEach((el, i) => el.classList.toggle('bg-primary-subtle', i === state.acSelectedIndex));
+      dd.querySelectorAll('.ac-item')[state.acSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (state.acSelectedIndex >= 0 && state.acSelectedIndex < len) {
+        console.log('[AC] Enter selecting index:', state.acSelectedIndex);
+        window._acSelect(state.acSelectedIndex);
+      } else if (len === 1) {
+        console.log('[AC] Enter selecting only result');
+        window._acSelect(0);
+      }
+    }
+  });
+
+  input.addEventListener('blur', (e) => {
+    setTimeout(() => {
+      if (!acDropdownHover) hideACDropdown();
+    }, 250);
+  });
+
+  input.addEventListener('focus', (e) => {
+    const q = e.target.value.trim();
+    if (q.length >= AC_MIN_CHARS) searchPatientsAC(q);
+  });
+
+  document.addEventListener('pointerdown', (e) => {
+    const dd = getACDropdown();
+    if (e.target === input || dd?.contains(e.target)) return;
+    hideACDropdown();
+  });
+
+  window.addEventListener('scroll', () => {
+    const dd = getACDropdown();
+    if (dd && acVisible) positionACDropdown();
+  }, true);
+  window.addEventListener('resize', () => {
+    const dd = getACDropdown();
+    if (dd && acVisible) positionACDropdown();
+  });
+
+  console.log('[AC] initPatientAutocomplete done');
+}
+
+/* ============================================================
+ * INIT — runs immediately if DOM ready, otherwise on DOMContentLoaded
+ * ============================================================ */
+function initAll() {
+  console.log('[patients] initAll called');
+  initPatientAutocomplete();
+  initPickerSearchDebounce();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAll);
+} else {
+  console.log('[patients] DOM already ready, initializing immediately');
+  initAll();
 }
 
 function findPatientByHN(hn) {
@@ -214,7 +545,6 @@ async function refreshPatientOptions(force = false) {
   ]);
   state.masterPatients = masterRows.map(normalizePatientRow).filter(Boolean);
   state.patientOptions = mergePatientSources(masterRows, [...orderHisRows, ...hisTableRows]);
-  renderPatientDatalist(state.patientOptions);
   return state.patientOptions;
 }
 
@@ -328,17 +658,11 @@ document.addEventListener('change', (e) => {
   if (e.target?.id === 'pHn') {
     fillPatientFields('modal', findPatientByHN(e.target.value));
   }
-  if (e.target?.id === 'patientId') {
-    fillPatientFields('order', findPatientByHN(e.target.value));
-  }
 });
 
 document.addEventListener('input', (e) => {
   if (e.target?.id === 'pHn') {
     fillPatientFields('modal', findPatientByHN(e.target.value));
-  }
-  if (e.target?.id === 'patientId') {
-    fillPatientFields('order', findPatientByHN(e.target.value));
   }
 });
 
@@ -392,58 +716,76 @@ window.deletePatient = async function(id) {
 window.openPatientPicker = function(callback) {
   state.pickerCallback = callback;
   $('patientPickerSearch').value = '';
-  $('patientPickerResults').innerHTML = '<div class="text-muted text-center py-3 small">ພິມເພື່ອຄົ້ນຫາ HN / ຊື່ / ເບີໂທ ຫຼື ກົດ "ໃໝ່"</div>';
-  refreshPatientOptions().catch(e => console.warn('[patients] options failed', e));
+  $('patientPickerResults').innerHTML = '<div class="text-muted text-center py-3 small">ພິມ 2+ ຕົວອັກສອນເພື່ອຄົ້ນຫາ HN / ຊື່ / ເບີໂທ ຫຼື ກົດ "ໃໝ່"</div>';
   showModal('patientPickerModal');
+  setTimeout(() => $('patientPickerSearch')?.focus(), 300);
 };
-window.searchPatientPicker = async function() {
-  const q = ($('patientPickerSearch').value || '').trim();
-  if (q.length < 1) return;
-  // Server-side ilike on hn OR name OR phone
-  const f = `or=(hn.ilike.*${q}*,name.ilike.*${q}*,phone.ilike.*${q}*)`;
-  const rows = await api.genericFetch('lis_one_patients', { filter: f, order: 'created_at.desc', limit: 30 });
-  if (!rows.length) {
-    $('patientPickerResults').innerHTML = '<div class="text-muted text-center py-3 small">ບໍ່ພົບ — ກົດ "ໃໝ່" ເພື່ອສ້າງຄົນເຈັບ</div>';
-    return;
-  }
-  $('patientPickerResults').innerHTML = `
-    <div class="list-group list-group-flush">
-      ${rows.map(p => `
-        <button type="button" class="list-group-item list-group-item-action" onclick='_pickPatient(${JSON.stringify({id:p.id,hn:p.hn,name:p.name,age:p.age,gender:p.gender,phone:p.phone}).replace(/'/g,"&apos;")})'>
-          <div class="d-flex justify-content-between align-items-center">
-            <div><b class="text-primary">${esc(p.hn)}</b> — ${esc(p.name)}</div>
-            <small class="text-muted">${esc(p.gender || '')} ${p.age ?? ''} ${p.phone ? '· ' + esc(p.phone) : ''}</small>
-          </div>
-        </button>
-      `).join('')}
-    </div>`;
-};
+
+let pickerAbortController = null;
 
 window.searchPatientPicker = async function() {
   const q = ($('patientPickerSearch').value || '').trim();
-  if (q.length < 1) return;
-  const options = await refreshPatientOptions();
-  const needle = q.toLowerCase();
-  const rows = options.filter(p =>
-    (p.hn || '').toLowerCase().includes(needle) ||
-    (p.name || '').toLowerCase().includes(needle) ||
-    (p.phone || '').toLowerCase().includes(needle)
-  ).slice(0, 30);
-  if (!rows.length) {
-    $('patientPickerResults').innerHTML = '<div class="text-muted text-center py-3 small">No patient found</div>';
+  if (q.length < AC_MIN_CHARS) {
+    $('patientPickerResults').innerHTML = '<div class="text-muted text-center py-3 small">ພິມຢ່າງໜ້ອຍ 2 ຕົວອັກສອນ</div>';
     return;
   }
-  $('patientPickerResults').innerHTML = `
-    <div class="list-group list-group-flush">
-      ${rows.map(p => `
-        <button type="button" class="list-group-item list-group-item-action" onclick='_pickPatient(${JSON.stringify({id:p.id,hn:p.hn,name:p.name,age:p.age,gender:p.gender,phone:p.phone}).replace(/'/g,"&apos;")})'>
-          <div class="d-flex justify-content-between align-items-center">
-            <div><b class="text-primary">${esc(p.hn)}</b> - ${esc(p.name)}${p._source !== 'master' ? ' <span class="badge bg-light text-secondary border ms-1">HIS</span>' : ''}</div>
-            <small class="text-muted">${esc(p.gender || '')} ${p.age ?? ''} ${p.phone ? ' - ' + esc(p.phone) : ''}</small>
-          </div>
-        </button>
-      `).join('')}
-    </div>`;
+
+  if (pickerAbortController) pickerAbortController.abort();
+  pickerAbortController = new AbortController();
+  const signal = pickerAbortController.signal;
+
+  $('patientPickerResults').innerHTML = '<div class="text-center py-3 small"><div class="spinner-border spinner-border-sm"></div></div>';
+
+  try {
+    const filter = buildPriorityFilter(q);
+    const res = await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        table: HIS_PATIENT_TABLE,
+        select: AC_SELECT_COLUMNS,
+        filter,
+        order: 'Patient_ID.asc',
+        limit: 20
+      }),
+      signal
+    });
+
+    if (signal.aborted) return;
+
+    if (!res.ok) {
+      $('patientPickerResults').innerHTML = '<div class="text-danger text-center py-3 small">ຄົ້ນຫາລົ້ມເຫຼວ</div>';
+      return;
+    }
+
+    const json = await res.json();
+    if (signal.aborted) return;
+
+    const rows = (Array.isArray(json.data) ? json.data : [])
+      .map(normalizePatientRow)
+      .filter(Boolean);
+
+    if (!rows.length) {
+      $('patientPickerResults').innerHTML = '<div class="text-muted text-center py-3 small">ບໍ່ພົບ — ກົດ "ໃໝ່" ເພື່ອສ້າງຄົນເຈັບ</div>';
+      return;
+    }
+
+    $('patientPickerResults').innerHTML = `
+      <div class="list-group list-group-flush">
+        ${rows.map(p => `
+          <button type="button" class="list-group-item list-group-item-action" onclick='_pickPatient(${JSON.stringify({id:p.id,hn:p.hn,name:p.name,age:p.age,gender:p.gender,phone:p.phone}).replace(/'/g,"&apos;")})'>
+            <div class="d-flex justify-content-between align-items-center">
+              <div><b class="text-primary">${esc(p.hn)}</b> — ${esc(p.name)}</div>
+              <small class="text-muted">${esc(p.gender || '')} ${p.age ?? ''} ${p.phone ? '· ' + esc(p.phone) : ''}</small>
+            </div>
+          </button>
+        `).join('')}
+      </div>`;
+  } catch (e) {
+    if (e.name === 'AbortError') return;
+    console.warn('[patients] picker search failed:', e);
+    $('patientPickerResults').innerHTML = '<div class="text-danger text-center py-3 small">ຄົ້ນຫາລົ້ມເຫຼວ</div>';
+  }
 };
 window._pickPatient = function(p) {
   if (state.pickerCallback) state.pickerCallback(p);
@@ -451,10 +793,21 @@ window._pickPatient = function(p) {
   hideModal('patientPickerModal');
 };
 window.createPatientFromPicker = async function() {
-  // Pre-fill modal then open
   await window.openPatientModal(null);
-  // patientModal must appear on top; bootstrap stacks correctly
 };
+
+function initPickerSearchDebounce() {
+  const input = $('patientPickerSearch');
+  if (!input) return;
+  let timer = null;
+  input.addEventListener('input', () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => window.searchPatientPicker(), AC_DEBOUNCE_MS);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); window.searchPatientPicker(); }
+  });
+}
 
 /* ============================================================
  * PATIENT HISTORY PAGE (was legacy stub)
@@ -692,10 +1045,5 @@ function statusBadge(s) {
   const c = v === 'Completed' ? 'success' : v === 'Cancelled' ? 'danger' : v === 'Received' ? 'info' : 'secondary';
   return `<span class="badge bg-${c}">${esc(v)}</span>`;
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  ensurePatientDatalist();
-  refreshPatientOptions().catch(e => console.warn('[patients] initial options failed', e));
-});
 
 console.log('[patients.js] loaded');

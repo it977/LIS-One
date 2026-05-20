@@ -51,8 +51,31 @@ function handleAuthFailure(message) {
   }
 }
 
+const API_TIMEOUT_MS = 10000;
+const DEBUG_PERF = true;
+
+function perfMark(label) {
+  if (!DEBUG_PERF || typeof performance === 'undefined') return;
+  performance.mark(`api-start-${label}`);
+}
+function perfMeasure(label) {
+  if (!DEBUG_PERF || typeof performance === 'undefined') return;
+  const startMark = `api-start-${label}`;
+  if (!performance.getEntriesByName(startMark).length) return;
+  performance.mark(`api-end-${label}`);
+  performance.measure(`api-${label}`, startMark, `api-end-${label}`);
+  const entries = performance.getEntriesByName(`api-${label}`);
+  const duration = entries[entries.length - 1]?.duration || 0;
+  if (duration > 2000) {
+    console.warn(`[API SLOW] ${label}: ${duration.toFixed(0)}ms`);
+  }
+  performance.clearMarks(startMark);
+  performance.clearMarks(`api-end-${label}`);
+  performance.clearMeasures(`api-${label}`);
+}
+
 async function fetchWithTimeout(resource, options = {}) {
-  const { timeout = 8000 } = options;
+  const { timeout = API_TIMEOUT_MS } = options;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {
@@ -69,6 +92,8 @@ async function fetchWithTimeout(resource, options = {}) {
 }
 
 async function fetchProxy(table, options = {}) {
+  const label = table;
+  perfMark(label);
   try {
     const res = await fetchWithTimeout('/api/data', {
       method: 'POST',
@@ -77,28 +102,22 @@ async function fetchProxy(table, options = {}) {
     });
     if (!res.ok) return { success: false, data: [], error: await res.text() };
     const json = await res.json();
+    perfMeasure(label);
     return { success: json.success, data: Array.isArray(json.data) ? json.data : [], error: json.error };
   } catch (e) {
+    perfMeasure(label);
     if (e.name === 'AbortError') {
-      console.warn(`[API] Fetch timeout for ${table}`);
-      if (typeof Swal !== 'undefined') {
-        Swal.fire({
-          icon: 'error',
-          title: 'Request timeout',
-          toast: true,
-          position: 'top-end',
-          timer: 2200,
-          showConfirmButton: false
-        });
-      }
+      console.warn(`[API] Timeout for ${table} (${API_TIMEOUT_MS}ms)`);
     } else {
-      console.error('API Fetch Error:', e);
+      console.error('[API] Fetch Error:', e.message);
     }
-    return { success: false, data: [] };
+    return { success: false, data: [], error: e.message };
   }
 }
 
 async function mutateProxy(action, table, payload, match, functionName) {
+  const label = `${action}_${table || functionName || 'rpc'}`;
+  perfMark(label);
   try {
     if (action !== 'select' && !hasValidAuthToken()) {
       const msg = 'Session ໝົດອາຍຸ ຫຼື ບໍ່ມີ token. ກະລຸນາ login ໃໝ່ແລ້ວລອງບັນທຶກອີກຄັ້ງ.';
@@ -112,6 +131,7 @@ async function mutateProxy(action, table, payload, match, functionName) {
     });
     let json = {};
     try { json = await res.json(); } catch {}
+    perfMeasure(label);
     if (res.status === 401) {
       handleAuthFailure(json.error || 'Session expired. Please login again.');
       return { success: false, error: json.error || 'Authentication required', status: res.status };
@@ -124,7 +144,8 @@ async function mutateProxy(action, table, payload, match, functionName) {
     }
     return { success: res.ok && json.success !== false, ...json };
   } catch (e) { 
-    if (e.name === 'AbortError') return { success: false, error: 'Timeout' };
+    perfMeasure(label);
+    if (e.name === 'AbortError') return { success: false, error: 'Request timeout' };
     return { success: false, error: e.message }; 
   }
 }
@@ -142,11 +163,12 @@ export async function loginUser(username, password) {
 }
 
 export async function getDashboardData(sDate, eDate) {
-  let filterStr = "";
-  if (sDate) filterStr += `order_datetime=gte.${sDate}T00:00:00`;
-  if (eDate) filterStr += `&order_datetime=lte.${eDate}T23:59:59`;
+  const filters = [];
+  if (sDate) filters.push(`order_datetime=gte.${sDate}T00:00:00`);
+  if (eDate) filters.push(`order_datetime=lte.${eDate}T23:59:59.999`);
+  const filterStr = filters.join('&');
   
-  const res = await fetchProxy('lis_one_test_orders', { filter: filterStr });
+  const res = await fetchProxy('lis_one_test_orders', { filter: filterStr, limit: 500 });
   const orders = res.data;
   
   return { 
@@ -161,14 +183,14 @@ export async function getDashboardData(sDate, eDate) {
   };
 }
 
-export async function getRecentOrders() { const res = await fetchProxy('lis_one_test_orders', { order: 'order_datetime.desc', limit: 200 }); return res.data; }
+export async function getRecentOrders() { const res = await fetchProxy('lis_one_test_orders', { order: 'order_datetime.desc', limit: 100 }); return res.data; }
 export async function getSettings() { const res = await fetchProxy('lis_one_settings', { order: 'id.asc' }); return res.data; }
-export async function getStockMaster() { const res = await fetchProxy('lis_one_stock_master', { order: 'name.asc' }); return res.data; }
-export async function getInventoryLots() { const res = await fetchProxy('lis_one_inventory_lots', { order: 'exp_date.asc' }); return res.data; }
-export async function getTestMaster() { const res = await fetchProxy('lis_one_test_master', { order: 'name.asc' }); return res.data; }
-export async function getAllTestPackages() { const res = await fetchProxy('lis_one_test_packages'); return res.data; }
-export async function getTestReagentMapping() { const res = await fetchProxy('lis_one_test_reagent_mapping', { order: 'test_name.asc' }); return res.data; }
-export async function getTestResults() { const res = await fetchProxy('lis_one_test_results', { order: 'order_id.asc', limit: 10000 }); return res.data; }
+export async function getStockMaster() { const res = await fetchProxy('lis_one_stock_master', { order: 'name.asc', limit: 200 }); return res.data; }
+export async function getInventoryLots() { const res = await fetchProxy('lis_one_inventory_lots', { order: 'exp_date.asc', limit: 200 }); return res.data; }
+export async function getTestMaster() { const res = await fetchProxy('lis_one_test_master', { order: 'category.asc,name.asc' }); return res.data; }
+export async function getAllTestPackages() { const res = await fetchProxy('lis_one_test_packages', { limit: 100 }); return res.data; }
+export async function getTestReagentMapping() { const res = await fetchProxy('lis_one_test_reagent_mapping', { order: 'test_name.asc', limit: 500 }); return res.data; }
+export async function getTestResults() { const res = await fetchProxy('lis_one_test_results', { order: 'order_id.asc', limit: 500 }); return res.data; }
 
 export async function updateOrder(orderId, changes) {
   return mutateProxy('update', 'lis_one_test_orders', changes, `order_id=eq.${encodeURIComponent(orderId)}`);
@@ -225,7 +247,7 @@ export async function getTestParameters() {
 
 /* ============= STOCK TRANSACTIONS ============= */
 export async function getStockTransactions(filterStr = '') {
-  const opts = { order: 'created_at.desc', limit: 5000 };
+  const opts = { order: 'created_at.desc', limit: 500 };
   if (filterStr) opts.filter = filterStr;
   const res = await fetchProxy('lis_one_stock_transactions', opts);
   return res.data;
@@ -251,6 +273,55 @@ export async function writeAudit(user_name, action, target, details) {
     target: String(target || ''),
     details: details == null ? null : (typeof details === 'string' ? details : JSON.stringify(details))
   }]);
+}
+
+/* ============= STATIC DATA CACHE ============= */
+const staticCache = {};
+const STATIC_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+export async function getStaticData(type) {
+  if (staticCache[type] && staticCache[type].expires > Date.now()) {
+    return staticCache[type].data;
+  }
+  let data;
+  switch (type) {
+    case 'departments':
+    case 'doctors':
+    case 'visitTypes':
+    case 'insites':
+    case 'senders':
+    case 'labDests': {
+      const settings = await getSettings();
+      const typeMap = {
+        departments: 'Department',
+        doctors: 'Doctor',
+        visitTypes: 'VisitType',
+        insites: 'Insite',
+        senders: 'Sender',
+        labDests: 'LabDest'
+      };
+      data = settings.filter(s => s.type === typeMap[type]).map(s => s.value);
+      break;
+    }
+    case 'testCategories': {
+      const tests = await getTestMaster();
+      data = [...new Set(tests.map(t => t.category).filter(Boolean))];
+      break;
+    }
+    case 'packages': {
+      data = await getAllTestPackages();
+      break;
+    }
+    default:
+      data = [];
+  }
+  staticCache[type] = { data, expires: Date.now() + STATIC_CACHE_TTL };
+  return data;
+}
+
+export function invalidateStaticCache(type) {
+  if (type) delete staticCache[type];
+  else Object.keys(staticCache).forEach(k => delete staticCache[k]);
 }
 
 /* ============= RESULT ENTRY ============= */
@@ -315,6 +386,8 @@ async function fileToBase64(file) {
 
 export async function uploadOrderFile(orderId, file) {
   try {
+    const cleanOrderId = String(orderId || '').trim();
+    console.log('[FILES] upload orderId', cleanOrderId);
     if (!hasValidAuthToken()) {
       const msg = 'Session ໝົດອາຍຸ. ກະລຸນາ login ໃໝ່.';
       handleAuthFailure(msg);
@@ -325,7 +398,7 @@ export async function uploadOrderFile(orderId, file) {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        order_id: String(orderId),
+        order_id: cleanOrderId,
         file_name: file.name,
         file_type: file.type || 'application/octet-stream',
         file_size: file.size,
@@ -333,10 +406,12 @@ export async function uploadOrderFile(orderId, file) {
       })
     });
     const json = await res.json();
+    console.log('[FILES] upload response', json);
     if (res.status === 401) {
       handleAuthFailure(json.error || 'Session expired.');
       return { success: false, error: json.error, status: res.status };
     }
+    console.log('[FILES] metadata inserted', json.file || json);
     return { success: res.ok && json.success !== false, ...json };
   } catch (e) {
     return { success: false, error: e.message };
@@ -345,13 +420,16 @@ export async function uploadOrderFile(orderId, file) {
 
 export async function getOrderFiles(orderId) {
   try {
+    const cleanOrderId = String(orderId || '').trim();
+    console.log('[FILES] list orderId', cleanOrderId);
     const res = await fetchWithTimeout('/api/list-files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: String(orderId) })
+      body: JSON.stringify({ order_id: cleanOrderId })
     });
     if (!res.ok) return { success: false, data: [], error: await res.text() };
     const json = await res.json();
+    console.log('[FILES] rows', json.data || []);
     return { success: json.success, data: Array.isArray(json.data) ? json.data : [], error: json.error };
   } catch (e) {
     return { success: false, data: [] };

@@ -6132,3 +6132,56 @@ body {
   border-color: #fb7185;
   color: #9f1239;
 }
+
+/* Patient Autocomplete Dropdown */
+#orderForm .col-md-3.col-12.position-relative {
+  position: relative !important;
+  overflow: visible !important;
+}
+
+#patientAutocompleteDropdown {
+  position: fixed;
+  z-index: 999999 !important;
+  display: block;
+  background: #fff !important;
+  color: #111827 !important;
+  opacity: 1 !important;
+  visibility: visible;
+  border: 1px solid #ddd !important;
+  border-radius: 0.375rem !important;
+  box-shadow: 0 12px 30px rgba(0,0,0,.18) !important;
+  max-height: 280px;
+  overflow-y: auto !important;
+  pointer-events: auto;
+  margin-top: 4px !important;
+}
+
+#patientAutocompleteDropdown .ac-item {
+  background: #fff !important;
+  color: #111827 !important;
+  opacity: 1 !important;
+}
+
+#patientAutocompleteDropdown .ac-item * {
+  color: inherit;
+  opacity: 1 !important;
+}
+
+#patientAutocompleteDropdown .ac-item:hover,
+#patientAutocompleteDropdown .ac-item.active,
+#patientAutocompleteDropdown .ac-item.bg-primary-subtle {
+  background: #f3e8ff !important;
+  color: #5b21b6 !important;
+}
+
+@media print {
+  #dashboard .card,
+  #dashboard .dashboard-card,
+  #dashboard .chart-card,
+  #dashboard canvas,
+  #dashboard table,
+  #dashboard .summary-report {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}

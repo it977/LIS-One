@@ -1,7 +1,7 @@
 /* ============================================================
  * LIS-One CRUD MODULE
  * Implements all CRUD operations for Inventory, Maintenance,
- * Test Master, Mapping, Packages, Settings, Parameters.
+ * Test Master, Mapping, Packages, Settings.
  * Wires up the previously stubbed window.* functions.
  * ============================================================ */
 import * as api from './api.js';
@@ -63,7 +63,7 @@ const hideModal = (id) => {
 
 /* ---------- shared cached lists ---------- */
 const cache = window.__lisCache || (window.__lisCache = {});
-for (const key of ['reagents', 'inventory', 'stockTransactions', 'testMaster', 'parameters', 'packages', 'settings']) {
+for (const key of ['reagents', 'inventory', 'stockTransactions', 'testMaster', 'packages', 'settings']) {
   if (!Array.isArray(cache[key])) cache[key] = [];
 }
 
@@ -2407,7 +2407,7 @@ window.deleteSetting = async function(id) {
 };
 
 /* ============================================================
- * TEST PARAMETERS
+ * Result Entry frame (iframe reload)
  * ============================================================ */
 window.toggleParamInputFields = function() {
   const t = $('spInputType').value;
@@ -2513,7 +2513,6 @@ function wrapShowPage() {
   const wrapped = function(e, id) {
     orig(e, id);
     if (id === 'maintenancePage')    window.loadMaintenanceTable?.();
-    if (id === 'paramSetupPage')     window.loadParamSetupData?.();
     if (id === 'resultEntryPage')    { window.loadResultEntryOrders?.(); document.getElementById('reListView')?.classList.remove('d-none'); document.getElementById('reWorkspaceView')?.classList.add('d-none'); }
     if (id === 'auditLogPage')       window.loadAuditLog?.();
     if (id === 'patientMasterPage')  window.loadPatientMaster?.();
