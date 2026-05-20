@@ -1,11 +1,11 @@
 import { verifyToken, extractToken, hasPermission } from '../_lib/auth.js';
 import { checkRateLimit, getClientIp } from '../_lib/rate-limit.js';
 
-export async function onRequestGet({ request }) {
-  return new Response(JSON.stringify({ status: 'API_ACTIVE', action: 'health' }), {
-    headers: { 'Content-Type': 'application/json' }
-  });
-}
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+};
 
 const READ_ONLY_HIS_TABLES = new Set(['HIS_One_Patients']);
 
@@ -16,19 +16,49 @@ const allowedTable = (table, action = 'select') =>
 
 const ACTION_WHITELIST = new Set(['select', 'insert', 'update', 'delete', 'rpc']);
 
-function json(body, status = 200) {
+function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
-    status, headers: { 'Content-Type': 'application/json' }
+    status,
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS, ...extraHeaders }
   });
 }
 
-export async function onRequestPost({ request, env }) {
+async function readJsonBody(request) {
+  try {
+    return await request.json();
+  } catch (err) {
+    console.error('[api/data] Invalid JSON body', { error: err.message });
+    return {};
+  }
+}
+
+async function readResponseBody(response) {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    return text;
+  }
+}
+
+function encodePostgrestFragment(fragment) {
+  return String(fragment || '').replace(/%(?![0-9A-Fa-f]{2})/g, '%25');
+}
+
+export async function onRequest(context) {
+  const { request, env = {} } = context;
+
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
+  if (request.method === 'GET') return json({ status: 'API_ACTIVE', action: 'health' });
+  if (request.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
+
   try {
     const ip = getClientIp(request);
+    const requestBody = await readJsonBody(request);
     const {
       action = 'select',
       table, select, filter, order, limit, payload, match, functionName
-    } = await request.json();
+    } = requestBody || {};
 
     if (!ACTION_WHITELIST.has(action)) {
       return json({ success: false, error: 'Invalid action' }, 400);
@@ -67,7 +97,16 @@ export async function onRequestPost({ request, env }) {
 
     const url = env.SUPABASE_URL || 'https://erueurkqzmtdefszqons.supabase.co';
     const key = env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY;
-    if (!key) return json({ success: false, error: 'Database key not configured' }, 500);
+    console.log('[api/data] env', { hasUrl: Boolean(url), hasKey: Boolean(key), usingDefaultUrl: !env.SUPABASE_URL });
+    if (!url || !key) {
+      console.error('[api/data] Supabase env missing', {
+        hasUrl: Boolean(url),
+        hasServiceRole: Boolean(env.SUPABASE_SERVICE_ROLE_KEY),
+        hasAnon: Boolean(env.SUPABASE_ANON_KEY),
+        hasViteAnon: Boolean(env.VITE_SUPABASE_ANON_KEY)
+      });
+      return json({ success: false, error: 'Database key not configured' }, 500);
+    }
 
     let queryUrl = action === 'rpc'
       ? `${url}/rest/v1/rpc/${functionName}`
@@ -91,21 +130,32 @@ export async function onRequestPost({ request, env }) {
     } else if (action === 'update') {
       if (!match && !filter) return json({ success: false, error: 'update requires match or filter' }, 400);
       method = 'PATCH';
-      queryUrl += `?${match || filter}&select=${select || '*'}`;
+      queryUrl += `?${encodePostgrestFragment(match || filter)}&select=${select || '*'}`;
       body = JSON.stringify(payload);
     } else if (action === 'delete') {
       if (!match && !filter) return json({ success: false, error: 'delete requires match or filter' }, 400);
       method = 'DELETE';
-      queryUrl += `?${match || filter}&select=${select || '*'}`;
+      queryUrl += `?${encodePostgrestFragment(match || filter)}&select=${select || '*'}`;
     } else {
       queryUrl += `?select=${select || '*'}`;
-      if (filter) queryUrl += `&${filter}`;
+      if (filter) queryUrl += `&${encodePostgrestFragment(filter)}`;
       if (order)  queryUrl += `&order=${order}`;
       if (limit)  queryUrl += `&limit=${limit}`;
     }
 
     const response = await fetch(queryUrl, { method, headers, body });
-    const data = await response.json().catch(() => null);
+    const data = await readResponseBody(response);
+
+    if (!response.ok) {
+      console.error('[api/data] Supabase upstream error', {
+        status: response.status,
+        action,
+        table,
+        functionName,
+        queryUrl,
+        body: data
+      });
+    }
 
     return json({
       success: response.ok,
@@ -113,6 +163,10 @@ export async function onRequestPost({ request, env }) {
       error: response.ok ? undefined : data
     }, response.ok ? 200 : response.status);
   } catch (err) {
+    console.error('[api/data] Unhandled error', {
+      message: err.message,
+      stack: err.stack
+    });
     return json({ success: false, error: err.message }, 500);
   }
 }
