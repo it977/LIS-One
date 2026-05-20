@@ -51,13 +51,13 @@ export async function onRequest({ request, env }) {
     console.log('[FILES] list orderId', cleanOrderId);
     if (!cleanOrderId) return json({ success: false, error: 'order_id is required' }, 400);
 
-    const { resp, body } = await supabaseRest(
+    const { resp, body: responseBody } = await supabaseRest(
       env,
       `lis_one_order_result_files?select=*&order_id=eq.${encodeURIComponent(cleanOrderId)}&order=uploaded_at.desc`
     );
-    if (!resp.ok) return json({ success: false, error: body }, resp.status);
+    if (!resp.ok) return json({ success: false, error: responseBody }, resp.status);
 
-    const rows = (Array.isArray(body) ? body : []).map(file => ({
+    const rows = (Array.isArray(responseBody) ? responseBody : []).map(file => ({
       ...file,
       public_url: `${url}/storage/v1/object/public/${ORDER_FILE_BUCKET}/${file.storage_path}`
     }));
