@@ -66,9 +66,75 @@ const cache = window.__lisCache || (window.__lisCache = {});
 for (const key of ['reagents', 'inventory', 'stockTransactions', 'testMaster', 'packages', 'settings']) {
   if (!Array.isArray(cache[key])) cache[key] = [];
 }
+if (!cache.__tableColumns || typeof cache.__tableColumns !== 'object') cache.__tableColumns = {};
+
+const REAGENT_CATEGORY_SETTING_PREFIX = 'ReagentCategory:';
+const FALLBACK_TABLE_COLUMNS = {
+  lis_one_stock_master: new Set(['id','name','unit','created_at','reagent_id','reagent_name','low_threshold','default_unit_type','default_tests_per_unit','default_low_threshold_tests']),
+  lis_one_inventory_lots: new Set(['id','lot_id','reagent_id','reagent_name','lot_no','supplier','location','receive_date','exp_date','qty','qty_remaining','created_at','current_qty','initial_qty','storage_location','lot_number','component_type','unit_type','unit_qty','tests_per_unit','total_tests','used_tests','remaining_tests','low_threshold_tests','status']),
+  lis_one_stock_transactions: new Set(['id','reagent_id','reagent_name','type','qty','note','user_name','created_at','component_type','transaction_type','qty_tests','qty_unit','reference_type','reference_id','created_by','lot_no','movement_date'])
+};
+
+function knownColumnsForTable(table) {
+  if (Array.isArray(cache.__tableColumns[table])) return new Set(cache.__tableColumns[table]);
+  const source = table === 'lis_one_stock_master' ? cache.reagents
+    : table === 'lis_one_inventory_lots' ? cache.inventory
+    : table === 'lis_one_stock_transactions' ? cache.stockTransactions
+    : null;
+  const sample = Array.isArray(source) ? source.find(row => row && typeof row === 'object') : null;
+  return sample ? new Set(Object.keys(sample)) : FALLBACK_TABLE_COLUMNS[table] || null;
+}
+
+function rememberTableColumns(table, rows = []) {
+  const sample = Array.isArray(rows) ? rows.find(row => row && typeof row === 'object') : null;
+  if (sample) cache.__tableColumns[table] = Object.keys(sample);
+}
+
+function tableSupportsColumn(table, column) {
+  const columns = knownColumnsForTable(table);
+  return !columns || columns.has(column);
+}
+
+function payloadForTable(table, payload = {}) {
+  const columns = knownColumnsForTable(table);
+  if (!columns) return payload;
+  return Object.fromEntries(Object.entries(payload).filter(([key]) => columns.has(key)));
+}
+
+async function loadReagentCategorySettings(force = false) {
+  if (force || !Array.isArray(cache.settings) || !cache.settings.length) {
+    cache.settings = await api.getSettings();
+  }
+  return (cache.settings || []).filter(s => String(s.type || '').startsWith(REAGENT_CATEGORY_SETTING_PREFIX));
+}
+
+async function applyStoredReagentCategories(rows = []) {
+  const settings = await loadReagentCategorySettings().catch(() => []);
+  const byId = new Map(settings.map(s => [String(s.type).slice(REAGENT_CATEGORY_SETTING_PREFIX.length), s.value]));
+  return rows.map(row => {
+    const stored = byId.get(String(row.id));
+    return stored ? { ...row, category: normalizeCategory(stored) } : row;
+  });
+}
+
+async function saveStoredReagentCategory(id, category) {
+  const type = `${REAGENT_CATEGORY_SETTING_PREFIX}${id}`;
+  const value = normalizeCategory(category || 'Other');
+  const settings = await loadReagentCategorySettings(true).catch(() => []);
+  const existing = settings.find(s => String(s.type) === type);
+  const res = existing
+    ? await api.genericUpdate('lis_one_settings', existing.id, { value })
+    : await api.genericInsert('lis_one_settings', { type, value });
+  if (res.success) {
+    cache.settings = await api.getSettings().catch(() => cache.settings);
+  }
+  return res;
+}
 
 async function refreshReagentCache() {
-  cache.reagents = await api.getStockMaster();
+  const rows = await api.getStockMaster();
+  rememberTableColumns('lis_one_stock_master', rows);
+  cache.reagents = await applyStoredReagentCategories(rows);
   return cache.reagents;
 }
 
@@ -706,21 +772,21 @@ window.toggleInventoryCategoryGroup = function(key) {
 };
 
 async function insertWithSchemaFallback(table, fullPayload, fallbackPayload) {
-  const res = await api.genericInsert(table, fullPayload);
+  const res = await api.genericInsert(table, payloadForTable(table, fullPayload));
   if (res.success) return res;
   if (res.status === 401 || res.status === 403) return res;
   if (!fallbackPayload || !Object.keys(fallbackPayload).length) return res;
   console.warn(`[CRUD] ${table} full insert failed; retrying minimal payload`, res.error);
-  return api.genericInsert(table, fallbackPayload);
+  return api.genericInsert(table, payloadForTable(table, fallbackPayload));
 }
 
 async function updateWithSchemaFallback(table, id, fullPayload, fallbackPayload, idCol = 'id') {
-  const res = await api.genericUpdate(table, id, fullPayload, idCol);
+  const res = await api.genericUpdate(table, id, payloadForTable(table, fullPayload), idCol);
   if (res.success) return res;
   if (res.status === 401 || res.status === 403) return res;
   if (!fallbackPayload || !Object.keys(fallbackPayload).length) return res;
   console.warn(`[CRUD] ${table} full update failed; retrying minimal payload`, res.error);
-  return api.genericUpdate(table, id, fallbackPayload, idCol);
+  return api.genericUpdate(table, id, payloadForTable(table, fallbackPayload), idCol);
 }
 
 function isMissingColumnError(error, column) {
@@ -1173,7 +1239,10 @@ window.loadInventoryTable = async function() {
     api.getStockTransactions(),
     api.getStockMaster()
   ]);
-  cache.reagents = reagents || [];
+  rememberTableColumns('lis_one_inventory_lots', lots);
+  rememberTableColumns('lis_one_stock_transactions', tx);
+  rememberTableColumns('lis_one_stock_master', reagents);
+  cache.reagents = await applyStoredReagentCategories(reagents || []);
   const byId = new Map(cache.reagents.map(r => [Number(r.id), r]));
   const byName = new Map(cache.reagents.map(r => [String(r.name || '').trim().toLowerCase(), r]));
   cache.inventory = (lots || []).map(l => {
@@ -1670,8 +1739,9 @@ function renderReagentTable() {
 // Quick inline category update (no need to open the full edit form).
 window.updateReagentCategory = async function(id, newCategory) {
   const normalized = normalizeCategory(newCategory);
-  const res = await updateWithSchemaFallback('lis_one_stock_master', Number(id),
-    { category: normalized }, {});
+  const res = tableSupportsColumn('lis_one_stock_master', 'category')
+    ? await updateWithSchemaFallback('lis_one_stock_master', Number(id), { category: normalized }, {})
+    : await saveStoredReagentCategory(id, normalized);
   if (res.success) {
     const r = cache.reagents.find(x => Number(x.id) === Number(id));
     if (r) r.category = normalized;
@@ -1743,6 +1813,10 @@ window.saveReagentMaster = async function() {
     ? await updateWithSchemaFallback('lis_one_stock_master', Number(id), fullPayload, payload)
     : await insertWithSchemaFallback('lis_one_stock_master', fullPayload, payload);
   if (res.success) { 
+    const savedId = id || res.data?.[0]?.id;
+    if (savedId && !tableSupportsColumn('lis_one_stock_master', 'category')) {
+      await saveStoredReagentCategory(savedId, fullPayload.category);
+    }
     toast('success','ບັນທຶກສຳເລັດ'); 
     window.cancelEditReagent(); 
     await refreshReagentCache(); 

@@ -831,69 +831,78 @@
 
         <!-- ============ SETTINGS TAB (admin only) ============ -->
         <div id="inventoryTabSettings" class="inventory-tab-panel">
-          <div class="inventory-page-desc">
-            <div class="ipd-lao">ຕັ້ງຄ່າລະບົບ</div>
-            <div class="ipd-sub">ການແບ່ງໝວດ, FIFO, ສູດ usable, ຂີດແຈ້ງເຕືອນ <span class="ipd-en">— Categories, FIFO, formulas, thresholds</span></div>
+          <div class="inventory-page-desc inventory-settings-hero">
+            <div class="ipd-lao">ຕັ້ງຄ່າສາງນ້ຳຢາ</div>
+            <div class="ipd-sub">ຈັດໝວດນ້ຳຢາ, ຜູກ Test ກັບນ້ຳຢາ, ແລະ ກຳນົດເງື່ອນໄຂຫັກ Stock</div>
           </div>
 
           <div class="inventory-section-card">
-            <div class="settings-group-title"><i class="bi bi-collection"></i> ການແບ່ງໝວດ &amp; ການເຊື່ອມໂຍງ <span class="sgt-en">Categories &amp; Mapping</span></div>
+            <div class="settings-group-title inventory-settings-section-title"><i class="bi bi-collection"></i> ນ້ຳຢາ ແລະ ການຫັກ Stock</div>
+            <div class="inventory-settings-helper mb-3">ໃຊ້ສ່ວນນີ້ເພື່ອຈັດລະບຽບນ້ຳຢາ ແລະ ໃຫ້ລະບົບຮູ້ວ່າແຕ່ລະ Test ຕ້ອງຫັກ Stock ແນວໃດ.</div>
             <div class="row g-3">
               <div class="col-xl-6">
-                <div class="lab-settings-panel">
-                  <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="fw-bold"><i class="bi bi-tags me-2 text-primary"></i>ການແບ່ງໝວດ <span class="text-muted small fw-normal">Category Management</span></div>
-                    <button class="btn btn-sm btn-outline-primary" onclick="openReagentModal()">ຈັດການນ້ຳຢາ</button>
+                <div class="lab-settings-panel inventory-settings-card">
+                  <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                      <div class="inventory-settings-card-title"><i class="bi bi-tags"></i>ຈັດການໝວດນ້ຳຢາ</div>
+                      <div class="inventory-settings-helper">ເບິ່ງພາບລວມຂອງນ້ຳຢາແຕ່ລະໝວດ: ມີຈັກລາຍການ, ອັນໃດ Stock ຕ່ຳ ຫຼື ໃກ້ໝົດອາຍຸ.</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary inventory-settings-action" onclick="openReagentModal()">ແກ້ໄຂນ້ຳຢາ</button>
                   </div>
-                  <div class="small text-muted mb-2"><i class="bi bi-info-circle"></i> ກຳນົດໝວດເຊັ່ນ Chemistry, Hematology, Serology ເພື່ອໃຫ້ສະຫຼຸບງ່າຍຂຶ້ນ.</div>
                   <div class="table-responsive">
                     <table class="table table-sm inventory-lab-table mb-0">
-                      <thead class="inventory-sticky-head"><tr><th>ໝວດ</th><th class="text-end">ລາຍການ</th><th class="text-end">ໃກ້ໝົດ</th><th class="text-end">ໃກ້ໝົດອາຍຸ</th><th class="text-end">Usable</th></tr></thead>
+                      <thead class="inventory-sticky-head"><tr><th>ໝວດນ້ຳຢາ</th><th class="text-end">ລາຍການ</th><th class="text-end">Stock ຕ່ຳ</th><th class="text-end">ໃກ້ໝົດອາຍຸ</th><th class="text-end">ໃຊ້ໄດ້</th></tr></thead>
                       <tbody id="inventoryCategorySettingsBody"></tbody>
                     </table>
                   </div>
                 </div>
               </div>
               <div class="col-xl-6">
-                <div class="lab-settings-panel">
-                  <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="fw-bold"><i class="bi bi-diagram-3 me-2 text-primary"></i>ການເຊື່ອມໂຍງ test ⇄ ນ້ຳຢາ <span class="text-muted small fw-normal">Test–Reagent Mapping</span></div>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="showPage(null,'testSetup');setSetupTab('mapping')"><i class="bi bi-link-45deg"></i> ເປີດໜ້າເຊື່ອມໂຍງ</button>
+                <div class="lab-settings-panel inventory-settings-card">
+                  <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                      <div class="inventory-settings-card-title"><i class="bi bi-diagram-3"></i>ຜູກ Test ກັບນ້ຳຢາ</div>
+                      <div class="inventory-settings-helper">ກຳນົດວ່າ Test ແຕ່ລະອັນໃຊ້ນ້ຳຢາໃດ. ຖ້າບໍ່ຜູກ, ລະບົບຈະບໍ່ຫັກ Stock.</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary inventory-settings-action" onclick="showPage(null,'testSetup');setSetupTab('mapping')"><i class="bi bi-link-45deg"></i> ເປີດໜ້າຜູກ Test</button>
                   </div>
                   <div class="mapping-explainer mb-2">
-                    <div class="me-line"><b>ມັນແມ່ນຫຍັງ?</b> ບອກລະບົບວ່າ "test ໃດ" ໃຊ້ "ນ້ຳຢາໃດ"</div>
+                    <div class="me-line"><b>ຕົວຢ່າງ:</b> ຖ້າມີ Order AST/GOT, ລະບົບຈະຫັກນ້ຳຢາ AST ຕາມຈຳນວນທີ່ຕັ້ງໄວ້.</div>
                     <div class="me-example">
                       <span class="me-tag me-test">test: AST/GOT</span>
                       <i class="bi bi-arrow-right"></i>
                       <span class="me-tag me-reagent">ນ້ຳຢາ: AST reagent (R1+R2)</span>
                     </div>
-                    <div class="me-why">ເມື່ອມີ order "AST/GOT" → ລະບົບ <b>ຫັກ stock</b> ໃຫ້ອັດຕະໂນມັດ. <b>ບໍ່ໄດ້ map = ບໍ່ຫັກ.</b></div>
+                    <div class="me-why">ການຜູກນີ້ຊ່ວຍໃຫ້ Stock ຖືກຫັກອັດຕະໂນມັດ ແລະ ບັນທຶກການໃຊ້ນ້ຳຢາຖືກຕ້ອງ.</div>
                   </div>
-                  <div class="small text-muted mb-1"><b>ວິທີໃຊ້:</b> 1️⃣ ກົດ <i>ເປີດໜ້າເຊື່ອມໂຍງ</i> · 2️⃣ ເລືອກ test · 3️⃣ ເລືອກນ້ຳຢາ · 4️⃣ ບັນທຶກ</div>
+                  <div class="inventory-settings-helper mb-2"><b>ວິທີໃຊ້:</b> ເປີດໜ້າຜູກ Test → ເລືອກ Test → ເລືອກນ້ຳຢາ → ບັນທຶກ.</div>
                   <div class="table-responsive">
                     <table class="table table-sm inventory-lab-table mb-0">
-                      <thead class="inventory-sticky-head"><tr><th>ນ້ຳຢາ</th><th>ໝວດ</th><th>ສູດ</th><th class="text-end">ຂີດຕ່ຳ</th></tr></thead>
+                      <thead class="inventory-sticky-head"><tr><th>ນ້ຳຢາ</th><th>ໝວດ</th><th>ສູດ</th><th class="text-end">Stock ຕ່ຳ</th></tr></thead>
                       <tbody id="inventoryMappingSettingsBody"></tbody>
                     </table>
                   </div>
                 </div>
               </div>
               <div class="col-12">
-                <div class="settings-group-title mt-3"><i class="bi bi-sliders2"></i> ກົດເກນຄຳນວນ &amp; ການແຈ້ງເຕືອນ <span class="sgt-en">Calculation rules &amp; alerts</span></div>
+                <div class="settings-group-title inventory-settings-section-title mt-4"><i class="bi bi-sliders2"></i> ກົດການຄຳນວນ ແລະ ແຈ້ງເຕືອນ</div>
+                <div class="inventory-settings-helper mb-3">ຕັ້ງຄ່າວິທີຄິດຈຳນວນທີ່ໃຊ້ໄດ້, ວິທີຫັກ Lot, ແລະ ຈຸດແຈ້ງເຕືອນເມື່ອ Stock ຕ່ຳ.</div>
               </div>
               <div class="col-xl-4">
-                <div class="lab-settings-panel h-100">
-                  <div class="fw-bold mb-2"><i class="bi bi-calculator me-2 text-primary"></i>ສູດ usable tests</div>
+                <div class="lab-settings-panel inventory-settings-card h-100">
+                  <div class="inventory-settings-card-title mb-2"><i class="bi bi-calculator"></i>ກົດການຄຳນວນ</div>
+                  <div class="inventory-settings-helper mb-2">ໃຊ້ຄຳນວນຈຳນວນ Test ທີ່ຍັງເຫຼືອໃຊ້ໄດ້.</div>
                   <select class="form-select form-select-sm mb-2">
                     <option>SINGLE = remaining_tests</option>
                     <option selected>R1/R2/R3 = MIN(component remaining)</option>
                   </select>
-                  <div class="small text-muted"><i class="bi bi-info-circle"></i> ສູດນີ້ໃຊ້ສຳລັບສະແດງຜົນ ບໍ່ມີຜົນຕໍ່ການຫັກ stock ຕົວຈິງ.</div>
+                  <div class="inventory-settings-helper"><i class="bi bi-info-circle"></i> ສູດນີ້ໃຊ້ສຳລັບສະແດງຜົນ ບໍ່ປ່ຽນຂໍ້ມູນ Stock ຕົວຈິງ.</div>
                 </div>
               </div>
               <div class="col-xl-4">
-                <div class="lab-settings-panel h-100">
-                  <div class="fw-bold mb-2"><i class="bi bi-arrow-down-up me-2 text-primary"></i>FIFO &amp; ວັນໝົດອາຍຸ</div>
+                <div class="lab-settings-panel inventory-settings-card h-100">
+                  <div class="inventory-settings-card-title mb-2"><i class="bi bi-arrow-down-up"></i>FIFO ແລະ ວັນໝົດອາຍຸ</div>
+                  <div class="inventory-settings-helper mb-2">ໃຊ້ Lot ເກົ່າ ຫຼື Lot ທີ່ໃກ້ໝົດອາຍຸກ່ອນ ເພື່ອຫຼຸດນ້ຳຢາເສຍ.</div>
                   <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" role="switch" checked>
                     <label class="form-check-label">ຫັກ Lot ໃກ້ໝົດອາຍຸກ່ອນ</label>
@@ -903,11 +912,12 @@
                 </div>
               </div>
               <div class="col-xl-4">
-                <div class="lab-settings-panel h-100">
-                  <div class="fw-bold mb-2"><i class="bi bi-speedometer me-2 text-primary"></i>ຂີດ Stock ຕ່ຳ</div>
+                <div class="lab-settings-panel inventory-settings-card h-100">
+                  <div class="inventory-settings-card-title mb-2"><i class="bi bi-speedometer"></i>ແຈ້ງເຕືອນ Stock ຕ່ຳ</div>
+                  <div class="inventory-settings-helper mb-2">ຖ້ານ້ຳຢາເຫຼືອນ້ອຍກວ່າຄ່ານີ້ ລະບົບຈະເຕືອນໃຫ້ກວດ Stock.</div>
                   <label class="form-label small mb-1">ຂີດເລີ່ມຕົ້ນ (tests)</label>
                   <input type="number" class="form-control form-control-sm mb-2" value="10">
-                  <div class="small text-muted"><i class="bi bi-info-circle"></i> ຄ່າສະເພາະຂອງແຕ່ລະນ້ຳຢາຍັງເອົາມາຈາກຂໍ້ມູນ reagent / lot.</div>
+                  <div class="inventory-settings-helper"><i class="bi bi-info-circle"></i> ຄ່າສະເພາະຂອງແຕ່ລະນ້ຳຢາຍັງອ້າງອີງຈາກ reagent / lot.</div>
                 </div>
               </div>
             </div>

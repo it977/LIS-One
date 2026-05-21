@@ -1697,6 +1697,15 @@ function chartPointLabel(label, value, total) {
     return `${label}: ${Number(value || 0).toLocaleString()} (${percentLabel(value, total)})`;
 }
 
+function compactChartValue(value, isCount = false) {
+    const n = Number(value) || 0;
+    if (isCount) return Math.round(n).toLocaleString();
+    const abs = Math.abs(n);
+    if (abs >= 1000000) return `₭${(n / 1000000).toFixed(abs >= 10000000 ? 0 : 1)}M`;
+    if (abs >= 1000) return `₭${(n / 1000).toFixed(abs >= 100000 ? 0 : 1)}K`;
+    return formatKip(n);
+}
+
 function buildDashboardTestRows(orders, results, testMaster) {
     const masterMap = new Map((testMaster || []).map(t => [String(t.name).trim(), t]));
     const resultGroups = {};
@@ -1860,10 +1869,32 @@ function renderChart(id, type, labels, data, label, colors) {
     const isPie = type === 'pie' || type === 'doughnut';
     const isCountChart = label === 'Patients' || label === 'Orders' || label === 'Count';
     const formatChartValue = (value) => isCountChart ? Number(value || 0).toLocaleString() : formatKip(value);
+    const formatCompactValue = (value) => compactChartValue(value, isCountChart || isPie);
     const total = data.reduce((s, v) => s + (Number(v) || 0), 0);
     const maxValue = Math.max(...data.map(v => Number(v) || 0), 0);
     const isCompactPie = isPie && id !== 'chartLabType';
     const chartType = isPie ? 'doughnut' : type;
+    const centerTotalPlugin = {
+        id: `dashboardCenterTotal-${id}`,
+        afterDraw(chart) {
+            if (!isPie || !total) return;
+            const meta = chart.getDatasetMeta(0);
+            const arc = meta?.data?.[0];
+            const { ctx, chartArea } = chart;
+            const x = arc?.x ?? ((chartArea.left + chartArea.right) / 2);
+            const y = arc?.y ?? ((chartArea.top + chartArea.bottom) / 2);
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '700 11px "Noto Sans Lao", Arial, sans-serif';
+            ctx.fillText('Total', x, y - 8);
+            ctx.fillStyle = '#111827';
+            ctx.font = '800 17px "Noto Sans Lao", Arial, sans-serif';
+            ctx.fillText(formatCompactValue(total), x, y + 10);
+            ctx.restore();
+        }
+    };
 
     dashboardCharts[id] = new Chart(canvas, {
         type: chartType,
@@ -1880,11 +1911,12 @@ function renderChart(id, type, labels, data, label, colors) {
                 borderRadius: isPie ? 0 : 4
             }]
         },
+        plugins: isPie ? [centerTotalPlugin] : [],
         options: {
             responsive: true,
             maintainAspectRatio: false,
             cutout: isPie ? '58%' : undefined,
-            layout: { padding: isPie ? { top: 8, right: 12, bottom: 28, left: 12 } : { top: 34, right: 12, bottom: 8, left: 8 } },
+            layout: { padding: isPie ? { top: 12, right: 14, bottom: 34, left: 14 } : { top: 40, right: 14, bottom: 8, left: 8 } },
             plugins: {
                 legend: {
                     display: isPie && labels.length > 1,
@@ -1896,7 +1928,7 @@ function renderChart(id, type, labels, data, label, colors) {
                         boxHeight: 7,
                         padding: 10,
                         color: '#475569',
-                        font: { size: 10, weight: '600' }
+                        font: { size: 11, weight: '700' }
                     }
                 },
                 tooltip: {
@@ -1912,21 +1944,25 @@ function renderChart(id, type, labels, data, label, colors) {
                         const value = Number(ctx.dataset.data[ctx.dataIndex]) || 0;
                         if (!value) return false;
                         if (!isPie) return true;
-                        return labels.length <= 1;
+                        const pct = total ? (value / total * 100) : 0;
+                        return labels.length <= 3 || pct >= 8;
                     },
                     color: isPie ? '#ffffff' : '#1f2937',
-                    backgroundColor: isPie ? 'rgba(15,23,42,0.72)' : 'rgba(255,255,255,0.9)',
-                    borderRadius: 4,
-                    padding: { top: 2, bottom: 2, left: 4, right: 4 },
+                    backgroundColor: isPie ? 'rgba(49,46,129,0.82)' : 'rgba(255,255,255,0.94)',
+                    borderColor: isPie ? 'rgba(255,255,255,0.55)' : 'rgba(124,58,237,0.22)',
+                    borderWidth: 1,
+                    borderRadius: 6,
+                    padding: { top: 3, bottom: 3, left: 5, right: 5 },
                     clamp: true,
                     clip: false,
                     anchor: isPie ? 'center' : 'end',
                     align: isPie ? (isCompactPie ? 'center' : 'bottom') : 'top',
-                    offset: isPie ? 0 : 8,
-                    font: { size: isPie ? 9 : 11, weight: '700' },
+                    offset: isPie ? 0 : 10,
+                    textAlign: 'center',
+                    font: { size: isPie ? 10 : 12, weight: '800' },
                     formatter(value, ctx) {
                         const lbl = ctx.chart.data.labels[ctx.dataIndex];
-                        return isPie ? chartPointLabel(lbl, value, total) : formatChartValue(value);
+                        return isPie ? `${lbl} ${formatCompactValue(value)}\n${percentLabel(value, total)}` : formatCompactValue(value);
                     }
                 }
             },
@@ -1935,10 +1971,10 @@ function renderChart(id, type, labels, data, label, colors) {
                     beginAtZero: true,
                     suggestedMax: maxValue > 0 ? maxValue * 1.22 : undefined,
                     grace: '18%',
-                    ticks: { font: { size: 10 }, precision: 0, callback: v => formatChartValue(v) },
+                    ticks: { font: { size: 11, weight: '600' }, precision: 0, callback: v => formatCompactValue(v) },
                     grid: { color: 'rgba(148,163,184,0.18)' }
                 },
-                x: { ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true }, grid: { display: false } }
+                x: { ticks: { font: { size: 11, weight: '600' }, maxRotation: 0, autoSkip: true }, grid: { display: false } }
             }
         }
     });

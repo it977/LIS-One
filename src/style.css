@@ -1932,7 +1932,7 @@ h3 {
 }
 
 h5 {
-  font-size: 16px;
+  font-size: 16px !important;
   color: #111827;
   font-weight: 600;
 }
@@ -4991,7 +4991,7 @@ body {
 }
 
 .inventory-attention .ia-row i {
-  font-size: 16px;
+  font-size: 16px !important;
 }
 
 .inventory-attention .ia-action {
@@ -6007,7 +6007,7 @@ body {
 
 /* Tighter page top header */
 #inventoryPage > .d-flex h4 {
-  font-size: 16px;
+  font-size: 16px !important;
 }
 
 #inventoryPage > .d-flex .btn-sm {
@@ -6075,6 +6075,112 @@ body {
 .mapping-edit-banner i {
   color: #475569;
   margin-right: 0.25rem;
+}
+
+/* Inventory Settings: clinic-friendly card layout */
+#inventoryTabSettings {
+  --inv-purple: #7c3aed;
+  --inv-purple-dark: #5b21b6;
+  --inv-purple-soft: #f5f3ff;
+  --inv-purple-border: #ede9fe;
+}
+
+#inventoryTabSettings .inventory-settings-hero {
+  border: 1px solid var(--inv-purple-border);
+  background: linear-gradient(180deg, #fff 0%, #faf5ff 100%);
+  border-left: 3px solid #a78bfa;
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.06);
+}
+
+#inventoryTabSettings .inventory-section-card {
+  padding: 1.1rem;
+  border: 1px solid var(--inv-purple-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.05);
+}
+
+#inventoryTabSettings .row.g-3 {
+  --bs-gutter-x: 1.15rem;
+  --bs-gutter-y: 1.15rem;
+}
+
+#inventoryTabSettings .inventory-settings-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  color: var(--inv-purple-dark) !important;
+  font-size: 16px !important;
+  font-weight: 900;
+}
+
+#inventoryTabSettings .inventory-settings-section-title i {
+  color: var(--inv-purple) !important;
+}
+
+#inventoryTabSettings .inventory-settings-helper {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#inventoryTabSettings .inventory-settings-card {
+  height: 100%;
+  padding: 1.1rem;
+  border-color: var(--inv-purple-border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.045);
+}
+
+#inventoryTabSettings .inventory-settings-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #111827;
+  font-size: 16px !important;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+#inventoryTabSettings .inventory-settings-card-title i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--inv-purple-soft);
+  color: var(--inv-purple) !important;
+  font-size: 15px;
+}
+
+#inventoryTabSettings .inventory-settings-action {
+  flex: 0 0 auto;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+#inventoryTabSettings .mapping-explainer {
+  border-color: var(--inv-purple-border);
+  background: #faf5ff;
+}
+
+#inventoryTabSettings .inventory-lab-table thead th {
+  color: #334155;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+#inventoryTabSettings .form-control,
+#inventoryTabSettings .form-select {
+  border-color: var(--inv-purple-border);
+}
+
+#inventoryTabSettings .form-check-input:checked {
+  background-color: var(--inv-purple);
+  border-color: var(--inv-purple);
 }
 
 .mapping-row-editing td {
