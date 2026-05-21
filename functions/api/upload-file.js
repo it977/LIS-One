@@ -17,7 +17,8 @@ function json(body, status = 200) {
 function supabaseConfig(env) {
   return {
     url: env.SUPABASE_URL || 'https://erueurkqzmtdefszqons.supabase.co',
-    key: env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
+    key: env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY,
+    keySource: env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : (env.SUPABASE_ANON_KEY ? 'anon' : (env.VITE_SUPABASE_ANON_KEY ? 'vite_anon' : 'missing'))
   };
 }
 
@@ -84,14 +85,25 @@ export async function onRequest(context) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (request.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
 
-  const { url, key } = supabaseConfig(env);
+  const { url, key, keySource } = supabaseConfig(env);
   console.log('[FILES] env url', url);
+  console.log('[FILES] upload auth/header diagnostics', {
+    keySource,
+    hasAuthorizationHeader: Boolean(request.headers.get('authorization')),
+    hasXLisTokenHeader: Boolean(request.headers.get('x-lis-token'))
+  });
   if (!key) return json({ success: false, error: 'Supabase env missing' }, 500);
 
   try {
     const token = extractToken(request);
     const session = await verifyToken(env, token);
     if (!session) return json({ success: false, error: 'Authentication required' }, 401);
+    console.log('[FILES] authenticated user', {
+      uid: session.uid || null,
+      username: session.u || session.username || null,
+      email: session.email || null,
+      role: session.r || session.role || null
+    });
 
     const { order_id, file_name, file_type, file_size, base64 } = await readBody(request);
     const cleanOrderId = String(order_id || '').trim();
@@ -121,12 +133,24 @@ export async function onRequest(context) {
       storage_path: storagePath,
       uploaded_by: session.u || session.username || 'unknown'
     };
+    console.log('[FILES] insert payload', {
+      order_id: metaPayload.order_id,
+      file_name: metaPayload.file_name,
+      file_type: metaPayload.file_type,
+      file_size: metaPayload.file_size,
+      storage_path: metaPayload.storage_path,
+      uploaded_by: metaPayload.uploaded_by
+    });
     const meta = await supabaseRest(env, 'lis_one_order_result_files?select=*', {
       method: 'POST',
       body: JSON.stringify(metaPayload)
     });
+    console.log('[FILES] insert response', { status: meta.resp.status, body: meta.body });
     if (!meta.resp.ok) {
       console.error('[FILES] metadata insert failed', { status: meta.resp.status, body: meta.body });
+      await supabaseStorage(env, `object/${ORDER_FILE_BUCKET}/${storagePath}`, { method: 'DELETE' }).catch((cleanupErr) => {
+        console.error('[FILES] storage cleanup after metadata failure failed', cleanupErr);
+      });
       return json({ success: false, error: 'Metadata insert failed', detail: meta.body }, meta.resp.status);
     }
 
@@ -134,6 +158,9 @@ export async function onRequest(context) {
     console.log('[FILES] inserted row', inserted);
     if (!inserted?.id) {
       console.error('[FILES] metadata insert returned no row', { order_id: cleanOrderId, body: meta.body });
+      await supabaseStorage(env, `object/${ORDER_FILE_BUCKET}/${storagePath}`, { method: 'DELETE' }).catch((cleanupErr) => {
+        console.error('[FILES] storage cleanup after empty metadata response failed', cleanupErr);
+      });
       return json({ success: false, error: 'Metadata insert returned no row', detail: meta.body }, 500);
     }
 

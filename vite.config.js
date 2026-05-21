@@ -211,6 +211,28 @@ function localSupabaseApi(env) {
         return { resp, body };
       }
 
+      function normalizeOrderFileStoragePath(value) {
+        let raw = String(value || '').trim();
+        if (!raw || raw === 'undefined' || raw === 'null') return '';
+        try {
+          raw = new URL(raw).pathname;
+        } catch {}
+        try { raw = decodeURIComponent(raw); } catch {}
+        raw = raw.replace(/\\/g, '/').replace(/^\/+/, '');
+        const marker = 'storage/v1/object/';
+        const markerIndex = raw.indexOf(marker);
+        if (markerIndex >= 0) raw = raw.slice(markerIndex + marker.length);
+        const parts = raw.split('/').filter(Boolean);
+        if (['public', 'sign', 'authenticated'].includes(parts[0])) parts.shift();
+        if (parts[0] === ORDER_FILE_BUCKET) parts.shift();
+        return parts.join('/');
+      }
+
+      function isMissingStorageObject(body) {
+        const text = typeof body === 'string' ? body : JSON.stringify(body || {});
+        return /not.?found|does not exist|404/i.test(text);
+      }
+
       server.middlewares.use('/api/upload-file', async (req, res) => {
         if (req.method !== 'POST') return sendJson(res, 405, { success: false, error: 'Method not allowed' });
         if (!supabaseUrl || !supabaseKey) return sendJson(res, 500, { success: false, error: 'Supabase env missing' });
@@ -218,6 +240,17 @@ function localSupabaseApi(env) {
           const token = extractToken(req);
           const session = await verifyToken({ SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY, VITE_SUPABASE_ANON_KEY: env.VITE_SUPABASE_ANON_KEY }, token);
           if (!session) return sendJson(res, 401, { success: false, error: 'Authentication required' });
+          console.log('[FILES] upload auth/header diagnostics', {
+            keySource: env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : (env.SUPABASE_ANON_KEY ? 'anon' : (env.VITE_SUPABASE_ANON_KEY ? 'vite_anon' : 'missing')),
+            hasAuthorizationHeader: Boolean(req.headers.authorization),
+            hasXLisTokenHeader: Boolean(req.headers['x-lis-token'])
+          });
+          console.log('[FILES] authenticated user', {
+            uid: session.uid || null,
+            username: session.u || session.username || null,
+            email: session.email || null,
+            role: session.r || session.role || null
+          });
           const { order_id, file_name, file_type, file_size, base64 } = await readJsonBody(req);
           const cleanOrderId = String(order_id || '').trim();
           console.log('[FILES] env url', supabaseUrl);
@@ -236,24 +269,36 @@ function localSupabaseApi(env) {
             body: bytes
           });
           if (!uploadResp.ok) return sendJson(res, uploadResp.status, { success: false, error: 'Storage upload failed' });
+          const metaPayload = {
+            order_id: cleanOrderId,
+            file_name: String(file_name),
+            file_type: String(file_type || 'application/octet-stream'),
+            file_size: Number(file_size) || 0,
+            storage_path: storagePath,
+            uploaded_by: session.u || session.username || 'unknown'
+          };
+          console.log('[FILES] insert payload', metaPayload);
           const { resp: metaResp, body: metaBody } = await supabaseRest(`lis_one_order_result_files?select=*`, {
             method: 'POST',
-            body: JSON.stringify([{
-              order_id: cleanOrderId,
-              file_name: String(file_name),
-              file_type: String(file_type || 'application/octet-stream'),
-              file_size: Number(file_size) || 0,
-              storage_path: storagePath,
-              uploaded_by: session.username || 'unknown'
-            }])
+            body: JSON.stringify(metaPayload)
           });
-          if (!metaResp.ok) return sendJson(res, metaResp.status, { success: false, error: 'Metadata insert failed', detail: metaBody });
+          console.log('[FILES] insert response', { status: metaResp.status, body: metaBody });
+          if (!metaResp.ok) {
+            await supabaseStorage(`object/${ORDER_FILE_BUCKET}/${storagePath}`, { method: 'DELETE' }).catch((cleanupErr) => {
+              console.error('[FILES] storage cleanup after metadata failure failed', cleanupErr);
+            });
+            return sendJson(res, metaResp.status, { success: false, error: 'Metadata insert failed', detail: metaBody });
+          }
           const inserted = Array.isArray(metaBody) ? metaBody[0] : metaBody;
           console.log('[FILES] inserted row', inserted);
+          const publicUrl = `${supabaseUrl}/storage/v1/object/public/${ORDER_FILE_BUCKET}/${storagePath}`;
+          const fileRow = inserted ? { ...inserted, order_id: String(inserted.order_id || '').trim(), public_url: publicUrl } : null;
           return sendJson(res, 200, {
             success: true,
-            file: inserted,
-            public_url: `${supabaseUrl}/storage/v1/object/public/${ORDER_FILE_BUCKET}/${storagePath}`
+            order_id: cleanOrderId,
+            file: fileRow,
+            data: fileRow ? [fileRow] : [],
+            public_url: publicUrl
           });
         } catch (err) {
           return sendJson(res, 500, { success: false, error: err.message });
@@ -267,6 +312,7 @@ function localSupabaseApi(env) {
           const { order_id } = await readJsonBody(req);
           const cleanOrderId = String(order_id || '').trim();
           console.log('[FILES] env url', supabaseUrl);
+          console.log('[FILES] list key source', env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : (env.SUPABASE_ANON_KEY ? 'anon' : (env.VITE_SUPABASE_ANON_KEY ? 'vite_anon' : 'missing')));
           console.log('[FILES] list orderId', cleanOrderId);
           if (!cleanOrderId) return sendJson(res, 400, { success: false, error: 'order_id is required' });
           const { resp, body } = await supabaseRest(
@@ -274,6 +320,7 @@ function localSupabaseApi(env) {
             { method: 'GET' }
           );
           if (!resp.ok) return sendJson(res, resp.status, { success: false, error: body });
+          console.log('[FILES] list response', { order_id: cleanOrderId, status: resp.status, count: Array.isArray(body) ? body.length : null, rows: body });
           const files = (Array.isArray(body) ? body : []).map(f => ({
             ...f,
             public_url: `${supabaseUrl}/storage/v1/object/public/${ORDER_FILE_BUCKET}/${f.storage_path}`
@@ -293,33 +340,40 @@ function localSupabaseApi(env) {
           const token = extractToken(req);
           const session = await verifyToken({ SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY, VITE_SUPABASE_ANON_KEY: env.VITE_SUPABASE_ANON_KEY }, token);
           if (!session) return sendJson(res, 401, { success: false, error: 'Authentication required' });
-          const { file_id, storage_path } = await readJsonBody(req);
+          const { file_id, storage_path, public_url, path } = await readJsonBody(req);
           if (!file_id) return sendJson(res, 400, { success: false, error: 'file_id is required' });
-          let storagePath = String(storage_path || '').trim();
-          if (!storagePath) {
-            const { resp: lookupResp, body: lookupBody } = await supabaseRest(
-              `lis_one_order_result_files?select=storage_path&id=eq.${encodeURIComponent(file_id)}&limit=1`,
-              { method: 'GET' }
-            );
-            if (!lookupResp.ok) return sendJson(res, lookupResp.status, { success: false, error: 'File lookup failed', detail: lookupBody });
-            storagePath = String((Array.isArray(lookupBody) ? lookupBody[0] : lookupBody)?.storage_path || '').trim();
-          }
-          console.log('[FILES] delete file', { file_id, storagePath });
+          const { resp: lookupResp, body: lookupBody } = await supabaseRest(
+            `lis_one_order_result_files?select=*&id=eq.${encodeURIComponent(file_id)}&limit=1`,
+            { method: 'GET' }
+          );
+          if (!lookupResp.ok) return sendJson(res, lookupResp.status, { success: false, error: 'File lookup failed', detail: lookupBody, pathUsed: null });
+          const row = Array.isArray(lookupBody) ? lookupBody[0] : lookupBody;
+          const storagePath = normalizeOrderFileStoragePath(row?.storage_path || storage_path || path || row?.public_url || public_url);
+          console.log('[FILES] delete file', { file_id, storagePath, requestStoragePath: storage_path || null, requestPublicUrl: public_url || null, dbStoragePath: row?.storage_path || null });
+          let warning;
           if (storagePath) {
             const { resp: storageResp, body: storageBody } = await supabaseStorage(`object/${ORDER_FILE_BUCKET}/${storagePath}`, { method: 'DELETE' });
-            if (!storageResp.ok) return sendJson(res, storageResp.status, { success: false, error: 'Storage delete failed', detail: storageBody });
+            if (!storageResp.ok) {
+              if (isMissingStorageObject(storageBody)) {
+                warning = 'Storage object already missing; DB row deleted only';
+                console.warn('[FILES] storage object already missing; deleting DB row only', { status: storageResp.status, body: storageBody, pathUsed: storagePath });
+              } else {
+                console.error('[FILES] storage delete failed', { status: storageResp.status, body: storageBody, pathUsed: storagePath });
+                return sendJson(res, storageResp.status, { success: false, error: 'Storage delete failed', detail: storageBody, pathUsed: storagePath });
+              }
+            }
+          } else {
+            warning = 'No storage path found; DB row deleted only';
+            console.warn('[FILES] no storage path found; deleting DB row only', { file_id });
           }
           const { resp, body } = await supabaseRest(`lis_one_order_result_files?id=eq.${encodeURIComponent(file_id)}`, {
             method: 'DELETE'
           });
           console.log('[FILES] delete row', body);
-          return sendJson(res, resp.ok ? 200 : resp.status, {
-            success: resp.ok,
-            deleted: body,
-            error: resp.ok ? undefined : 'Delete failed'
-          });
+          if (!resp.ok) return sendJson(res, resp.status, { success: false, error: 'Delete failed', detail: body, pathUsed: storagePath });
+          return sendJson(res, 200, { success: true, deleted: body || [], pathUsed: storagePath, warning });
         } catch (err) {
-          return sendJson(res, 500, { success: false, error: err.message });
+          return sendJson(res, 500, { success: false, error: err.message, detail: String(err?.stack || ''), pathUsed: null });
         }
       })
     }

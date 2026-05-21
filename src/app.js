@@ -1048,7 +1048,7 @@ async function uploadedFilesHtml(orderId) {
             <div class="d-flex gap-1">
                 <button class="btn btn-sm btn-outline-primary" onclick="window.open('${escapeHtml(file.public_url)}', '_blank')"><i class="bi bi-eye"></i> View</button>
                 <button class="btn btn-sm btn-outline-success" onclick="window.open('${escapeHtml(file.public_url)}', '_blank')"><i class="bi bi-download"></i> Download</button>
-                <button class="btn btn-sm btn-outline-danger" onclick="removeOrderFile('${escapeHtml(file.id)}', '${escapeHtml(file.storage_path)}', '${escapeHtml(orderId)}')"><i class="bi bi-trash"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeOrderFile('${escapeHtml(file.id)}', '${escapeHtml(file.storage_path)}', '${escapeHtml(orderId)}', '${escapeHtml(file.public_url)}')"><i class="bi bi-trash"></i></button>
             </div>
         </div>
     `).join('');
@@ -1094,7 +1094,7 @@ async function renderOrderUploadModal(orderId, prefetchedFiles = null) {
             <div class="upload-file-actions">
                 <button class="btn btn-sm btn-outline-primary" onclick="window.open('${escapeHtml(file.public_url)}', '_blank')"><i class="bi bi-eye-fill"></i> ເບິ່ງ</button>
                 <button class="btn btn-sm btn-outline-success" onclick="window.open('${escapeHtml(file.public_url)}', '_blank')"><i class="bi bi-download"></i> ໂຫຼດ</button>
-                <button class="btn btn-sm btn-outline-danger" onclick="removeOrderFile('${escapeHtml(file.id)}', '${escapeHtml(file.storage_path)}', '${escapeHtml(orderId)}')"><i class="bi bi-trash"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeOrderFile('${escapeHtml(file.id)}', '${escapeHtml(file.storage_path)}', '${escapeHtml(orderId)}', '${escapeHtml(file.public_url)}')"><i class="bi bi-trash"></i></button>
             </div>
         </div>
     `).join('');
@@ -1157,8 +1157,12 @@ document.addEventListener('change', async (event) => {
                 uploadedCount++;
                 const row = res.file || (Array.isArray(res.data) ? res.data[0] : null);
                 if (row?.id) uploadedRows.push(row);
+            } else {
+                const detail = res.detail?.message || res.detail?.error || (typeof res.detail === 'string' ? res.detail : '');
+                throw new Error(detail || res.error || 'Upload failed');
             }
         }
+        if (uploadedCount === 0) throw new Error('No files were uploaded');
         const filesRes = await api.getOrderFiles(cleanOrderId);
         let files = filesRes.success ? (filesRes.data || []) : [];
         uploadedRows.forEach(row => {
@@ -1179,13 +1183,13 @@ document.addEventListener('change', async (event) => {
         });
     } catch (error) {
         console.error(error);
-        Swal.fire('ຜິດພາດ', 'ອັບໂຫຼດໄຟລ໌ບໍ່ສຳເລັດ', 'error');
+        Swal.fire('ຜິດພາດ', error.message || 'ອັບໂຫຼດໄຟລ໌ບໍ່ສຳເລັດ', 'error');
     } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> ເພີ່ມໄຟລ໌'; }
     }
 });
 
-window.removeOrderFile = async function(fileId, storagePath, orderId) {
+window.removeOrderFile = async function(fileId, storagePath, orderId, publicUrl) {
     const confirm = await Swal.fire({
         title: 'ລຶບໄຟລ໌?',
         text: 'ໄຟລ໌ນີ້ຈະຖືກລຶບຖາວອນ',
@@ -1196,14 +1200,15 @@ window.removeOrderFile = async function(fileId, storagePath, orderId) {
         confirmButtonColor: '#dc2626'
     });
     if (!confirm.isConfirmed) return;
-    const res = await api.deleteOrderFile(fileId, storagePath);
+    const res = await api.deleteOrderFile(fileId, storagePath, publicUrl);
     if (res.success) {
         invalidateFileCache(orderId);
         await hydrateOrderUploadBadges(recentOrders);
         await renderOrderUploadModal(orderId);
         Swal.fire('ສຳເລັດ', 'ລຶບໄຟລ໌ແລ້ວ', 'success');
     } else {
-        Swal.fire('ຜິດພາດ', res.error || 'ລຶບບໍ່ສຳເລັດ', 'error');
+        const detail = res.detail?.message || res.detail?.error || (typeof res.detail === 'string' ? res.detail : '');
+        Swal.fire('ຜິດພາດ', detail || res.error || 'ລຶບບໍ່ສຳເລັດ', 'error');
     }
 };
 

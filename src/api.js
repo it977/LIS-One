@@ -41,6 +41,27 @@ function authHeaders() {
   return h;
 }
 
+function sessionDiagnostics() {
+  const session = readSessionUser();
+  const token = session?.token || null;
+  const payload = decodeTokenPayload(token);
+  const headers = authHeaders();
+  return {
+    hasSession: Boolean(session),
+    sessionUserId: session?.id || null,
+    sessionUsername: session?.username || null,
+    sessionEmail: session?.email || null,
+    tokenUserId: payload?.uid || null,
+    tokenUsername: payload?.u || null,
+    tokenEmail: payload?.email || null,
+    tokenRole: payload?.r || session?.role || null,
+    tokenExp: payload?.exp || null,
+    hasToken: Boolean(token),
+    hasAuthorizationHeader: Boolean(headers.Authorization),
+    hasXLisTokenHeader: Boolean(headers['X-Lis-Token'])
+  };
+}
+
 function handleAuthFailure(message) {
   if (typeof window !== 'undefined' && typeof window.handleAuthExpired === 'function') {
     window.handleAuthExpired(message);
@@ -397,15 +418,22 @@ export async function uploadOrderFile(orderId, file) {
   try {
     const cleanOrderId = String(orderId || '').trim();
     console.log('[FILES] upload orderId', cleanOrderId);
+    console.log('[FILES] frontend auth diagnostics', sessionDiagnostics());
     if (!hasValidAuthToken()) {
       const msg = 'Session ໝົດອາຍຸ. ກະລຸນາ login ໃໝ່.';
       handleAuthFailure(msg);
       return { success: false, error: msg, status: 401 };
     }
     const base64 = await fileToBase64(file);
+    const headers = authHeaders();
+    console.log('[FILES] upload request headers', {
+      hasAuthorizationHeader: Boolean(headers.Authorization),
+      hasXLisTokenHeader: Boolean(headers['X-Lis-Token']),
+      order_id: cleanOrderId
+    });
     const res = await fetchWithTimeout('/api/upload-file', {
       method: 'POST',
-      headers: authHeaders(),
+      headers,
       body: JSON.stringify({
         order_id: cleanOrderId,
         file_name: file.name,
@@ -415,7 +443,14 @@ export async function uploadOrderFile(orderId, file) {
       })
     });
     const json = await readJsonSafe(res);
-    console.log('[FILES] upload response', json);
+    console.log('[FILES] upload response', {
+      status: res.status,
+      success: json.success,
+      order_id: json.order_id,
+      file: json.file,
+      error: json.error,
+      detail: json.detail
+    });
     if (res.status === 401) {
       handleAuthFailure(json.error || 'Session expired.');
       return { success: false, error: json.error, status: res.status };
@@ -441,6 +476,7 @@ export async function getOrderFiles(orderId) {
   try {
     const cleanOrderId = String(orderId || '').trim();
     console.log('[FILES] list orderId', cleanOrderId);
+    console.log('[FILES] list request diagnostics', { order_id: cleanOrderId });
     const res = await fetchWithTimeout('/api/list-files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -448,14 +484,14 @@ export async function getOrderFiles(orderId) {
     });
     const json = await readJsonSafe(res);
     if (!res.ok) return { success: false, data: [], error: json.error || JSON.stringify(json) };
-    console.log('[FILES] rows', json.data || []);
+    console.log('[FILES] rows', { order_id: cleanOrderId, count: Array.isArray(json.data) ? json.data.length : 0, rows: json.data || [] });
     return { success: json.success, data: Array.isArray(json.data) ? json.data : [], error: json.error };
   } catch (e) {
     return { success: false, data: [] };
   }
 }
 
-export async function deleteOrderFile(fileId, storagePath) {
+export async function deleteOrderFile(fileId, storagePath, publicUrl) {
   try {
     if (!hasValidAuthToken()) {
       const msg = 'Session ໝົດອາຍຸ. ກະລຸນາ login ໃໝ່.';
@@ -465,7 +501,8 @@ export async function deleteOrderFile(fileId, storagePath) {
     const res = await fetchWithTimeout('/api/delete-file', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ file_id: fileId, storage_path: storagePath })
+      body: JSON.stringify({ file_id: fileId, storage_path: storagePath, public_url: publicUrl }),
+      timeout: 30000
     });
     const json = await readJsonSafe(res);
     console.log('[FILES] delete response', json);
@@ -475,6 +512,9 @@ export async function deleteOrderFile(fileId, storagePath) {
     }
     return { success: res.ok && json.success !== false, ...json };
   } catch (e) {
-    return { success: false, error: e.message };
+    const msg = e?.name === 'AbortError' || /aborted/i.test(e?.message || '')
+      ? 'Delete request timed out or was interrupted. Please retry.'
+      : e.message;
+    return { success: false, error: msg };
   }
 }

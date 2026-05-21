@@ -63,6 +63,34 @@ async function supabaseStorage(env, path, options = {}) {
   return { resp, body };
 }
 
+function normalizeStoragePath(value) {
+  let raw = String(value || '').trim();
+  if (!raw || raw === 'undefined' || raw === 'null') return '';
+
+  try {
+    const parsed = new URL(raw);
+    raw = parsed.pathname;
+  } catch {}
+
+  try { raw = decodeURIComponent(raw); } catch {}
+  raw = raw.replace(/\\/g, '/').replace(/^\/+/, '');
+
+  const objectMarker = 'storage/v1/object/';
+  const markerIndex = raw.indexOf(objectMarker);
+  if (markerIndex >= 0) raw = raw.slice(markerIndex + objectMarker.length);
+
+  const parts = raw.split('/').filter(Boolean);
+  if (['public', 'sign', 'authenticated'].includes(parts[0])) parts.shift();
+  if (parts[0] === ORDER_FILE_BUCKET) parts.shift();
+
+  return parts.join('/');
+}
+
+function isMissingObject(body) {
+  const text = typeof body === 'string' ? body : JSON.stringify(body || {});
+  return /not.?found|does not exist|404/i.test(text);
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -77,30 +105,42 @@ export async function onRequest(context) {
     const session = await verifyToken(env, token);
     if (!session) return json({ success: false, error: 'Authentication required' }, 401);
 
-    const { file_id, storage_path } = await readBody(request);
+    const { file_id, storage_path, public_url, path } = await readBody(request);
     if (!file_id) return json({ success: false, error: 'file_id is required' }, 400);
 
-    let storagePath = String(storage_path || '').trim();
-    if (!storagePath) {
-      const lookup = await supabaseRest(
-        env,
-        `lis_one_order_result_files?select=storage_path&id=eq.${encodeURIComponent(file_id)}&limit=1`,
-        { method: 'GET' }
-      );
-      if (!lookup.resp.ok) {
-        console.error('[FILES] delete lookup failed', { status: lookup.resp.status, body: lookup.body });
-        return json({ success: false, error: 'File lookup failed', detail: lookup.body }, lookup.resp.status);
-      }
-      storagePath = String((Array.isArray(lookup.body) ? lookup.body[0] : lookup.body)?.storage_path || '').trim();
+    const lookup = await supabaseRest(
+      env,
+      `lis_one_order_result_files?select=*&id=eq.${encodeURIComponent(file_id)}&limit=1`,
+      { method: 'GET' }
+    );
+    if (!lookup.resp.ok) {
+      console.error('[FILES] delete lookup failed', { status: lookup.resp.status, body: lookup.body });
+      return json({ success: false, error: 'File lookup failed', detail: lookup.body, pathUsed: null }, lookup.resp.status);
     }
+    const row = Array.isArray(lookup.body) ? lookup.body[0] : lookup.body;
+    let storagePath = normalizeStoragePath(row?.storage_path || storage_path || path || row?.public_url || public_url);
 
-    console.log('[FILES] delete file', { file_id, storagePath });
+    console.log('[FILES] delete file', { file_id, storagePath, requestStoragePath: storage_path || null, requestPublicUrl: public_url || null, dbStoragePath: row?.storage_path || null });
+    let warning;
     if (storagePath) {
       const storage = await supabaseStorage(env, `object/${ORDER_FILE_BUCKET}/${storagePath}`, { method: 'DELETE' });
       if (!storage.resp.ok) {
-        console.error('[FILES] storage delete failed', { status: storage.resp.status, body: storage.body });
-        return json({ success: false, error: 'Storage delete failed', detail: storage.body }, storage.resp.status);
+        if (isMissingObject(storage.body)) {
+          warning = 'Storage object already missing; DB row deleted only';
+          console.warn('[FILES] storage object already missing; deleting DB row only', { status: storage.resp.status, body: storage.body, pathUsed: storagePath });
+        } else {
+          console.error('[FILES] storage delete failed', { status: storage.resp.status, body: storage.body, pathUsed: storagePath });
+          return json({
+            success: false,
+            error: 'Storage delete failed',
+            detail: storage.body,
+            pathUsed: storagePath
+          }, storage.resp.status);
+        }
       }
+    } else {
+      warning = 'No storage path found; DB row deleted only';
+      console.warn('[FILES] no storage path found; deleting DB row only', { file_id });
     }
 
     const removed = await supabaseRest(
@@ -110,13 +150,18 @@ export async function onRequest(context) {
     );
     console.log('[FILES] delete row', removed.body);
     if (!removed.resp.ok) {
-      console.error('[FILES] delete row failed', { status: removed.resp.status, body: removed.body });
-      return json({ success: false, error: 'Delete failed', detail: removed.body }, removed.resp.status);
+      console.error('[FILES] delete row failed', { status: removed.resp.status, body: removed.body, pathUsed: storagePath });
+      return json({ success: false, error: 'Delete failed', detail: removed.body, pathUsed: storagePath }, removed.resp.status);
     }
 
-    return json({ success: true, deleted: removed.body || [] });
+    return json({
+      success: true,
+      deleted: removed.body || [],
+      pathUsed: storagePath,
+      warning
+    });
   } catch (err) {
     console.error('[FILES] delete error', err);
-    return json({ success: false, error: err.message }, 500);
+    return json({ success: false, error: err.message, detail: String(err?.stack || ''), pathUsed: null }, 500);
   }
 }

@@ -15,7 +15,8 @@ function json(body, status = 200) {
 function supabaseConfig(env) {
   return {
     url: env.SUPABASE_URL || 'https://erueurkqzmtdefszqons.supabase.co',
-    key: env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
+    key: env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY,
+    keySource: env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : (env.SUPABASE_ANON_KEY ? 'anon' : (env.VITE_SUPABASE_ANON_KEY ? 'vite_anon' : 'missing'))
   };
 }
 
@@ -40,8 +41,9 @@ export async function onRequest(context) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (!['GET', 'POST'].includes(request.method)) return json({ success: false, error: 'Method not allowed' }, 405);
 
-  const { url, key } = supabaseConfig(env);
+  const { url, key, keySource } = supabaseConfig(env);
   console.log('[FILES] env url', url);
+  console.log('[FILES] list key source', keySource);
   if (!key) return json({ success: false, error: 'Supabase env missing' }, 500);
 
   try {
@@ -56,6 +58,7 @@ export async function onRequest(context) {
       env,
       `lis_one_order_result_files?select=*&order_id=eq.${encodeURIComponent(cleanOrderId)}&order=uploaded_at.desc`
     );
+    console.log('[FILES] list response', { order_id: cleanOrderId, status: resp.status, count: Array.isArray(responseBody) ? responseBody.length : null, rows: responseBody });
     if (!resp.ok) {
       console.error('[FILES] list failed', { status: resp.status, body: responseBody });
       return json({ success: false, error: responseBody }, resp.status);
