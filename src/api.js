@@ -420,8 +420,18 @@ export async function uploadOrderFile(orderId, file) {
       handleAuthFailure(json.error || 'Session expired.');
       return { success: false, error: json.error, status: res.status };
     }
-    console.log('[FILES] metadata inserted', json.file || json);
-    return { success: res.ok && json.success !== false, ...json };
+    const fileRow = json.file ? {
+      ...json.file,
+      order_id: String(json.file.order_id || cleanOrderId).trim(),
+      public_url: json.file.public_url || json.public_url
+    } : null;
+    console.log('[FILES] metadata inserted', fileRow || json);
+    return {
+      success: res.ok && json.success !== false,
+      ...json,
+      file: fileRow,
+      data: Array.isArray(json.data) ? json.data : (fileRow ? [fileRow] : [])
+    };
   } catch (e) {
     return { success: false, error: e.message };
   }

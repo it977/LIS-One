@@ -70,6 +70,15 @@ function dataUrlToBytes(base64) {
   return bytes;
 }
 
+function withPublicUrl(url, file) {
+  if (!file || typeof file !== 'object') return null;
+  return {
+    ...file,
+    order_id: String(file.order_id || '').trim(),
+    public_url: `${url}/storage/v1/object/public/${ORDER_FILE_BUCKET}/${file.storage_path}`
+  };
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -104,16 +113,17 @@ export async function onRequest(context) {
       return json({ success: false, error: 'Storage upload failed', detail: upload.body }, upload.resp.status);
     }
 
+    const metaPayload = {
+      order_id: cleanOrderId,
+      file_name: String(file_name),
+      file_type: String(file_type || 'application/octet-stream'),
+      file_size: Number(file_size) || 0,
+      storage_path: storagePath,
+      uploaded_by: session.u || session.username || 'unknown'
+    };
     const meta = await supabaseRest(env, 'lis_one_order_result_files?select=*', {
       method: 'POST',
-      body: JSON.stringify([{
-        order_id: cleanOrderId,
-        file_name: String(file_name),
-        file_type: String(file_type || 'application/octet-stream'),
-        file_size: Number(file_size) || 0,
-        storage_path: storagePath,
-        uploaded_by: session.u || session.username || 'unknown'
-      }])
+      body: JSON.stringify(metaPayload)
     });
     if (!meta.resp.ok) {
       console.error('[FILES] metadata insert failed', { status: meta.resp.status, body: meta.body });
@@ -122,10 +132,29 @@ export async function onRequest(context) {
 
     const inserted = Array.isArray(meta.body) ? meta.body[0] : meta.body;
     console.log('[FILES] inserted row', inserted);
+    if (!inserted?.id) {
+      console.error('[FILES] metadata insert returned no row', { order_id: cleanOrderId, body: meta.body });
+      return json({ success: false, error: 'Metadata insert returned no row', detail: meta.body }, 500);
+    }
+
+    const verify = await supabaseRest(
+      env,
+      `lis_one_order_result_files?select=*&id=eq.${encodeURIComponent(inserted.id)}&order_id=eq.${encodeURIComponent(cleanOrderId)}&limit=1`,
+      { method: 'GET' }
+    );
+    if (!verify.resp.ok) {
+      console.error('[FILES] metadata verify failed', { status: verify.resp.status, body: verify.body });
+      return json({ success: false, error: 'Metadata verify failed', detail: verify.body }, verify.resp.status);
+    }
+    const verified = Array.isArray(verify.body) ? verify.body[0] : verify.body;
+    console.log('[FILES] verified inserted row', { order_id: cleanOrderId, row: verified });
+    const fileRow = withPublicUrl(url, verified || inserted);
     return json({
       success: true,
-      file: inserted,
-      public_url: `${url}/storage/v1/object/public/${ORDER_FILE_BUCKET}/${storagePath}`
+      order_id: cleanOrderId,
+      file: fileRow,
+      data: fileRow ? [fileRow] : [],
+      public_url: fileRow?.public_url || `${url}/storage/v1/object/public/${ORDER_FILE_BUCKET}/${storagePath}`
     });
   } catch (err) {
     console.error('[FILES] upload error', err);

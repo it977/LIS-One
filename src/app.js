@@ -1149,13 +1149,22 @@ document.addEventListener('change', async (event) => {
     try {
         let uploadedCount = 0;
         const cleanOrderId = String(orderId || '').trim();
+        const uploadedRows = [];
         for (const file of input.files) {
             const res = await api.uploadOrderFile(cleanOrderId, file);
             console.log('[FILES] upload response', res);
-            if (res.success) uploadedCount++;
+            if (res.success) {
+                uploadedCount++;
+                const row = res.file || (Array.isArray(res.data) ? res.data[0] : null);
+                if (row?.id) uploadedRows.push(row);
+            }
         }
         const filesRes = await api.getOrderFiles(cleanOrderId);
-        const files = filesRes.success ? (filesRes.data || []) : [];
+        let files = filesRes.success ? (filesRes.data || []) : [];
+        uploadedRows.forEach(row => {
+            const sameRow = files.some(file => String(file.id) === String(row.id));
+            if (!sameRow && String(row.order_id || '').trim() === cleanOrderId) files.unshift(row);
+        });
         console.log('[FILES] fetched rows after upload', { orderId: cleanOrderId, rows: files });
         invalidateFileCache(cleanOrderId);
         ORDER_FILE_CACHE[cleanOrderId] = files;
