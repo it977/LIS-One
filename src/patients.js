@@ -97,6 +97,10 @@ function firstValue(row = {}, keys = []) {
   return '';
 }
 
+function orderDateValue(order) {
+  return Date.parse(order?.order_datetime || order?.created_at || '') || 0;
+}
+
 function normalizeHisGender(value) {
   const text = String(value || '').trim().toLowerCase();
   if (!text) return '';
@@ -875,16 +879,16 @@ async function buildPatientHistory() {
       total_price: order._hasItemPrice
         ? order.total_price
         : Math.max(0, ...(order._totalCandidates || [0]), Number(order.total_price) || 0)
-    })).sort((a, b) => (b.order_datetime || '').localeCompare(a.order_datetime || ''));
+    })).sort((a, b) => orderDateValue(b) - orderDateValue(a));
     delete g._orderMap;
     g.visits = g.orders.length;
     g.results_ready = g.orders.filter(o => o.status === 'Completed').length;
     g.total = g.orders.reduce((sum, order) => sum + (Number(order.total_price) || 0), 0);
     const latest = g.orders[0];
-    g.last_dt = latest?.order_datetime || '';
+    g.last_dt = latest?.order_datetime || latest?.created_at || '';
     g.last_tests = latest?.test_name ? latest.test_name.split(',').map(x => x.trim()) : [];
   }
-  return [...map.values()].sort((a, b) => (b.last_dt || '').localeCompare(a.last_dt || ''));
+  return [...map.values()].sort((a, b) => orderDateValue({ order_datetime: b.last_dt }) - orderDateValue({ order_datetime: a.last_dt }));
 }
 
 window.loadPatientHistoryPage = async function(force = false) {

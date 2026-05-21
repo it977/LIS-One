@@ -103,6 +103,10 @@ function statusBadge(status) {
     return `<span class="badge bg-${color}">${escapeHtml(normalized)}</span>`;
 }
 
+function orderDateValue(order) {
+    return Date.parse(order?.order_datetime || order?.created_at || '') || 0;
+}
+
 function showAuthenticatedApp(user) {
     const loginScreen = document.getElementById('loginScreen');
     const mainApp = document.getElementById('mainApp');
@@ -406,6 +410,29 @@ window.showPage = (e, id) => {
 
 let testMasterCache = null;
 let testCategoryOrder = [];
+const TEST_CATEGORY_DISPLAY_ORDER = ['Hematology', 'Chemistry', 'Immunology', 'Urine and stool', 'Pathology', 'Outlab'];
+
+function testCategoryRank(category) {
+    const key = String(category || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const aliases = {
+        biochemistry: 'chemistry',
+        immunoserology: 'immunology',
+        stoolurine: 'urineandstool',
+        urinestool: 'urineandstool',
+        urineandstool: 'urineandstool'
+    };
+    const normalized = aliases[key] || key;
+    const order = TEST_CATEGORY_DISPLAY_ORDER.map(cat => cat.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    const rank = order.indexOf(normalized);
+    return rank === -1 ? Number.MAX_SAFE_INTEGER : rank;
+}
+
+function sortTestCategories(categories) {
+    return [...categories].sort((a, b) => {
+        const rankDiff = testCategoryRank(a) - testCategoryRank(b);
+        return rankDiff || categories.indexOf(a) - categories.indexOf(b);
+    });
+}
 
 window.loadTestCheckboxes = async function() {
     const container = document.getElementById('dynamicTestContainer');
@@ -438,7 +465,7 @@ window.loadTestCheckboxes = async function() {
             grouped[cat].push(t);
         });
         
-        renderTestCategory(container, grouped, testCategoryOrder);
+        renderTestCategory(container, grouped, sortTestCategories(testCategoryOrder));
 
         document.querySelectorAll('.test-checkbox').forEach(chk => {
             chk.onchange = (e) => {
@@ -980,7 +1007,7 @@ function groupOrdersById(rows = []) {
                 item_count: order._item_rows.length
             };
         })
-        .sort((a, b) => String(b.order_datetime || '').localeCompare(String(a.order_datetime || '')));
+        .sort((a, b) => orderDateValue(b) - orderDateValue(a));
 }
 
 function findRecentOrder(orderId) {
