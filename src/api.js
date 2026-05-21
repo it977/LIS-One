@@ -91,6 +91,16 @@ async function fetchWithTimeout(resource, options = {}) {
   }
 }
 
+async function readJsonSafe(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { success: false, error: text };
+  }
+}
+
 async function fetchProxy(table, options = {}) {
   const label = table;
   perfMark(label);
@@ -101,7 +111,7 @@ async function fetchProxy(table, options = {}) {
       body: JSON.stringify({ table, ...options })
     });
     if (!res.ok) return { success: false, data: [], error: await res.text() };
-    const json = await res.json();
+    const json = await readJsonSafe(res);
     perfMeasure(label);
     return { success: json.success, data: Array.isArray(json.data) ? json.data : [], error: json.error };
   } catch (e) {
@@ -129,8 +139,7 @@ async function mutateProxy(action, table, payload, match, functionName) {
       headers: authHeaders(),
       body: JSON.stringify({ action, table, payload, match, functionName })
     });
-    let json = {};
-    try { json = await res.json(); } catch {}
+    const json = await readJsonSafe(res);
     perfMeasure(label);
     if (res.status === 401) {
       handleAuthFailure(json.error || 'Session expired. Please login again.');
@@ -157,7 +166,7 @@ export async function loginUser(username, password) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    const json = await res.json().catch(() => ({}));
+    const json = await readJsonSafe(res);
     return { success: res.ok && json.success === true, ...json };
   } catch (e) { return { success: false, message: e.name === 'AbortError' ? 'Timeout' : e.message }; }
 }
@@ -405,7 +414,7 @@ export async function uploadOrderFile(orderId, file) {
         base64
       })
     });
-    const json = await res.json();
+    const json = await readJsonSafe(res);
     console.log('[FILES] upload response', json);
     if (res.status === 401) {
       handleAuthFailure(json.error || 'Session expired.');
@@ -427,8 +436,8 @@ export async function getOrderFiles(orderId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order_id: cleanOrderId })
     });
-    if (!res.ok) return { success: false, data: [], error: await res.text() };
-    const json = await res.json();
+    const json = await readJsonSafe(res);
+    if (!res.ok) return { success: false, data: [], error: json.error || JSON.stringify(json) };
     console.log('[FILES] rows', json.data || []);
     return { success: json.success, data: Array.isArray(json.data) ? json.data : [], error: json.error };
   } catch (e) {
@@ -448,7 +457,8 @@ export async function deleteOrderFile(fileId, storagePath) {
       headers: authHeaders(),
       body: JSON.stringify({ file_id: fileId, storage_path: storagePath })
     });
-    const json = await res.json();
+    const json = await readJsonSafe(res);
+    console.log('[FILES] delete response', json);
     if (res.status === 401) {
       handleAuthFailure(json.error || 'Session expired.');
       return { success: false, error: json.error, status: res.status };

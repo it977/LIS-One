@@ -286,6 +286,7 @@ function localSupabaseApi(env) {
       })
 
       server.middlewares.use('/api/delete-file', async (req, res) => {
+        if (req.method === 'OPTIONS') return sendJson(res, 200, { success: true });
         if (req.method !== 'POST') return sendJson(res, 405, { success: false, error: 'Method not allowed' });
         if (!supabaseUrl || !supabaseKey) return sendJson(res, 500, { success: false, error: 'Supabase env missing' });
         try {
@@ -294,14 +295,27 @@ function localSupabaseApi(env) {
           if (!session) return sendJson(res, 401, { success: false, error: 'Authentication required' });
           const { file_id, storage_path } = await readJsonBody(req);
           if (!file_id) return sendJson(res, 400, { success: false, error: 'file_id is required' });
-          if (storage_path) {
-            await supabaseStorage(`object/${ORDER_FILE_BUCKET}/${storage_path}`, { method: 'DELETE' });
+          let storagePath = String(storage_path || '').trim();
+          if (!storagePath) {
+            const { resp: lookupResp, body: lookupBody } = await supabaseRest(
+              `lis_one_order_result_files?select=storage_path&id=eq.${encodeURIComponent(file_id)}&limit=1`,
+              { method: 'GET' }
+            );
+            if (!lookupResp.ok) return sendJson(res, lookupResp.status, { success: false, error: 'File lookup failed', detail: lookupBody });
+            storagePath = String((Array.isArray(lookupBody) ? lookupBody[0] : lookupBody)?.storage_path || '').trim();
           }
-          const { resp } = await supabaseRest(`lis_one_order_result_files?id=eq.${encodeURIComponent(file_id)}`, {
+          console.log('[FILES] delete file', { file_id, storagePath });
+          if (storagePath) {
+            const { resp: storageResp, body: storageBody } = await supabaseStorage(`object/${ORDER_FILE_BUCKET}/${storagePath}`, { method: 'DELETE' });
+            if (!storageResp.ok) return sendJson(res, storageResp.status, { success: false, error: 'Storage delete failed', detail: storageBody });
+          }
+          const { resp, body } = await supabaseRest(`lis_one_order_result_files?id=eq.${encodeURIComponent(file_id)}`, {
             method: 'DELETE'
           });
+          console.log('[FILES] delete row', body);
           return sendJson(res, resp.ok ? 200 : resp.status, {
             success: resp.ok,
+            deleted: body,
             error: resp.ok ? undefined : 'Delete failed'
           });
         } catch (err) {

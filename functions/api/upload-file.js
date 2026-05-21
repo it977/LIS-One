@@ -55,6 +55,14 @@ async function supabaseStorage(env, path, options = {}) {
   return { resp, body };
 }
 
+async function readBody(request) {
+  try {
+    return await request.json();
+  } catch {
+    return {};
+  }
+}
+
 function dataUrlToBytes(base64) {
   const binary = atob(String(base64 || '').split(',')[1] || base64);
   const bytes = new Uint8Array(binary.length);
@@ -62,7 +70,8 @@ function dataUrlToBytes(base64) {
   return bytes;
 }
 
-export async function onRequest({ request, env }) {
+export async function onRequest(context) {
+  const { request, env } = context;
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (request.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
 
@@ -75,7 +84,7 @@ export async function onRequest({ request, env }) {
     const session = await verifyToken(env, token);
     if (!session) return json({ success: false, error: 'Authentication required' }, 401);
 
-    const { order_id, file_name, file_type, file_size, base64 } = await request.json();
+    const { order_id, file_name, file_type, file_size, base64 } = await readBody(request);
     const cleanOrderId = String(order_id || '').trim();
     console.log('[FILES] upload orderId', cleanOrderId);
     if (!cleanOrderId || !file_name || !base64) return json({ success: false, error: 'Missing required fields' }, 400);
@@ -90,7 +99,10 @@ export async function onRequest({ request, env }) {
       headers: { 'Content-Type': file_type || 'application/octet-stream' },
       body: dataUrlToBytes(base64)
     });
-    if (!upload.resp.ok) return json({ success: false, error: 'Storage upload failed', detail: upload.body }, upload.resp.status);
+    if (!upload.resp.ok) {
+      console.error('[FILES] storage upload failed', { status: upload.resp.status, body: upload.body });
+      return json({ success: false, error: 'Storage upload failed', detail: upload.body }, upload.resp.status);
+    }
 
     const meta = await supabaseRest(env, 'lis_one_order_result_files?select=*', {
       method: 'POST',
@@ -103,7 +115,10 @@ export async function onRequest({ request, env }) {
         uploaded_by: session.u || session.username || 'unknown'
       }])
     });
-    if (!meta.resp.ok) return json({ success: false, error: 'Metadata insert failed', detail: meta.body }, meta.resp.status);
+    if (!meta.resp.ok) {
+      console.error('[FILES] metadata insert failed', { status: meta.resp.status, body: meta.body });
+      return json({ success: false, error: 'Metadata insert failed', detail: meta.body }, meta.resp.status);
+    }
 
     const inserted = Array.isArray(meta.body) ? meta.body[0] : meta.body;
     console.log('[FILES] inserted row', inserted);
@@ -113,6 +128,7 @@ export async function onRequest({ request, env }) {
       public_url: `${url}/storage/v1/object/public/${ORDER_FILE_BUCKET}/${storagePath}`
     });
   } catch (err) {
+    console.error('[FILES] upload error', err);
     return json({ success: false, error: err.message }, 500);
   }
 }

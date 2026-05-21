@@ -35,7 +35,8 @@ async function supabaseRest(env, path) {
   return { resp, body };
 }
 
-export async function onRequest({ request, env }) {
+export async function onRequest(context) {
+  const { request, env } = context;
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (!['GET', 'POST'].includes(request.method)) return json({ success: false, error: 'Method not allowed' }, 405);
 
@@ -55,7 +56,10 @@ export async function onRequest({ request, env }) {
       env,
       `lis_one_order_result_files?select=*&order_id=eq.${encodeURIComponent(cleanOrderId)}&order=uploaded_at.desc`
     );
-    if (!resp.ok) return json({ success: false, error: responseBody }, resp.status);
+    if (!resp.ok) {
+      console.error('[FILES] list failed', { status: resp.status, body: responseBody });
+      return json({ success: false, error: responseBody }, resp.status);
+    }
 
     const rows = (Array.isArray(responseBody) ? responseBody : []).map(file => ({
       ...file,
@@ -64,6 +68,7 @@ export async function onRequest({ request, env }) {
     console.log('[FILES] list rows', rows);
     return json({ success: true, data: rows });
   } catch (err) {
+    console.error('[FILES] list error', err);
     return json({ success: false, error: err.message }, 500);
   }
 }
