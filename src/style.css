@@ -6291,3 +6291,605 @@ body {
     break-inside: avoid !important;
   }
 }
+
+/* ================== ENTERPRISE CLINIC THEME - LOCAL OVERRIDE ================== */
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1e40af;
+  --primary-light: #dbeafe;
+  --primary-soft: rgba(37, 99, 235, 0.12);
+  --secondary: #475569;
+  --accent: #06b6d4;
+  --accent-dark: #0891b2;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --success: #10b981;
+  --success-dark: #047857;
+  --success-light: #d1fae5;
+  --success-soft: #ecfdf5;
+  --warning: #f59e0b;
+  --warning-dark: #b45309;
+  --warning-light: #fef3c7;
+  --warning-soft: #fffbeb;
+  --danger: #ef4444;
+  --danger-dark: #be123c;
+  --danger-light: #ffe4e6;
+  --danger-soft: #fff1f2;
+  --info: #06b6d4;
+  --info-dark: #0e7490;
+  --info-light: #cffafe;
+  --info-soft: #ecfeff;
+  --bg-main: var(--bg);
+  --bg-card: var(--surface);
+  --bg-hover: #f1f5f9;
+  --text-primary: var(--text);
+  --text-secondary: #334155;
+  --text-muted: var(--muted);
+  --border-color: var(--border);
+  --border-light: #edf2f7;
+  --sidebar-bg: #111827;
+  --sidebar-bg-gradient: linear-gradient(180deg, #0f172a 0%, #172033 54%, #1e293b 100%);
+  --sidebar-text: #cbd5e1;
+  --sidebar-hover: rgba(14, 165, 233, 0.11);
+  --sidebar-active-bg: linear-gradient(135deg, rgba(37, 99, 235, 0.95) 0%, rgba(30, 64, 175, 0.95) 100%);
+  --sidebar-active-border: #06b6d4;
+  --bs-primary: #2563eb;
+  --bs-primary-rgb: 37, 99, 235;
+  --bs-secondary: #475569;
+  --bs-secondary-rgb: 71, 85, 105;
+  --bs-success: #10b981;
+  --bs-success-rgb: 16, 185, 129;
+  --bs-warning: #f59e0b;
+  --bs-warning-rgb: 245, 158, 11;
+  --bs-danger: #ef4444;
+  --bs-danger-rgb: 239, 68, 68;
+  --bs-info: #06b6d4;
+  --bs-info-rgb: 6, 182, 212;
+  --bs-light: #f8fafc;
+  --bs-light-rgb: 248, 250, 252;
+  --bs-border-color: var(--border);
+  --inv-purple: #2563eb;
+  --inv-purple-dark: #1e40af;
+  --inv-purple-soft: #dbeafe;
+  --inv-purple-border: #bfdbfe;
+}
+
+html,
+body,
+#loginScreen,
+.content {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+}
+
+#loginScreen {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(248,250,252,0.96) 100%),
+    radial-gradient(circle at top left, rgba(6, 182, 212, 0.12) 0%, transparent 34%),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12) 0%, transparent 28%) !important;
+}
+
+.text-primary,
+.card-header i,
+.dashboard-title i,
+.login-box h2 i,
+#orderForm .card-header i,
+#historyPage h4 i,
+#patientMasterPage h4 i,
+#resultEntryPage h4 i,
+#inventoryPage h4 i,
+.table .price-text,
+.price-text,
+#totalPriceDisplay,
+#orderForm #cartList .list-group-item .text-primary,
+.movement-order-link {
+  color: var(--primary-dark) !important;
+}
+
+.text-muted,
+.form-text,
+.form-label,
+.small,
+small {
+  color: var(--muted) !important;
+}
+
+.border-primary {
+  border-color: rgba(37, 99, 235, 0.45) !important;
+}
+
+.bg-primary,
+.btn-primary,
+.modal-header.bg-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+  border-color: var(--primary-dark) !important;
+  color: #ffffff !important;
+}
+
+.bg-info,
+.btn-info {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%) !important;
+  border-color: var(--accent-dark) !important;
+  color: #ffffff !important;
+}
+
+.bg-success,
+.btn-success {
+  background: linear-gradient(135deg, var(--success) 0%, var(--success-dark) 100%) !important;
+  border-color: var(--success-dark) !important;
+  color: #ffffff !important;
+}
+
+.bg-warning,
+.btn-warning {
+  background: linear-gradient(135deg, var(--warning) 0%, var(--warning-dark) 100%) !important;
+  border-color: var(--warning-dark) !important;
+  color: #ffffff !important;
+}
+
+.bg-danger,
+.btn-danger {
+  background: linear-gradient(135deg, var(--danger) 0%, var(--danger-dark) 100%) !important;
+  border-color: var(--danger-dark) !important;
+  color: #ffffff !important;
+}
+
+.bg-secondary,
+.btn-secondary {
+  background: linear-gradient(135deg, #64748b 0%, var(--secondary) 100%) !important;
+  border-color: var(--secondary) !important;
+  color: #ffffff !important;
+}
+
+.btn-primary:hover,
+.btn-success:hover,
+.btn-info:hover,
+.btn-secondary:hover {
+  filter: brightness(0.96);
+  box-shadow: 0 10px 20px rgba(30, 64, 175, 0.18) !important;
+}
+
+.btn {
+  border-radius: 8px !important;
+  letter-spacing: 0 !important;
+}
+
+.btn-outline-primary,
+.btn-outline-success,
+.btn-outline-info {
+  background: #ffffff !important;
+  border-color: #bfdbfe !important;
+  color: var(--primary-dark) !important;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-success:hover,
+.btn-outline-info:hover,
+.btn-light.text-primary:hover {
+  background: var(--primary-light) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary-dark) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+}
+
+.btn-outline-secondary,
+.btn-outline-dark,
+.btn-light {
+  background: #ffffff !important;
+  border-color: var(--border) !important;
+  color: var(--secondary) !important;
+}
+
+.btn-outline-secondary:hover,
+.btn-outline-dark:hover,
+.btn-light:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text) !important;
+}
+
+.btn-outline-warning {
+  border-color: #fcd34d !important;
+  color: #92400e !important;
+}
+
+.btn-outline-warning:hover {
+  background: var(--warning-soft) !important;
+  border-color: var(--warning) !important;
+  color: #78350f !important;
+}
+
+.btn-outline-danger {
+  border-color: #fecdd3 !important;
+  color: var(--danger-dark) !important;
+}
+
+.btn-outline-danger:hover {
+  background: var(--danger-soft) !important;
+  border-color: var(--danger) !important;
+  color: #9f1239 !important;
+}
+
+.card,
+.login-box,
+.mobile-header,
+.modal-content,
+#dashboard .page-header,
+.card.border-0.shadow-sm.bg-light,
+.date-filter-group,
+.inventory-section-card,
+.inventory-overview-card,
+.inventory-alert-card,
+.inventory-setting-card,
+.inventory-executive-card,
+.lab-settings-panel,
+.lab-alert-section {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06) !important;
+  backdrop-filter: none !important;
+}
+
+.card:hover,
+.test-item-card:hover,
+.inventory-settings-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08) !important;
+}
+
+.card-header,
+.modal-header,
+#inventoryPage .card-header,
+#orderForm .card-header,
+.re-test-card .card-header {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  border-radius: 8px 8px 0 0 !important;
+}
+
+.modal-content {
+  overflow: hidden;
+}
+
+.modal-footer {
+  background: #f8fafc !important;
+  border-top: 1px solid var(--border) !important;
+}
+
+.modal-header.bg-primary .modal-title,
+.modal-header.bg-primary .modal-title i,
+.modal-header.bg-primary .btn-close {
+  color: #ffffff !important;
+}
+
+.form-control,
+.form-select,
+div.dataTables_wrapper div.dataTables_filter input,
+div.dataTables_wrapper div.dataTables_length select,
+.date-filter-group input[type="date"],
+.input-group-text {
+  background: #ffffff !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  color: var(--text) !important;
+}
+
+.form-control:focus,
+.form-select:focus,
+div.dataTables_wrapper div.dataTables_filter input:focus,
+div.dataTables_wrapper div.dataTables_length select:focus,
+.date-filter-group input[type="date"]:focus,
+.required-field:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14) !important;
+}
+
+.required-field,
+.bg-primary-subtle,
+.test-item-card.bg-primary-subtle,
+#orderForm .test-item-card.bg-primary-subtle {
+  background-color: var(--primary-light) !important;
+}
+
+.test-item-card.border-primary,
+#orderForm .test-item-card.border-primary,
+#orderForm .card[style*="var(--primary-dark)"] {
+  border-color: var(--primary) !important;
+}
+
+#orderForm .card-header[style*="var(--primary-dark)"] {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+}
+
+.table {
+  color: var(--text) !important;
+  background: var(--surface) !important;
+}
+
+.table thead th,
+.table-dark thead th,
+#orderHistoryTable thead th,
+#patientMasterPage .table th,
+.report-main-table thead th,
+.reagent-master-table thead th,
+.inventory-lab-table thead th {
+  background: #f8fafc !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--secondary) !important;
+  font-weight: 800 !important;
+}
+
+.table tbody td,
+.table-sm td,
+#orderHistoryTable tbody td {
+  color: var(--text) !important;
+  border-color: var(--border-light) !important;
+}
+
+.table-hover tbody tr:hover,
+.table-hover tbody tr:hover td {
+  background: #eff6ff !important;
+}
+
+.table-bordered,
+.table-bordered th,
+.table-bordered td {
+  border-color: var(--border) !important;
+}
+
+.badge,
+#orderHistoryTable .badge,
+.role-badge,
+.upload-count-badge {
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  font-weight: 800 !important;
+}
+
+.badge.bg-primary,
+.badge.badge-solid-primary,
+span.badge.badge-category-biochemistry {
+  background: #dbeafe !important;
+  color: #1e40af !important;
+  border: 1px solid #bfdbfe !important;
+}
+
+.badge.bg-info,
+.badge.badge-solid-info,
+[class^="badge-category-"],
+[class*=" badge-category-"],
+.badge-category-cardiology,
+.badge-category-other,
+.badge-category-default {
+  background: #cffafe !important;
+  color: #0e7490 !important;
+  border: 1px solid #a5f3fc !important;
+}
+
+.badge.bg-success,
+.badge.badge-solid-success,
+.movement-in,
+.upload-count-badge.has-files {
+  background: var(--success-soft) !important;
+  color: var(--success-dark) !important;
+  border: 1px solid #a7f3d0 !important;
+}
+
+.badge.bg-warning,
+.badge.badge-solid-warning,
+.movement-adjust,
+.component-r3 {
+  background: var(--warning-soft) !important;
+  color: #92400e !important;
+  border: 1px solid #fde68a !important;
+}
+
+.badge.bg-danger,
+.badge.badge-solid-danger,
+.movement-out,
+.movement-expired,
+.badge-category-hematology,
+.badge-category-hormone {
+  background: var(--danger-soft) !important;
+  color: var(--danger-dark) !important;
+  border: 1px solid #fecdd3 !important;
+}
+
+.badge.bg-secondary,
+.badge.badge-solid-secondary,
+.movement-other,
+.component-single,
+.lab-category-badge,
+.map-component-pill {
+  background: #f1f5f9 !important;
+  color: var(--secondary) !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.badge-category-immunoserology {
+  background: #e0f2fe !important;
+  color: #075985 !important;
+  border: 1px solid #bae6fd !important;
+}
+
+.kpi-card,
+.bg-kpi-1,
+.bg-kpi-2,
+.bg-kpi-3,
+.bg-kpi-4 {
+  background: #ffffff !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06) !important;
+}
+
+.kpi-card::before {
+  background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%) !important;
+  width: 4px !important;
+  height: 100% !important;
+  top: 0 !important;
+  right: auto !important;
+  left: 0 !important;
+  border-radius: 8px 0 0 8px !important;
+  opacity: 1 !important;
+}
+
+.kpi-card h6,
+.kpi-card h6 i {
+  color: var(--muted) !important;
+}
+
+.kpi-card h4,
+.kpi-card h2 {
+  color: var(--text) !important;
+  text-shadow: none !important;
+}
+
+.test-items-container,
+.test-item-card,
+.lab-category-card,
+#testSetup [data-setup-panel="mapping"] .card-body {
+  background: #ffffff !important;
+  border-color: var(--border) !important;
+}
+
+.test-item-card:hover,
+#patientAutocompleteDropdown .ac-item:hover,
+#patientAutocompleteDropdown .ac-item.active,
+#patientAutocompleteDropdown .ac-item.bg-primary-subtle {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: var(--primary-dark) !important;
+}
+
+.sidebar {
+  background: var(--sidebar-bg-gradient) !important;
+  border-right: 1px solid rgba(148, 163, 184, 0.18) !important;
+  box-shadow: 14px 0 34px rgba(15, 23, 42, 0.16) !important;
+}
+
+.sidebar .brand-header {
+  background: rgba(15, 23, 42, 0.72) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+.sidebar .brand-title,
+.sidebar .user-info .fw-bold {
+  color: #f8fafc !important;
+}
+
+.sidebar .toggle-btn,
+.sidebar .user-info,
+.sidebar .user-info .mb-1,
+.sidebar .user-info span,
+.sidebar a.nav-link,
+.sidebar a.nav-link .nav-text,
+.sidebar a.nav-link i {
+  color: var(--sidebar-text) !important;
+}
+
+.sidebar .user-info {
+  background: rgba(15, 23, 42, 0.34) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16) !important;
+}
+
+.sidebar .toggle-btn:hover,
+.sidebar a.nav-link:hover {
+  background: var(--sidebar-hover) !important;
+  color: #ffffff !important;
+}
+
+.sidebar a.nav-link {
+  border-radius: 8px !important;
+}
+
+.sidebar a.nav-link.active {
+  background: var(--sidebar-active-bg) !important;
+  color: #ffffff !important;
+  border-left-color: var(--sidebar-active-border) !important;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.24) !important;
+}
+
+.sidebar a.nav-link.active i,
+.sidebar a.nav-link.active .nav-text,
+.sidebar a.nav-link:hover i,
+.sidebar a.nav-link:hover .nav-text {
+  color: #ffffff !important;
+}
+
+.sidebar a.nav-link.mt-auto {
+  color: #fecdd3 !important;
+  border-top: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+.swal2-container {
+  background: rgba(15, 23, 42, 0.48) !important;
+}
+
+.swal2-popup {
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.32) !important;
+}
+
+.swal2-styled.swal2-confirm {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%) !important;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.24) !important;
+}
+
+.swal2-styled.swal2-cancel {
+  background: #e2e8f0 !important;
+  color: var(--secondary) !important;
+}
+
+#inventoryTabSettings {
+  --inv-purple: var(--primary);
+  --inv-purple-dark: var(--primary-dark);
+  --inv-purple-soft: var(--primary-light);
+  --inv-purple-border: #bfdbfe;
+}
+
+#inventoryTabSettings .inventory-settings-hero,
+#inventoryTabSettings .mapping-explainer {
+  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%) !important;
+  border-color: #bfdbfe !important;
+  border-left-color: var(--accent) !important;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.06) !important;
+}
+
+#inventoryTabSettings .inventory-settings-section-title,
+#inventoryTabSettings .inventory-settings-section-title i,
+#inventoryTabSettings .inventory-settings-card-title i,
+#testSetup .setup-tab-panel .text-primary {
+  color: var(--primary-dark) !important;
+}
+
+#inventoryTabSettings .inventory-settings-card-title i {
+  background: var(--primary-light) !important;
+}
+
+#inventoryTabSettings .form-check-input:checked {
+  background-color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+::-webkit-scrollbar-track,
+.table-responsive::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+}
+
+::-webkit-scrollbar-thumb,
+.table-responsive::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+}
+
+::-webkit-scrollbar-thumb:hover,
+.table-responsive::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
