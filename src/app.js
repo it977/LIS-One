@@ -184,6 +184,7 @@ async function bootApp(user) {
 
 window.handleAuthExpired = function(message = 'Session ໝົດອາຍຸ. ກະລຸນາ login ໃໝ່.') {
     sessionStorage.removeItem('lis_user');
+    localStorage.removeItem('lis_user');
     if (typeof window.performLogout === 'function') window.performLogout();
     const errDiv = document.getElementById('loginError');
     if (errDiv) {
@@ -299,20 +300,17 @@ async function handleLoginSubmit(event) {
 
         if (res && res.success) {
             // Store user session
-            sessionStorage.setItem('lis_user', JSON.stringify({
+            const sessionUser = {
                 id: res.id,
                 username: res.username || u,
                 role: res.role || 'admin',
                 token: res.token
-            }));
+            };
+            sessionStorage.setItem('lis_user', JSON.stringify(sessionUser));
+            localStorage.setItem('lis_user', JSON.stringify(sessionUser));
 
             // Show real app
-            bootApp({
-                id: res.id,
-                username: res.username || u,
-                role: res.role || 'admin',
-                token: res.token
-            });
+            bootApp(sessionUser);
         } else {
             console.warn('Login Rejected');
             if (errDiv) { errDiv.textContent = res?.message || 'Login failed'; errDiv.style.display = 'block'; }
@@ -2961,11 +2959,12 @@ requiredFns.forEach(s => {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM Loaded. Checking session...');
     bindLoginEvents();
-    const user = JSON.parse(sessionStorage.getItem('lis_user') || 'null');
+    const user = JSON.parse(sessionStorage.getItem('lis_user') || localStorage.getItem('lis_user') || 'null');
     if (user && api.hasValidAuthToken()) bootApp(user);
     else if (user) {
         console.warn('[auth] stale session removed: missing or expired token');
         sessionStorage.removeItem('lis_user');
+        localStorage.removeItem('lis_user');
         const errDiv = document.getElementById('loginError');
         if (errDiv) {
             errDiv.textContent = 'Session ໝົດອາຍຸ ຫຼື token ບໍ່ຖືກຕ້ອງ. ກະລຸນາ login ໃໝ່.';

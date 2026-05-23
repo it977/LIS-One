@@ -7,7 +7,8 @@ export const supabase = null
 
 function readSessionUser() {
   try {
-    return JSON.parse(sessionStorage.getItem('lis_user') || 'null');
+    const raw = sessionStorage.getItem('lis_user') || localStorage.getItem('lis_user') || 'null';
+    return JSON.parse(raw);
   } catch {
     return null;
   }
@@ -36,9 +37,14 @@ function authHeaders() {
   const h = { 'Content-Type': 'application/json' };
   if (token) {
     h['Authorization'] = `Bearer ${token}`;
-    h['X-Lis-Token'] = token;
+    h['x-lis-token'] = token;
   }
   return h;
+}
+
+function hasCookie(name) {
+  if (typeof document === 'undefined') return false;
+  return document.cookie.split(';').some((part) => part.trim().startsWith(`${name}=`));
 }
 
 function sessionDiagnostics() {
@@ -48,8 +54,10 @@ function sessionDiagnostics() {
   const headers = authHeaders();
   return {
     hasSession: Boolean(session),
-    sessionUserId: session?.id || null,
-    sessionUsername: session?.username || null,
+    userId: session?.id || payload?.uid || null,
+    username: session?.username || payload?.u || null,
+    sessionStorageHasSession: Boolean(sessionStorage.getItem('lis_user')),
+    localStorageHasSession: Boolean(localStorage.getItem('lis_user')),
     sessionEmail: session?.email || null,
     tokenUserId: payload?.uid || null,
     tokenUsername: payload?.u || null,
@@ -58,7 +66,11 @@ function sessionDiagnostics() {
     tokenExp: payload?.exp || null,
     hasToken: Boolean(token),
     hasAuthorizationHeader: Boolean(headers.Authorization),
-    hasXLisTokenHeader: Boolean(headers['X-Lis-Token'])
+    hasXLisTokenHeader: Boolean(headers['x-lis-token']),
+    hasCookies: typeof document !== 'undefined' && Boolean(document.cookie),
+    hasLisUserCookie: hasCookie('lis_user'),
+    supabaseSessionUser: null,
+    fallbackAuthPath: sessionStorage.getItem('lis_user') ? 'sessionStorage' : (localStorage.getItem('lis_user') ? 'localStorage' : 'none')
   };
 }
 
@@ -98,7 +110,7 @@ function perfMeasure(label) {
 async function fetchWithTimeout(resource, options = {}) {
   const { timeout = API_TIMEOUT_MS } = options;
   const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
+  const id = setTimeout(() => controller.abort(new Error(`Request timeout after ${timeout}ms`)), timeout);
   try {
     const response = await fetch(resource, {
       ...options,
@@ -428,8 +440,16 @@ export async function uploadOrderFile(orderId, file) {
     const headers = authHeaders();
     console.log('[FILES] upload request headers', {
       hasAuthorizationHeader: Boolean(headers.Authorization),
-      hasXLisTokenHeader: Boolean(headers['X-Lis-Token']),
+      hasXLisTokenHeader: Boolean(headers['x-lis-token']),
       order_id: cleanOrderId
+    });
+    console.log('[FILES] upload request payload', {
+      order_id: cleanOrderId,
+      file_name: file.name,
+      file_type: file.type || 'application/octet-stream',
+      file_size: file.size,
+      hasBase64: Boolean(base64),
+      base64Length: typeof base64 === 'string' ? base64.length : 0
     });
     const res = await fetchWithTimeout('/api/upload-file', {
       method: 'POST',
@@ -440,7 +460,8 @@ export async function uploadOrderFile(orderId, file) {
         file_type: file.type || 'application/octet-stream',
         file_size: file.size,
         base64
-      })
+      }),
+      timeout: 60000
     });
     const json = await readJsonSafe(res);
     console.log('[FILES] upload response', {
@@ -449,6 +470,9 @@ export async function uploadOrderFile(orderId, file) {
       order_id: json.order_id,
       file: json.file,
       error: json.error,
+      stage: json.stage,
+      authSource: json.authSource,
+      user: json.user,
       detail: json.detail
     });
     if (res.status === 401) {
@@ -468,7 +492,11 @@ export async function uploadOrderFile(orderId, file) {
       data: Array.isArray(json.data) ? json.data : (fileRow ? [fileRow] : [])
     };
   } catch (e) {
-    return { success: false, error: e.message };
+    const msg = e?.name === 'AbortError' || /aborted|timeout/i.test(e?.message || '')
+      ? e.message || 'Upload request timed out or was interrupted. Please retry.'
+      : e.message;
+    console.error('[FILES] upload exception', { error: msg, diagnostics: sessionDiagnostics() });
+    return { success: false, stage: 'frontend_exception', error: msg, detail: e?.stack || null };
   }
 }
 
@@ -493,6 +521,7 @@ export async function getOrderFiles(orderId) {
 
 export async function deleteOrderFile(fileId, storagePath, publicUrl) {
   try {
+    console.log('[FILES] delete frontend auth diagnostics', sessionDiagnostics());
     if (!hasValidAuthToken()) {
       const msg = 'Session ໝົດອາຍຸ. ກະລຸນາ login ໃໝ່.';
       handleAuthFailure(msg);
@@ -505,6 +534,11 @@ export async function deleteOrderFile(fileId, storagePath, publicUrl) {
       timeout: 30000
     });
     const json = await readJsonSafe(res);
+    console.log('[FILES] delete request payload', {
+      file_id: fileId,
+      hasStoragePath: Boolean(storagePath),
+      hasPublicUrl: Boolean(publicUrl)
+    });
     console.log('[FILES] delete response', json);
     if (res.status === 401) {
       handleAuthFailure(json.error || 'Session expired.');
@@ -513,8 +547,9 @@ export async function deleteOrderFile(fileId, storagePath, publicUrl) {
     return { success: res.ok && json.success !== false, ...json };
   } catch (e) {
     const msg = e?.name === 'AbortError' || /aborted/i.test(e?.message || '')
-      ? 'Delete request timed out or was interrupted. Please retry.'
+      ? e.message || 'Delete request timed out or was interrupted. Please retry.'
       : e.message;
-    return { success: false, error: msg };
+    console.error('[FILES] delete exception', { error: msg, diagnostics: sessionDiagnostics() });
+    return { success: false, stage: 'frontend_exception', error: msg, detail: e?.stack || null };
   }
 }

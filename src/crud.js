@@ -159,6 +159,7 @@ window.setSetupTab = function(tab) {
  * ============================================================ */
 window.performLogout = function() {
   sessionStorage.removeItem('lis_user');
+  localStorage.removeItem('lis_user');
   document.body.classList.remove('lis-authenticated');
   const main = $('mainApp');
   if (main) {

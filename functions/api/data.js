@@ -4,7 +4,7 @@ import { checkRateLimit, getClientIp } from '../_lib/rate-limit.js';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Lis-Token, x-lis-token'
 };
 
 const READ_ONLY_HIS_TABLES = new Set(['HIS_One_Patients']);

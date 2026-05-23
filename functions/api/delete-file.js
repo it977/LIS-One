@@ -1,10 +1,10 @@
-import { verifyToken, extractToken } from '../_lib/auth.js';
+import { authRequestDiagnostics, resolveAuth } from '../_lib/auth.js';
 
 const ORDER_FILE_BUCKET = 'order-result-files';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Lis-Token, x-lis-token'
 };
 
 function json(body, status = 200) {
@@ -14,10 +14,16 @@ function json(body, status = 200) {
   });
 }
 
+function fail(stage, status, authSource, user, error, detail = null) {
+  console.error('[FILES] delete failed', { stage, status, authSource, user, error, detail });
+  return json({ success: false, stage, authSource, user, error, detail }, status);
+}
+
 function supabaseConfig(env) {
   return {
     url: env.SUPABASE_URL || 'https://erueurkqzmtdefszqons.supabase.co',
-    key: env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
+    key: env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY,
+    keySource: env.SUPABASE_SERVICE_ROLE_KEY ? 'service_role' : (env.SUPABASE_ANON_KEY ? 'anon' : (env.VITE_SUPABASE_ANON_KEY ? 'vite_anon' : 'missing'))
   };
 }
 
@@ -94,19 +100,39 @@ function isMissingObject(body) {
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
-  if (request.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
+  if (request.method !== 'POST') return fail('method', 405, 'none', null, 'Method not allowed');
 
-  const { url, key } = supabaseConfig(env);
-  console.log('[FILES] env url', url);
-  if (!key) return json({ success: false, error: 'Supabase env missing' }, 500);
+  const { url, key, keySource } = supabaseConfig(env);
+  const requestHeaders = authRequestDiagnostics(request);
+  console.log('[FILES] delete diagnostics', {
+    url,
+    keySource,
+    env: {
+      hasSupabaseUrl: Boolean(env.SUPABASE_URL),
+      hasServiceRoleKey: Boolean(env.SUPABASE_SERVICE_ROLE_KEY),
+      hasAnonKey: Boolean(env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY)
+    },
+    requestHeaders
+  });
+  if (!key) return fail('env', 500, 'none', null, 'Supabase env missing', { keySource });
 
+  let authSource = 'missing';
+  let user = null;
   try {
-    const token = extractToken(request);
-    const session = await verifyToken(env, token);
-    if (!session) return json({ success: false, error: 'Authentication required' }, 401);
+    const auth = await resolveAuth(request, env);
+    authSource = auth.authSource;
+    user = auth.user;
+    if (!auth.token) return fail('auth_missing', 401, authSource, user, 'Authentication required', requestHeaders);
+    if (!auth.session) return fail('auth_verify', 401, authSource, user, 'Authentication required', requestHeaders);
+    console.log('[FILES] delete auth resolved', { authSource, user });
 
     const { file_id, storage_path, public_url, path } = await readBody(request);
-    if (!file_id) return json({ success: false, error: 'file_id is required' }, 400);
+    console.log('[FILES] delete payload', {
+      file_id: file_id || null,
+      hasStoragePath: Boolean(storage_path || path),
+      hasPublicUrl: Boolean(public_url)
+    });
+    if (!file_id) return fail('payload', 400, authSource, user, 'file_id is required');
 
     const lookup = await supabaseRest(
       env,
@@ -114,8 +140,7 @@ export async function onRequest(context) {
       { method: 'GET' }
     );
     if (!lookup.resp.ok) {
-      console.error('[FILES] delete lookup failed', { status: lookup.resp.status, body: lookup.body });
-      return json({ success: false, error: 'File lookup failed', detail: lookup.body, pathUsed: null }, lookup.resp.status);
+      return fail('metadata_lookup', lookup.resp.status, authSource, user, 'File lookup failed', lookup.body);
     }
     const row = Array.isArray(lookup.body) ? lookup.body[0] : lookup.body;
     let storagePath = normalizeStoragePath(row?.storage_path || storage_path || path || row?.public_url || public_url);
@@ -130,12 +155,10 @@ export async function onRequest(context) {
           console.warn('[FILES] storage object already missing; deleting DB row only', { status: storage.resp.status, body: storage.body, pathUsed: storagePath });
         } else {
           console.error('[FILES] storage delete failed', { status: storage.resp.status, body: storage.body, pathUsed: storagePath });
-          return json({
-            success: false,
-            error: 'Storage delete failed',
-            detail: storage.body,
+          return fail('storage_delete', storage.resp.status, authSource, user, 'Storage delete failed', {
+            body: storage.body,
             pathUsed: storagePath
-          }, storage.resp.status);
+          });
         }
       }
     } else {
@@ -150,8 +173,10 @@ export async function onRequest(context) {
     );
     console.log('[FILES] delete row', removed.body);
     if (!removed.resp.ok) {
-      console.error('[FILES] delete row failed', { status: removed.resp.status, body: removed.body, pathUsed: storagePath });
-      return json({ success: false, error: 'Delete failed', detail: removed.body, pathUsed: storagePath }, removed.resp.status);
+      return fail('metadata_delete', removed.resp.status, authSource, user, 'Delete failed', {
+        body: removed.body,
+        pathUsed: storagePath
+      });
     }
 
     return json({
@@ -162,6 +187,6 @@ export async function onRequest(context) {
     });
   } catch (err) {
     console.error('[FILES] delete error', err);
-    return json({ success: false, error: err.message, detail: String(err?.stack || ''), pathUsed: null }, 500);
+    return fail('exception', 500, authSource, user, err.message, String(err?.stack || ''));
   }
 }

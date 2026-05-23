@@ -1,10 +1,10 @@
-import { verifyToken, extractToken } from '../_lib/auth.js';
+import { authRequestDiagnostics, resolveAuth } from '../_lib/auth.js';
 
 const ORDER_FILE_BUCKET = 'order-result-files';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Lis-Token, x-lis-token'
 };
 
 function json(body, status = 200) {
@@ -12,6 +12,11 @@ function json(body, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
   });
+}
+
+function fail(stage, status, authSource, user, error, detail = null) {
+  console.error('[FILES] upload failed', { stage, status, authSource, user, error, detail });
+  return json({ success: false, stage, authSource, user, error, detail }, status);
 }
 
 function supabaseConfig(env) {
@@ -83,32 +88,49 @@ function withPublicUrl(url, file) {
 export async function onRequest(context) {
   const { request, env } = context;
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
-  if (request.method !== 'POST') return json({ success: false, error: 'Method not allowed' }, 405);
+  if (request.method !== 'POST') return fail('method', 405, 'none', null, 'Method not allowed');
 
   const { url, key, keySource } = supabaseConfig(env);
-  console.log('[FILES] env url', url);
-  console.log('[FILES] upload auth/header diagnostics', {
+  const requestHeaders = authRequestDiagnostics(request);
+  console.log('[FILES] upload diagnostics', {
     keySource,
-    hasAuthorizationHeader: Boolean(request.headers.get('authorization')),
-    hasXLisTokenHeader: Boolean(request.headers.get('x-lis-token'))
+    env: {
+      hasSupabaseUrl: Boolean(env.SUPABASE_URL),
+      hasServiceRoleKey: Boolean(env.SUPABASE_SERVICE_ROLE_KEY),
+      hasAnonKey: Boolean(env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY)
+    },
+    requestHeaders
   });
-  if (!key) return json({ success: false, error: 'Supabase env missing' }, 500);
+  if (!key) return fail('env', 500, 'none', null, 'Supabase env missing', { keySource });
 
+  let authSource = 'missing';
+  let user = null;
   try {
-    const token = extractToken(request);
-    const session = await verifyToken(env, token);
-    if (!session) return json({ success: false, error: 'Authentication required' }, 401);
-    console.log('[FILES] authenticated user', {
-      uid: session.uid || null,
-      username: session.u || session.username || null,
-      email: session.email || null,
-      role: session.r || session.role || null
-    });
+    const auth = await resolveAuth(request, env);
+    authSource = auth.authSource;
+    user = auth.user;
+    if (!auth.token) return fail('auth_missing', 401, authSource, user, 'Authentication required', requestHeaders);
+    if (!auth.session) return fail('auth_verify', 401, authSource, user, 'Authentication required', requestHeaders);
+    const session = auth.session;
+    console.log('[FILES] upload auth resolved', { authSource, user });
 
     const { order_id, file_name, file_type, file_size, base64 } = await readBody(request);
     const cleanOrderId = String(order_id || '').trim();
-    console.log('[FILES] upload orderId', cleanOrderId);
-    if (!cleanOrderId || !file_name || !base64) return json({ success: false, error: 'Missing required fields' }, 400);
+    console.log('[FILES] upload payload', {
+      order_id: cleanOrderId,
+      file_name: file_name || null,
+      file_type: file_type || null,
+      file_size: Number(file_size) || 0,
+      hasBase64: Boolean(base64),
+      base64Length: typeof base64 === 'string' ? base64.length : 0
+    });
+    if (!cleanOrderId || !file_name || !base64) {
+      return fail('payload', 400, authSource, user, 'Missing required fields', {
+        hasOrderId: Boolean(cleanOrderId),
+        hasFileName: Boolean(file_name),
+        hasBase64: Boolean(base64)
+      });
+    }
 
     const timestamp = Date.now();
     const safeName = String(file_name).replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -121,8 +143,7 @@ export async function onRequest(context) {
       body: dataUrlToBytes(base64)
     });
     if (!upload.resp.ok) {
-      console.error('[FILES] storage upload failed', { status: upload.resp.status, body: upload.body });
-      return json({ success: false, error: 'Storage upload failed', detail: upload.body }, upload.resp.status);
+      return fail('storage_upload', upload.resp.status, authSource, user, 'Storage upload failed', upload.body);
     }
 
     const metaPayload = {
@@ -151,7 +172,7 @@ export async function onRequest(context) {
       await supabaseStorage(env, `object/${ORDER_FILE_BUCKET}/${storagePath}`, { method: 'DELETE' }).catch((cleanupErr) => {
         console.error('[FILES] storage cleanup after metadata failure failed', cleanupErr);
       });
-      return json({ success: false, error: 'Metadata insert failed', detail: meta.body }, meta.resp.status);
+      return fail('metadata_insert', meta.resp.status, authSource, user, 'Metadata insert failed', meta.body);
     }
 
     const inserted = Array.isArray(meta.body) ? meta.body[0] : meta.body;
@@ -161,7 +182,7 @@ export async function onRequest(context) {
       await supabaseStorage(env, `object/${ORDER_FILE_BUCKET}/${storagePath}`, { method: 'DELETE' }).catch((cleanupErr) => {
         console.error('[FILES] storage cleanup after empty metadata response failed', cleanupErr);
       });
-      return json({ success: false, error: 'Metadata insert returned no row', detail: meta.body }, 500);
+      return fail('metadata_insert_empty', 500, authSource, user, 'Metadata insert returned no row', meta.body);
     }
 
     const verify = await supabaseRest(
@@ -170,8 +191,7 @@ export async function onRequest(context) {
       { method: 'GET' }
     );
     if (!verify.resp.ok) {
-      console.error('[FILES] metadata verify failed', { status: verify.resp.status, body: verify.body });
-      return json({ success: false, error: 'Metadata verify failed', detail: verify.body }, verify.resp.status);
+      return fail('metadata_verify', verify.resp.status, authSource, user, 'Metadata verify failed', verify.body);
     }
     const verified = Array.isArray(verify.body) ? verify.body[0] : verify.body;
     console.log('[FILES] verified inserted row', { order_id: cleanOrderId, row: verified });
@@ -185,6 +205,6 @@ export async function onRequest(context) {
     });
   } catch (err) {
     console.error('[FILES] upload error', err);
-    return json({ success: false, error: err.message }, 500);
+    return fail('exception', 500, authSource, user, err.message, String(err?.stack || ''));
   }
 }

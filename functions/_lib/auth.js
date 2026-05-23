@@ -76,6 +76,49 @@ export function extractToken(request) {
   return headerValue(headers, 'x-lis-token') || null;
 }
 
+export function authRequestDiagnostics(request) {
+  const headers = request?.headers;
+  const authorization = headerValue(headers, 'authorization');
+  const xLisToken = headerValue(headers, 'x-lis-token');
+  const cookie = headerValue(headers, 'cookie');
+  return {
+    hasAuthorizationHeader: Boolean(authorization),
+    authorizationIsBearer: Boolean(authorization && authorization.toLowerCase().startsWith('bearer ')),
+    hasXLisTokenHeader: Boolean(xLisToken),
+    hasCookieHeader: Boolean(cookie),
+    hasLisUserCookie: /\blis_user=/.test(cookie || ''),
+    contentType: headerValue(headers, 'content-type') || null,
+    userAgent: headerValue(headers, 'user-agent') || null
+  };
+}
+
+export function extractTokenWithSource(request) {
+  const headers = request?.headers;
+  const h = headerValue(headers, 'authorization');
+  if (h && h.toLowerCase().startsWith('bearer ')) {
+    return { token: h.slice(7).trim(), authSource: 'authorization' };
+  }
+  const xLisToken = headerValue(headers, 'x-lis-token');
+  if (xLisToken) return { token: xLisToken, authSource: 'x-lis-token' };
+  return { token: null, authSource: 'missing' };
+}
+
+export async function resolveAuth(request, env) {
+  const { token, authSource } = extractTokenWithSource(request);
+  const session = await verifyToken(env, token);
+  return {
+    token,
+    authSource,
+    session,
+    user: session ? {
+      id: session.uid || null,
+      username: session.u || session.username || null,
+      email: session.email || null,
+      role: session.r || session.role || null
+    } : null
+  };
+}
+
 /* ===========================================================
  * Permission matrix (mirror of lis_one_permissions seed)
  * =========================================================== */
