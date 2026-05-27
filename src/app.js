@@ -22,6 +22,63 @@ const Pages = { active: 'dashboard', setupTab: 'tests' };
 const appCache = window.__lisCache || (window.__lisCache = {});
 if (!Array.isArray(appCache.settings)) appCache.settings = [];
 
+const SUMMARY_CATEGORY_ORDER = [
+    'Hematology',
+    'Biochemistry',
+    'Immunoserology',
+    'Stool/Urine',
+    'Package',
+    'ultrasound',
+    'Cardiology',
+    'X-ray',
+    'ENT',
+    'Pathology',
+    'Lab',
+    'Other',
+    'Unknown',
+];
+const SUMMARY_TEST_ORDER = [
+    'CBC 24P',
+    'BT (Ts Tc)',
+    'HbA1C',
+    'Blood sugar/FBS',
+    'Glucose',
+    'Urea/BUN',
+    'Bun',
+    'Creatinine',
+    'Uric Acid',
+    'Calcium',
+    'Total Protein',
+    'Albumin',
+    'SGOT(AST)',
+    'AST(SGOT)',
+    'SGPT(ALT)',
+    'ALT( SGPT)',
+    'Gamma ( GGT )',
+    'GGT',
+    'Alkaline Phosphatase',
+    'ALP(Alkaline phosphatase)',
+    'Bilirubin Total',
+    'Bilirubin Direct',
+    'Cholesterol',
+    'Triglyceride',
+    'HDL-C',
+    'HDL',
+    'LDL-C',
+    'LDL',
+    'Electrolyte (Na,K,Cl)',
+    'Electolyte',
+    'HBsAg',
+    'HCV',
+    'HIV',
+    'Dengue NS1,IgM,IgG',
+    'Antigen Influenza,RSV,Covid-19',
+    'T3',
+    'T4',
+    'TSH',
+];
+const SUMMARY_TEST_ORDER_MAP = new Map(SUMMARY_TEST_ORDER.map((name, index) => [normalizeSummaryKey(name), index + 1]));
+
 window.invalidateDropdownCache = function() {
     appCache.settings = [];
 };
@@ -101,6 +158,49 @@ function statusBadge(status) {
         : normalized.toLowerCase() === 'processing' ? 'primary'
         : 'secondary';
     return `<span class="badge bg-${color}">${escapeHtml(normalized)}</span>`;
+}
+
+function normalizeSummaryKey(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/&/g, 'and')
+        .replace(/[^a-z0-9]+/g, '');
+}
+
+function normalizeSummaryCategory(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return 'Unknown';
+    const exact = SUMMARY_CATEGORY_ORDER.find(c => c.toLowerCase() === raw.toLowerCase());
+    if (exact) return exact;
+    if (/bio|chem/i.test(raw)) return 'Biochemistry';
+    if (/immun|sero|rapid/i.test(raw)) return 'Immunoserology';
+    if (/hema|cbc|blood/i.test(raw)) return 'Hematology';
+    if (/stool|urine/i.test(raw)) return 'Stool/Urine';
+    if (/pack/i.test(raw)) return 'Package';
+    return raw;
+}
+
+function summaryCategoryRank(category) {
+    const normalized = normalizeSummaryCategory(category);
+    const idx = SUMMARY_CATEGORY_ORDER.findIndex(c => c.toLowerCase() === normalized.toLowerCase());
+    return idx === -1 ? 999 : idx;
+}
+
+function summaryTestRank(testName) {
+    const key = normalizeSummaryKey(testName);
+    if (SUMMARY_TEST_ORDER_MAP.has(key)) return SUMMARY_TEST_ORDER_MAP.get(key);
+    for (const [knownKey, order] of SUMMARY_TEST_ORDER_MAP.entries()) {
+        if (key && knownKey && (key.startsWith(knownKey) || knownKey.startsWith(key))) return order;
+    }
+    return 9999;
+}
+
+function compareSummaryRows(a, b) {
+    return summaryCategoryRank(a.category) - summaryCategoryRank(b.category)
+        || summaryTestRank(a.test_name) - summaryTestRank(b.test_name)
+        || String(a.test_name || '').localeCompare(String(b.test_name || ''), undefined, { numeric: true })
+        || Number(b.revenue || 0) - Number(a.revenue || 0);
 }
 
 function orderDateValue(order) {
@@ -1819,15 +1919,16 @@ function calculateDashboardAnalytics(orders, testRows) {
 
     const summaryMap = new Map();
     testRows.forEach(row => {
-        const key = `${row.category}|||${row.test_name}`;
-        if (!summaryMap.has(key)) summaryMap.set(key, { category: row.category, test_name: row.test_name, normal: 0, package: 0, count: 0, revenue: 0 });
+        const category = normalizeSummaryCategory(row.category);
+        const key = `${category}|||${row.test_name}`;
+        if (!summaryMap.has(key)) summaryMap.set(key, { category, test_name: row.test_name, normal: 0, package: 0, count: 0, revenue: 0 });
         const item = summaryMap.get(key);
         item.count += 1;
         item.revenue += Number(row.revenue) || 0;
         if (String(row.test_type).toLowerCase() === 'package') item.package += 1;
         else item.normal += 1;
     });
-    const testSummary = [...summaryMap.values()].sort((a, b) => b.revenue - a.revenue || b.count - a.count);
+    const testSummary = [...summaryMap.values()].sort(compareSummaryRows);
 
     return {
         kpis: {
@@ -2047,7 +2148,7 @@ function renderAgeGroupsTable(rows) {
 }
 
 function renderTopTables(analytics) {
-    const tests = analytics.testSummary.slice(0, 5).map((x, i) => ({ rank: i + 1, name: x.test_name, count: x.count, revenue: x.revenue }));
+    const tests = analytics.testSummary.slice().sort((a, b) => b.revenue - a.revenue || b.count - a.count).slice(0, 5).map((x, i) => ({ rank: i + 1, name: x.test_name, count: x.count, revenue: x.revenue }));
     const cats = analytics.categorySummary.slice(0, 5).map((x, i) => ({ rank: i + 1, name: x.name, count: x.count, revenue: x.revenue }));
     renderRankTable('topTestsBody', tests);
     renderRankTable('topCatsBody', cats);
@@ -2062,7 +2163,24 @@ function renderRankTable(id, rows) {
 function renderDashboardSummaryTable(rows) {
     const body = document.getElementById('dashboardSummaryBody');
     const foot = document.getElementById('dashboardSummaryFoot');
-    if (body) body.innerHTML = rows.map(r => `<tr><td>${escapeHtml(r.category)}</td><td>${escapeHtml(r.test_name)}</td><td class="text-center">${r.normal.toLocaleString()}</td><td class="text-center">${r.package.toLocaleString()}</td><td class="text-end">${formatKip(r.revenue)}</td></tr>`).join('');
+    if (body) {
+        let currentCategory = '';
+        body.innerHTML = rows.map(r => {
+            const category = normalizeSummaryCategory(r.category);
+            const subtotalRows = rows.filter(x => normalizeSummaryCategory(x.category) === category);
+            const header = category !== currentCategory
+                ? `<tr class="summary-category-row"><td colspan="5">
+                    <div class="summary-category-title">
+                        <span>${escapeHtml(category)}</span>
+                        <small>${subtotalRows.length.toLocaleString()} items</small>
+                        <b>${formatKip(subtotalRows.reduce((s, x) => s + x.revenue, 0))}</b>
+                    </div>
+                  </td></tr>`
+                : '';
+            currentCategory = category;
+            return `${header}<tr><td>${escapeHtml(category)}</td><td>${escapeHtml(r.test_name)}</td><td class="text-center">${r.normal.toLocaleString()}</td><td class="text-center">${r.package.toLocaleString()}</td><td class="text-end">${formatKip(r.revenue)}</td></tr>`;
+        }).join('');
+    }
     if (foot) foot.innerHTML = `<tr class="table-light fw-bold"><td colspan="2">Total</td><td class="text-center">${rows.reduce((s, r) => s + r.normal, 0).toLocaleString()}</td><td class="text-center">${rows.reduce((s, r) => s + r.package, 0).toLocaleString()}</td><td class="text-end">${formatKip(rows.reduce((s, r) => s + r.revenue, 0))}</td></tr>`;
 }
 
@@ -2708,229 +2826,470 @@ window.exportDashboardPDF = async () => {
 
 window.exportDashboardPDF = async () => {
     if (!dashboardState.analytics) await loadDashboard();
-    if (!window.jspdf?.jsPDF || typeof html2canvas === 'undefined') {
-        return Swal.fire('PDF Error', 'jsPDF/html2canvas library is not loaded', 'error');
+    if (!window.jspdf?.jsPDF || typeof html2canvas === 'undefined' || typeof Chart === 'undefined') {
+        return Swal.fire('PDF Error', 'jsPDF/html2canvas/Chart library is not loaded', 'error');
     }
 
-    const dashboard = document.getElementById('dashboard');
-    if (!dashboard) return Swal.fire('PDF Error', 'Dashboard not found', 'error');
+    const analytics = dashboardState.analytics;
+    let pdfContainer = null;
+    const exportCharts = [];
+    const exportChartPixelRatio = 4;
 
-    const content = document.querySelector('.content');
-    const previousScroll = content?.scrollTop || 0;
-    let screenshotClone = null;
-    let originalOverflow = '';
+    const toKip = (value) => `₭ ${formatPrice(value)}`;
+    const shortLabel = (value, max = 18) => {
+        const text = String(value || 'Other');
+        return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+    };
+    const objectEntries = (obj) => Object.entries(obj || {}).filter(([, value]) => Number(value) > 0);
+    const topRevenueEntries = (obj, limit = 6) => objectEntries(obj)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, limit);
+    const chartColors = ['#2563eb', '#ec4899', '#10b981', '#f59e0b', '#6366f1', '#06b6d4', '#64748b'];
+    const chartDataFromObject = (obj, fallbackLabel = 'No data') => {
+        const rows = objectEntries(obj);
+        if (!rows.length) return { labels: [fallbackLabel], values: [1], empty: true };
+        return { labels: rows.map(([label]) => label), values: rows.map(([, value]) => Number(value) || 0), empty: false };
+    };
+    const renderRankRows = (rows, nameKey = 'name') => rows.map((row, index) => `
+        <tr>
+            <td class="rank"><span>${index + 1}</span></td>
+            <td class="name">${escapeHtml(row[nameKey] || row.test_name || row.name || 'Other')}</td>
+            <td class="count">${Number(row.count || 0).toLocaleString()}</td>
+            <td class="money">${toKip(row.revenue)}</td>
+        </tr>
+    `).join('');
+
+    const topTests = analytics.testSummary.slice()
+        .sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0) || Number(b.count || 0) - Number(a.count || 0))
+        .slice(0, 5);
+    const topCategories = analytics.categorySummary.slice(0, 5);
 
     try {
         Swal.fire({
             title: 'Generating PDF...',
-            html: 'Taking a real screenshot of the dashboard',
+            html: 'Building the compact dashboard report',
             allowOutsideClick: false,
             didOpen: () => Swal.showLoading()
         });
 
-        content?.scrollTo({ top: 0, behavior: 'instant' });
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        originalOverflow = dashboard.style.overflow;
-        dashboard.style.overflow = 'visible';
-        await new Promise(resolve => requestAnimationFrame(resolve));
-
-        const buildScreenshotClone = () => {
-            const clone = dashboard.cloneNode(true);
-            Object.assign(clone.style, {
-                position: 'fixed',
-                left: '0px',
-                top: '0px',
-                width: `${dashboard.scrollWidth}px`,
-                minHeight: `${dashboard.scrollHeight}px`,
-                background: '#ffffff',
-                zIndex: '2147483647',
-                overflow: 'visible',
-                transform: 'none',
-                opacity: '1',
-                display: 'block',
-                visibility: 'visible',
-                pointerEvents: 'none',
-                animation: 'none'
-            });
-            clone.querySelectorAll('*').forEach(el => {
-                el.style.animation = 'none';
-                el.style.transition = 'none';
-            });
-            const exportStyle = document.createElement('style');
-            exportStyle.textContent = `
-                .dashboard-pdf-capture, .dashboard-pdf-capture * {
-                    font-family: 'Noto Sans Lao', 'Phetsarath OT', 'Saysettha OT', 'Segoe UI', Arial, sans-serif !important;
-                    text-rendering: geometricPrecision;
+        pdfContainer = document.createElement('div');
+        pdfContainer.className = 'dashboard-pdf-compact';
+        pdfContainer.innerHTML = `
+            <style>
+                .dashboard-pdf-compact {
+                    position: fixed;
+                    left: 0;
+                    top: 0;
+                    z-index: 2147483646;
+                    pointer-events: none;
+                    width: 297mm;
+                    background: #ffffff;
+                    color: #111827;
+                    font-family: 'Noto Sans Lao', 'Phetsarath OT', 'Saysettha OT', 'Segoe UI', Arial, sans-serif;
                     -webkit-font-smoothing: antialiased;
-                    font-kerning: normal;
-                    font-synthesis: none;
-                    scrollbar-width: none !important;
+                    text-rendering: geometricPrecision;
                 }
-                .dashboard-pdf-capture *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
-                .dashboard-pdf-capture .table-responsive,
-                .dashboard-pdf-capture .card,
-                .dashboard-pdf-capture .card-body,
-                .dashboard-pdf-capture #dashboardSummaryTableContainer {
-                    overflow: visible !important;
-                    max-height: none !important;
+                .dashboard-pdf-compact * { box-sizing: border-box; }
+                .pdf-page {
+                    width: 297mm;
+                    height: 210mm;
+                    padding: 6mm;
+                    background: #ffffff;
+                    overflow: hidden;
                 }
-                .dashboard-pdf-capture table {
-                    width: 100% !important;
-                    table-layout: fixed !important;
+                .pdf-kpis {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 4mm;
+                    margin-bottom: 5mm;
                 }
-                .dashboard-pdf-capture .card-header,
-                .dashboard-pdf-capture .table th {
-                    font-weight: 800 !important;
+                .pdf-kpi {
+                    height: 17mm;
+                    border-radius: 2mm;
+                    color: #ffffff;
+                    display: grid;
+                    place-items: center;
+                    text-align: center;
+                    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
                 }
-                .dashboard-pdf-capture .table th,
-                .dashboard-pdf-capture .table td {
-                    font-size: 13px !important;
-                    line-height: 1.35 !important;
+                .pdf-kpi .label {
+                    font-size: 8px;
+                    font-weight: 700;
+                    line-height: 1.15;
+                    opacity: 0.95;
                 }
-                .dashboard-pdf-capture .card,
-                .dashboard-pdf-capture .dashboard-card,
-                .dashboard-pdf-capture .chart-card,
-                .dashboard-pdf-capture canvas,
-                .dashboard-pdf-capture img,
-                .dashboard-pdf-capture table,
-                .dashboard-pdf-capture .summary-report {
-                    page-break-inside: avoid !important;
-                    break-inside: avoid !important;
+                .pdf-kpi .value {
+                    margin-top: 1mm;
+                    font-size: 15px;
+                    line-height: 1;
+                    font-weight: 900;
                 }
-            `;
-            clone.classList.add('dashboard-pdf-capture');
-            clone.prepend(exportStyle);
-            dashboard.querySelectorAll('canvas').forEach(sourceCanvas => {
-                if (!sourceCanvas.id) return;
-                const targetCanvas = clone.querySelector(`#${CSS.escape(sourceCanvas.id)}`);
-                if (!targetCanvas) return;
-                const img = document.createElement('img');
-                img.src = sourceCanvas.toDataURL('image/png');
-                img.style.display = 'block';
-                img.style.width = `${sourceCanvas.offsetWidth || sourceCanvas.width}px`;
-                img.style.height = `${sourceCanvas.offsetHeight || sourceCanvas.height}px`;
-                targetCanvas.replaceWith(img);
-            });
-            return clone;
+                .pdf-card {
+                    border: 1px solid #e5e7eb;
+                    border-radius: 2mm;
+                    background: #ffffff;
+                    overflow: hidden;
+                    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+                }
+                .pdf-card-title {
+                    min-height: 9mm;
+                    padding: 2.2mm 3mm;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 1.5mm;
+                    border-bottom: 1px solid #e5e7eb;
+                    font-size: 10px;
+                    font-weight: 900;
+                    line-height: 1.15;
+                    color: #111827;
+                }
+                .pdf-time-title { justify-content: flex-start; }
+                .pdf-time-card { height: 70mm; margin-bottom: 5mm; }
+                .pdf-time-body { height: 61mm; padding: 2mm 4mm 3mm; }
+                .pdf-card-grid {
+                    display: grid;
+                    gap: 4mm;
+                }
+                .pdf-four { grid-template-columns: repeat(4, 1fr); }
+                .pdf-chart-row { grid-template-columns: 1fr 1fr 1fr 1fr; margin-bottom: 5mm; }
+                .pdf-donut-card { height: 62mm; }
+                .pdf-small-card { height: 62mm; }
+                .pdf-chart-body { height: calc(100% - 9mm); padding: 2mm; }
+                .pdf-chart-body canvas { width: 100% !important; height: 100% !important; }
+                .pdf-table-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 4mm;
+                }
+                .pdf-table-card {
+                    border-top-width: 1mm;
+                    height: 72mm;
+                }
+                .pdf-table-card.info { border-top-color: #06b6d4; }
+                .pdf-table-card.warn { border-top-color: #f59e0b; }
+                .pdf-table-card .pdf-card-title {
+                    justify-content: flex-start;
+                    font-size: 9.5px;
+                }
+                .pdf-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    table-layout: fixed;
+                    font-size: 8px;
+                }
+                .pdf-table th {
+                    background: #f8fafc;
+                    color: #475569;
+                    padding: 2mm 2.5mm;
+                    border-bottom: 1px solid #e5e7eb;
+                    font-weight: 900;
+                    text-align: left;
+                }
+                .pdf-table td {
+                    padding: 1.8mm 2.5mm;
+                    border-bottom: 1px solid #eef2f7;
+                    vertical-align: middle;
+                    font-weight: 700;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .pdf-table .rank { width: 12%; text-align: center; }
+                .pdf-table .rank span {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-width: 4.5mm;
+                    height: 3.5mm;
+                    border-radius: 99px;
+                    background: #6b7280;
+                    color: #ffffff;
+                    font-size: 6.5px;
+                    font-weight: 900;
+                }
+                .pdf-table .name { width: 50%; }
+                .pdf-table .count { width: 14%; text-align: center; }
+                .pdf-table .money { width: 24%; text-align: right; color: #111827; }
+            </style>
+            <section class="pdf-page">
+                <div class="pdf-kpis">
+                    <div class="pdf-kpi" style="background:#111827;">
+                        <div><div class="label"><i class="bi bi-people"></i> ຈຳນວນບິນ (Orders)</div><div class="value">${analytics.kpis.totalOrders.toLocaleString()}</div></div>
+                    </div>
+                    <div class="pdf-kpi" style="background:#10b981;">
+                        <div><div class="label"><i class="bi bi-cash-coin"></i> ລາຍຮັບລວມ (₭)</div><div class="value">${toKip(analytics.kpis.totalRevenue)}</div></div>
+                    </div>
+                    <div class="pdf-kpi" style="background:#0ea5e9;">
+                        <div><div class="label"><i class="bi bi-building"></i> In-Lab (₭)</div><div class="value">${toKip(analytics.kpis.inLabRevenue)}</div></div>
+                    </div>
+                    <div class="pdf-kpi" style="background:#f59e0b;">
+                        <div><div class="label"><i class="bi bi-truck"></i> Outsource (₭)</div><div class="value">${toKip(analytics.kpis.outLabRevenue)}</div></div>
+                    </div>
+                </div>
+                <div class="pdf-card pdf-time-card">
+                    <div class="pdf-card-title pdf-time-title"><i class="bi bi-bar-chart-line text-primary"></i> ລາຍຮັບ ແລະ ຈຳນວນບິນ ຕາມຊ່ວງເວລາ (Time Slot)</div>
+                    <div class="pdf-time-body"><canvas id="pdfChartTimeSlot"></canvas></div>
+                </div>
+                <div class="pdf-card-grid pdf-four">
+                    <div class="pdf-card pdf-donut-card"><div class="pdf-card-title">ເພດຄົນເຈັບ (Gender)</div><div class="pdf-chart-body"><canvas id="pdfChartGender"></canvas></div></div>
+                    <div class="pdf-card pdf-donut-card"><div class="pdf-card-title">OPD vs IPD (Insite)</div><div class="pdf-chart-body"><canvas id="pdfChartInsite"></canvas></div></div>
+                    <div class="pdf-card pdf-donut-card"><div class="pdf-card-title">Visit Type</div><div class="pdf-chart-body"><canvas id="pdfChartVisitType"></canvas></div></div>
+                    <div class="pdf-card pdf-donut-card"><div class="pdf-card-title">Normal vs Package</div><div class="pdf-chart-body"><canvas id="pdfChartTestType"></canvas></div></div>
+                </div>
+            </section>
+            <section class="pdf-page">
+                <div class="pdf-card-grid pdf-chart-row">
+                    <div class="pdf-card pdf-small-card"><div class="pdf-card-title">In-Lab vs Outsource</div><div class="pdf-chart-body"><canvas id="pdfChartLabType"></canvas></div></div>
+                    <div class="pdf-card pdf-small-card"><div class="pdf-card-title">Age Group</div><div class="pdf-chart-body"><canvas id="pdfChartAgeGroup"></canvas></div></div>
+                    <div class="pdf-card pdf-small-card"><div class="pdf-card-title">ລາຍຮັບແຍກຕາມແພດ</div><div class="pdf-chart-body"><canvas id="pdfChartDoctor"></canvas></div></div>
+                    <div class="pdf-card pdf-small-card"><div class="pdf-card-title"><i class="bi bi-diagram-3 text-primary"></i> ລາຍຮັບແຍກຕາມພະແນກ</div><div class="pdf-chart-body"><canvas id="pdfChartDept"></canvas></div></div>
+                </div>
+                <div class="pdf-table-grid">
+                    <div class="pdf-card pdf-table-card info">
+                        <div class="pdf-card-title"><i class="bi bi-trophy text-info"></i> 5 ອັນດັບ ລາຍການກວດ (Top Tests)</div>
+                        <table class="pdf-table">
+                            <thead><tr><th class="rank">#</th><th class="name">ຊື່ລາຍການ</th><th class="count">ຈຳນວນ</th><th class="money">ລາຍຮັບ</th></tr></thead>
+                            <tbody>${renderRankRows(topTests, 'test_name')}</tbody>
+                        </table>
+                    </div>
+                    <div class="pdf-card pdf-table-card warn">
+                        <div class="pdf-card-title"><i class="bi bi-tags text-warning"></i> 5 ອັນດັບ ໝວດໝູ່ (Top Categories)</div>
+                        <table class="pdf-table">
+                            <thead><tr><th class="rank">#</th><th class="name">ໝວດໝູ່</th><th class="count">ຈຳນວນ</th><th class="money">ລາຍຮັບ</th></tr></thead>
+                            <tbody>${renderRankRows(topCategories)}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        `;
+        document.body.appendChild(pdfContainer);
+        if (window.ChartDataLabels && !Chart.registry.plugins.get('datalabels')) {
+            Chart.register(window.ChartDataLabels);
+        }
+
+        const makeChart = (id, config) => {
+            const canvas = pdfContainer.querySelector(`#${id}`);
+            if (!canvas) return null;
+            const chart = new Chart(canvas, config);
+            exportCharts.push(chart);
+            return chart;
+        };
+        const doughnutOptions = (empty = false) => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            devicePixelRatio: exportChartPixelRatio,
+            cutout: '58%',
+            layout: { padding: { top: 10, right: 10, bottom: 20, left: 10 } },
+            plugins: {
+                legend: {
+                    display: !empty,
+                    position: 'bottom',
+                    labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 9, color: '#475569', font: { size: 10, weight: '700' } }
+                },
+                tooltip: { enabled: false },
+                datalabels: {
+                    display: (ctx) => !empty && Number(ctx.dataset.data[ctx.dataIndex]) > 0,
+                    color: '#ffffff',
+                    backgroundColor: 'rgba(71, 85, 105, 0.86)',
+                    borderRadius: 4,
+                    padding: { top: 2, bottom: 2, left: 4, right: 4 },
+                    font: { size: 10, weight: '900' },
+                    formatter: (value, ctx) => {
+                        const total = ctx.dataset.data.reduce((s, n) => s + Number(n || 0), 0);
+                        return `${Number(value || 0).toLocaleString()}\n${percentLabel(value, total)}`;
+                    }
+                }
+            }
+        });
+        const makeDoughnut = (id, data, colors) => makeChart(id, {
+            type: 'doughnut',
+            data: {
+                labels: data.labels,
+                datasets: [{ data: data.values, backgroundColor: data.empty ? ['#e5e7eb'] : colors, borderColor: '#ffffff', borderWidth: 2 }]
+            },
+            options: doughnutOptions(data.empty)
+        });
+        const barOptions = (horizontal = false, values = []) => {
+            const maxValue = Math.max(0, ...values.map(value => Number(value) || 0));
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                devicePixelRatio: exportChartPixelRatio,
+                indexAxis: horizontal ? 'y' : 'x',
+                layout: { padding: { top: 18, right: horizontal ? 42 : 14, bottom: 0, left: 4 } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: false },
+                    datalabels: {
+                        display: (ctx) => Number(ctx.dataset.data[ctx.dataIndex]) > 0,
+                        anchor: 'end',
+                        align: 'end',
+                        clamp: true,
+                        color: '#1f2937',
+                        font: { size: 10, weight: '900' },
+                        formatter: (value) => compactChartValue(value)
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: horizontal && maxValue > 0 ? maxValue * 1.28 : undefined,
+                        ticks: { color: '#64748b', font: { size: 9, weight: '700' }, callback: (v) => compactChartValue(v) },
+                        grid: { color: 'rgba(148, 163, 184, 0.22)' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: '#64748b', font: { size: 9, weight: '700' } },
+                        grid: { display: !horizontal, color: 'rgba(148, 163, 184, 0.18)' }
+                    }
+                }
+            };
         };
 
-        screenshotClone = buildScreenshotClone();
-        document.body.appendChild(screenshotClone);
+        const timeRows = analytics.timeSlots || [];
+        makeChart('pdfChartTimeSlot', {
+            type: 'bar',
+            data: {
+                labels: timeRows.map(row => row.label),
+                datasets: [
+                    {
+                        type: 'line',
+                        label: 'ລາຍຮັບ (₭)',
+                        data: timeRows.map(row => Number(row.revenue) || 0),
+                        yAxisID: 'revenue',
+                        borderColor: '#ef4444',
+                        backgroundColor: '#ef4444',
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointHoverRadius: 3,
+                        tension: 0.25
+                    },
+                    {
+                        type: 'bar',
+                        label: 'ຈຳນວນບິນ',
+                        data: timeRows.map(row => Number(row.count) || 0),
+                        yAxisID: 'count',
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 2,
+                        maxBarThickness: 62
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                devicePixelRatio: exportChartPixelRatio,
+                layout: { padding: { top: 18, right: 14, bottom: 0, left: 4 } },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { color: '#475569', boxWidth: 18, font: { size: 10, weight: '700' } }
+                    },
+                    tooltip: { enabled: false },
+                    datalabels: {
+                        display: (ctx) => Number(ctx.dataset.data[ctx.dataIndex]) > 0,
+                        anchor: 'end',
+                        align: 'top',
+                        clamp: true,
+                        color: (ctx) => ctx.dataset.type === 'line' ? '#ef4444' : '#ffffff',
+                        font: { size: 10, weight: '900' },
+                        formatter: (value, ctx) => ctx.dataset.type === 'line' ? toKip(value) : `${Number(value).toLocaleString()} ບິນ`
+                    }
+                },
+                scales: {
+                    count: {
+                        position: 'left',
+                        beginAtZero: true,
+                        title: { display: true, text: 'ຈຳນວນບິນ', color: '#64748b', font: { size: 10, weight: '700' } },
+                        ticks: { precision: 0, color: '#64748b', font: { size: 10, weight: '700' } },
+                        grid: { color: 'rgba(148, 163, 184, 0.2)' }
+                    },
+                    revenue: {
+                        position: 'right',
+                        beginAtZero: true,
+                        title: { display: true, text: 'ລາຍຮັບ (₭)', color: '#64748b', font: { size: 10, weight: '700' } },
+                        ticks: { color: '#64748b', font: { size: 10, weight: '700' }, callback: (v) => compactChartValue(v) },
+                        grid: { drawOnChartArea: false }
+                    },
+                    x: {
+                        ticks: { color: '#64748b', font: { size: 10, weight: '700' } },
+                        grid: { color: 'rgba(148, 163, 184, 0.18)' }
+                    }
+                }
+            }
+        });
+
+        makeDoughnut('pdfChartGender', chartDataFromObject(analytics.gender), ['#3b82f6', '#ec4899', '#94a3b8']);
+        makeDoughnut('pdfChartInsite', chartDataFromObject(analytics.insite), ['#0ea5e9', '#f59e0b', '#94a3b8']);
+        makeDoughnut('pdfChartVisitType', chartDataFromObject(analytics.visitType), ['#1e3a8a', '#10b981', '#f59e0b', '#64748b']);
+        makeDoughnut('pdfChartTestType', chartDataFromObject(analytics.testType), ['#0284c7', '#f59e0b', '#94a3b8']);
+        makeDoughnut('pdfChartLabType', chartDataFromObject(analytics.labType), ['#10b981', '#ef4444', '#94a3b8']);
+        makeDoughnut('pdfChartAgeGroup', {
+            labels: (analytics.ageGroups || []).filter(row => Number(row.count) > 0).map(row => row.label),
+            values: (analytics.ageGroups || []).filter(row => Number(row.count) > 0).map(row => Number(row.count) || 0),
+            empty: !(analytics.ageGroups || []).some(row => Number(row.count) > 0)
+        }, ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#94a3b8']);
+
+        const doctorRows = topRevenueEntries(analytics.doctorRevenue, 6);
+        const deptRows = topRevenueEntries(analytics.deptRevenue, 6);
+        const doctorValues = doctorRows.map(([, value]) => Number(value) || 0);
+        const deptValues = deptRows.map(([, value]) => Number(value) || 0);
+        makeChart('pdfChartDoctor', {
+            type: 'bar',
+            data: { labels: doctorRows.map(([label]) => shortLabel(label, 16)), datasets: [{ data: doctorValues, backgroundColor: '#3b82f6', borderRadius: 2, maxBarThickness: 12 }] },
+            options: barOptions(true, doctorValues)
+        });
+        makeChart('pdfChartDept', {
+            type: 'bar',
+            data: { labels: deptRows.map(([label]) => shortLabel(label, 16)), datasets: [{ data: deptValues, backgroundColor: '#3b82f6', borderRadius: 2, maxBarThickness: 12 }] },
+            options: barOptions(true, deptValues)
+        });
+
+        exportCharts.forEach(chart => {
+            chart.resize();
+            chart.update('none');
+        });
         if (document.fonts?.ready) await document.fonts.ready;
         await new Promise(resolve => requestAnimationFrame(resolve));
+        await new Promise(resolve => requestAnimationFrame(resolve));
 
-        const canvas = await html2canvas(screenshotClone, {
-            scale: 4,
-            useCORS: true,
-            allowTaint: true,
-            foreignObjectRendering: false,
-            letterRendering: false,
-            backgroundColor: '#ffffff',
-            logging: false,
-            imageTimeout: 15000,
-            width: screenshotClone.scrollWidth,
-            height: screenshotClone.scrollHeight,
-            windowWidth: screenshotClone.scrollWidth,
-            windowHeight: screenshotClone.scrollHeight,
-            scrollX: 0,
-            scrollY: 0
-        });
-        screenshotClone.remove();
-        screenshotClone = null;
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
         const pageW = doc.internal.pageSize.getWidth();
         const pageH = doc.internal.pageSize.getHeight();
-        const margin = 1.5;
-        const maxW = pageW - margin * 2;
-        const maxH = pageH - margin * 2;
-        const dashboardRect = dashboard.getBoundingClientRect();
-        const yRatio = canvas.height / Math.max(1, dashboard.scrollHeight || dashboardRect.height);
-        const safeCuts = [...dashboard.querySelectorAll('.card, .row, .dashboard-section, .page-header')]
-            .map(el => {
-                const rect = el.getBoundingClientRect();
-                return Math.round((rect.bottom - dashboardRect.top) * yRatio);
-            })
-            .filter(y => y > 80 && y < canvas.height - 80)
-            .sort((a, b) => a - b);
-        const avoidRects = [...dashboard.querySelectorAll('.card, .dashboard-card, .chart-card, canvas, table, .summary-report')]
-            .map(el => {
-                const rect = el.getBoundingClientRect();
-                return {
-                    top: Math.round((rect.top - dashboardRect.top) * yRatio),
-                    bottom: Math.round((rect.bottom - dashboardRect.top) * yRatio)
-                };
-            })
-            .filter(r => r.bottom > 80 && r.top < canvas.height - 80 && r.bottom > r.top)
-            .sort((a, b) => a.top - b.top);
+        const pages = [...pdfContainer.querySelectorAll('.pdf-page')];
 
-        const priorityCharts = ['chartGender', 'chartInsite', 'chartVisitType', 'chartTestType'];
-        const priorityCut = Math.max(0, ...priorityCharts.map(id => {
-            const card = document.getElementById(id)?.closest('.card');
-            if (!card) return 0;
-            const rect = card.getBoundingClientRect();
-            return Math.round((rect.bottom - dashboardRect.top + 16) * yRatio);
-        }));
-
-        dashboard.style.overflow = originalOverflow;
-
-        const pagePixelH = Math.floor(canvas.width * (maxH / maxW));
-
-        const findSafeCut = (target, minY) => {
-            const crossing = avoidRects.find(r => r.top < target && r.bottom > target);
-            if (crossing) {
-                if (crossing.top > minY + 80) return crossing.top;
-                if (crossing.bottom < canvas.height && crossing.bottom > minY + 80) return crossing.bottom;
-            }
-            const windowPx = Math.max(120, Math.round(pagePixelH * 0.16));
-            const candidates = safeCuts.filter(y => y > minY + 80 && y >= target - windowPx && y <= target + windowPx);
-            if (!candidates.length) return Math.min(canvas.height, target);
-            return candidates.reduce((best, y) => Math.abs(y - target) < Math.abs(best - target) ? y : best, candidates[0]);
-        };
-
-        const cuts = [0];
-        let cursor = 0;
-        if (priorityCut > 120 && priorityCut < canvas.height - 120 && priorityCut <= pagePixelH * 1.05) {
-            cuts.push(priorityCut);
-            cursor = priorityCut;
-        }
-        while (canvas.height - cursor > pagePixelH && cuts.length < 8) {
-            const next = findSafeCut(cursor + pagePixelH, cursor);
-            if (next <= cursor + 80) break;
-            cuts.push(next);
-            cursor = next;
-        }
-        if (cuts[cuts.length - 1] < canvas.height) cuts.push(canvas.height);
-
-        for (let i = 0; i < cuts.length - 1; i += 1) {
+        for (let i = 0; i < pages.length; i += 1) {
             if (i > 0) doc.addPage('a4', 'landscape');
-            const y = cuts[i];
-            const h = cuts[i + 1] - y;
-            const pageCanvas = document.createElement('canvas');
-            pageCanvas.width = canvas.width;
-            pageCanvas.height = h;
-            const ctx = pageCanvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-            ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
-
-            const img = pageCanvas.toDataURL('image/png');
-            const scale = Math.min(maxW / pageCanvas.width, maxH / pageCanvas.height);
-            const imgW = pageCanvas.width * scale;
-            const imgH = pageCanvas.height * scale;
-            doc.addImage(img, 'PNG', margin + (maxW - imgW) / 2, margin, imgW, imgH, undefined, 'FAST');
+            const canvas = await html2canvas(pages[i], {
+                scale: 3,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                logging: false,
+                width: pages[i].scrollWidth,
+                height: pages[i].scrollHeight,
+                windowWidth: pages[i].scrollWidth,
+                windowHeight: pages[i].scrollHeight,
+                scrollX: 0,
+                scrollY: 0
+            });
+            doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageW, pageH, undefined, 'FAST');
         }
 
-        doc.save(`Dashboard-Report-${new Date().toISOString().slice(0, 10)}.pdf`);
+        doc.save(`Dashboard_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
         Swal.fire({ icon: 'success', title: 'PDF Generated!', timer: 1800, showConfirmButton: false });
     } catch (error) {
         console.error('PDF Export Error:', error);
         Swal.fire('Error', 'Failed to generate PDF: ' + error.message, 'error');
     } finally {
-        if (screenshotClone?.parentNode) screenshotClone.remove();
-        dashboard.style.overflow = originalOverflow;
-        content?.scrollTo({ top: previousScroll, behavior: 'instant' });
+        exportCharts.forEach(chart => chart.destroy());
+        pdfContainer?.remove();
     }
 };
 

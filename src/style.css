@@ -228,6 +228,60 @@ span.badge.badge-category-other, span.badge.badge-category-default {
   font-family: 'Noto Sans Lao', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
+#dashboardSummaryTable {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+#dashboardSummaryTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #dbe4ef !important;
+}
+
+#dashboardSummaryTable tbody td {
+  border-bottom: 1px solid #eef2f7;
+  vertical-align: middle;
+}
+
+#dashboardSummaryTable tbody tr:not(.summary-category-row):hover td {
+  background: #f8fbff !important;
+}
+
+#dashboardSummaryTable .summary-category-row td {
+  background: #eaf4ff !important;
+  border-top: 1px solid #cfe3ff;
+  border-bottom: 1px solid #cfe3ff;
+  padding: 0.42rem 0.6rem !important;
+}
+
+#dashboardSummaryTable .summary-category-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #334155;
+}
+
+#dashboardSummaryTable .summary-category-title span {
+  font-weight: 800;
+}
+
+#dashboardSummaryTable .summary-category-title small {
+  color: #64748b;
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+#dashboardSummaryTable .summary-category-title b {
+  margin-left: auto;
+  color: #0f766e;
+}
+
 /* Top categories table badges */
 #topCatsBody .badge {
   font-size: 0.65rem !important;
@@ -5395,20 +5449,23 @@ body {
 
 #inventoryTable {
   table-layout: fixed;
-  min-width: 980px;
+  min-width: 1180px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-#inventoryTable th:nth-child(1),  #inventoryTable td:nth-child(1)  { width: 24px; }
-#inventoryTable th:nth-child(2),  #inventoryTable td:nth-child(2)  { width: 200px; }
-#inventoryTable th:nth-child(3),  #inventoryTable td:nth-child(3)  { width: 72px; }
-#inventoryTable th:nth-child(4),  #inventoryTable td:nth-child(4)  { width: 96px; }
-#inventoryTable th:nth-child(5),  #inventoryTable td:nth-child(5)  { width: 72px; }
-#inventoryTable th:nth-child(6),  #inventoryTable td:nth-child(6)  { width: 78px; }
-#inventoryTable th:nth-child(7),  #inventoryTable td:nth-child(7)  { width: 88px; }
-#inventoryTable th:nth-child(8),  #inventoryTable td:nth-child(8)  { width: 64px; }
-#inventoryTable th:nth-child(9),  #inventoryTable td:nth-child(9)  { width: 86px; }
-#inventoryTable th:nth-child(10), #inventoryTable td:nth-child(10) { width: 110px; }
-#inventoryTable th:nth-child(11), #inventoryTable td:nth-child(11) { width: 180px; }
+#inventoryTable th:nth-child(1),  #inventoryTable td:nth-child(1)  { width: 30px; }
+#inventoryTable th:nth-child(2),  #inventoryTable td:nth-child(2)  { width: 220px; }
+#inventoryTable th:nth-child(3),  #inventoryTable td:nth-child(3)  { width: 88px; }
+#inventoryTable th:nth-child(4),  #inventoryTable td:nth-child(4)  { width: 128px; }
+#inventoryTable th:nth-child(5),  #inventoryTable td:nth-child(5)  { width: 82px; }
+#inventoryTable th:nth-child(6),  #inventoryTable td:nth-child(6)  { width: 88px; }
+#inventoryTable th:nth-child(7),  #inventoryTable td:nth-child(7)  { width: 104px; }
+#inventoryTable th:nth-child(8),  #inventoryTable td:nth-child(8)  { width: 86px; }
+#inventoryTable th:nth-child(9),  #inventoryTable td:nth-child(9)  { width: 112px; }
+#inventoryTable th:nth-child(10), #inventoryTable td:nth-child(10) { width: 140px; }
+#inventoryTable th:nth-child(11), #inventoryTable td:nth-child(11) { width: 168px; }
 
 /* Single-line inventory cells: keep everything on one row */
 #inventoryTable tbody td {
@@ -5418,24 +5475,24 @@ body {
 }
 
 #inventoryTable .reagent-primary {
-  display: inline-block;
-  vertical-align: middle;
+  display: block;
   font-family: 'Noto Sans Lao', 'Phetsarath OT', system-ui, sans-serif;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   color: #0f172a;
-  max-width: 150px;
+  max-width: 188px;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 #inventoryTable .reagent-code {
-  display: inline-block;
-  margin-left: 4px;
+  display: block;
+  margin-top: 2px;
   font-size: 10px;
-  color: #94a3b8;
-  font-weight: 500;
-  vertical-align: middle;
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 #inventoryTable .component-pill-wrap {
@@ -5448,7 +5505,7 @@ body {
 
 #inventoryTable .component-pill {
   font-size: 10px;
-  padding: 1px 6px;
+  padding: 2px 7px;
   margin: 0;
 }
 
@@ -5457,6 +5514,8 @@ body {
   display: inline-flex;
   gap: 3px;
   align-items: center;
+  justify-content: flex-end;
+  width: 100%;
 }
 
 .ra-btn {
@@ -5464,7 +5523,7 @@ body {
   background: #fff;
   border-radius: 5px;
   padding: 2px 7px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   font-family: 'Noto Sans Lao', 'Phetsarath OT', system-ui, sans-serif;
   cursor: pointer;
@@ -5491,6 +5550,7 @@ body {
   border-color: #e2e8f0;
   color: #64748b;
   padding: 2px 6px;
+  min-width: 24px;
 }
 
 .ra-btn.ra-icon:hover {
@@ -5674,8 +5734,8 @@ body {
   text-transform: uppercase;
   letter-spacing: 0;
   white-space: nowrap;
-  padding-top: 0.3rem;
-  padding-bottom: 0.3rem;
+  padding-top: 0.45rem;
+  padding-bottom: 0.45rem;
 }
 
 .inventory-lab-table thead th small,
@@ -5684,9 +5744,9 @@ body {
 }
 
 .inventory-lab-row td {
-  font-size: 11.5px;
-  padding-top: 0.28rem;
-  padding-bottom: 0.28rem;
+  font-size: 12px;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
   border-bottom: 1px solid #eef2f7;
   vertical-align: middle;
 }
@@ -5700,9 +5760,29 @@ body {
 }
 
 .lab-group-row td {
-  background: #eef6ff !important;
+  background: #eaf4ff !important;
   border-top: 1px solid #cfe3ff;
   border-bottom: 1px solid #cfe3ff;
+  color: #334155;
+}
+
+#inventoryTable .lab-group-row td {
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+#inventoryTable .cat-header-wrap {
+  gap: 0.55rem;
+}
+
+#inventoryTable .cat-header-name {
+  min-width: 96px;
+}
+
+#inventoryTable .cat-header-count {
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  color: #334155;
 }
 
 .lab-row-warning td {
@@ -6892,4 +6972,197 @@ span.badge.badge-category-biochemistry {
 ::-webkit-scrollbar-thumb:hover,
 .table-responsive::-webkit-scrollbar-thumb:hover {
   background: #94a3b8 !important;
+}
+
+/* Inventory workspace refresh: keep operational tables above the fold. */
+#inventoryPage {
+  --inv-border: #dbe4ef;
+  --inv-muted: #64748b;
+  --inv-soft: #f8fafc;
+}
+
+#inventoryPage .inventory-page-head {
+  margin-bottom: 0.35rem !important;
+}
+
+#inventoryPage .inventory-page-head h4 {
+  font-size: 19px;
+  line-height: 1.2;
+}
+
+#inventoryPage .inventory-tabbar {
+  margin-bottom: 0.5rem !important;
+  padding: 0.15rem;
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+#inventoryPage .inventory-tab-btn {
+  min-height: 32px;
+  padding: 0.28rem 0.65rem;
+}
+
+#inventoryPage .inventory-tab-btn .inv-tab-lao {
+  font-size: 12px;
+}
+
+#inventoryPage .inventory-tab-btn .inv-tab-en {
+  font-size: 9px;
+}
+
+#inventoryTabReport > .inventory-page-desc,
+#inventoryTabStock > .inventory-page-desc {
+  display: none;
+}
+
+#inventoryTabReport .report-date-bar {
+  margin-bottom: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  gap: 0.5rem;
+  border-radius: 8px;
+}
+
+#inventoryTabReport .report-date-bar .rdb-btn {
+  min-width: 72px;
+  padding: 0.28rem 0.55rem;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+#inventoryTabReport .report-date-bar .rdb-custom {
+  padding-left: 0.55rem;
+}
+
+#inventoryTabReport .report-date-bar .rdb-custom input[type="date"] {
+  width: 128px;
+}
+
+#inventoryTabReport .card-header,
+#inventoryTabMovements .card-header {
+  min-height: 38px;
+  padding: 0.45rem 0.7rem;
+}
+
+#inventoryTabStock .inventory-attention {
+  margin-bottom: 0.4rem;
+}
+
+#inventoryTabStock .stock-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(118px, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 0.45rem !important;
+}
+
+#inventoryTabStock .sa-btn {
+  min-height: 36px;
+  padding: 0.34rem 0.6rem;
+  border-radius: 6px;
+}
+
+#inventoryTabStock .sa-btn i {
+  font-size: 14px;
+}
+
+#inventoryTabStock .sa-btn b {
+  font-size: 12px;
+}
+
+#inventoryTabStock .sa-btn small {
+  display: none;
+}
+
+#inventoryTabStock > .row.g-2.mb-3 {
+  margin-bottom: 0.45rem !important;
+}
+
+#inventoryTabStock .kpi-card {
+  min-height: 40px;
+  padding: 0.35rem 0.65rem !important;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+#inventoryTabStock .kpi-card h6 {
+  margin: 0;
+  font-size: 11px !important;
+  line-height: 1.15 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#inventoryTabStock .kpi-card h4,
+#inventoryTabStock .kpi-card h2 {
+  margin: 0 !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+}
+
+#inventoryTabStock > .card.border-0.shadow-sm.mb-2 {
+  margin-bottom: 0.45rem !important;
+}
+
+#inventoryTabStock > .card.border-0.shadow-sm.mb-2 .card-body {
+  padding: 0.45rem 0.55rem !important;
+}
+
+#inventoryTabStock > .card.border-0.shadow-sm.mb-2 .card-body > .small.text-muted.mt-1 {
+  display: none;
+}
+
+#inventoryTabStock #inventoryTable {
+  min-width: 1120px;
+}
+
+#inventoryTabStock #inventoryTable th:nth-child(2),
+#inventoryTabStock #inventoryTable td:nth-child(2) {
+  width: 250px;
+}
+
+#inventoryTabStock #inventoryTable th:nth-child(11),
+#inventoryTabStock #inventoryTable td:nth-child(11) {
+  width: 148px;
+}
+
+#inventoryTabStock > .card.border-0.shadow-sm:last-child .card-body,
+#inventoryTabMovements .inventory-movement-card .card-body,
+#inventoryTabReport .card-body {
+  padding: 0.35rem !important;
+}
+
+#inventoryTabStock .table-responsive {
+  max-height: calc(100vh - 255px) !important;
+  min-height: 520px;
+  border-radius: 8px;
+}
+
+#inventoryTabReport .table-responsive,
+#inventoryTabMovements .table-responsive {
+  max-height: calc(100vh - 220px) !important;
+  min-height: 560px;
+  border-radius: 8px;
+}
+
+#inventoryTabMovements .inventory-movement-card {
+  margin-top: 0;
+}
+
+#inventoryTabMovements .inventory-lab-table {
+  min-width: 1280px;
+}
+
+@media (max-width: 992px) {
+  #inventoryTabStock .stock-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #inventoryTabStock .table-responsive,
+  #inventoryTabReport .table-responsive,
+  #inventoryTabMovements .table-responsive {
+    min-height: 420px;
+  }
 }

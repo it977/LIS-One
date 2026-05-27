@@ -46,6 +46,78 @@ const LAB_CATEGORIES = [
   'Controls & Calibrators',
   'Other',
 ];
+const INVENTORY_EXCEL_ORDER = [
+  ['H001', 'Diluent'],
+  ['H002', 'Lyse solution'],
+  ['H003', 'Probe cleanser'],
+  ['H004', 'Anti A'],
+  ['H005', 'Anti B'],
+  ['H006', 'Anti D'],
+  ['C001', 'Glucose', 'Glu'],
+  ['C002', 'Urea/BUN', 'BUN', 'Urea'],
+  ['C003', 'Creatinine'],
+  ['C004', 'Cholesterol'],
+  ['C005', 'Triglyceride'],
+  ['C006', 'AST/GOT', 'AST', 'GOT'],
+  ['C007', 'ALT/GPT', 'ALT', 'GPT'],
+  ['C008', 'HDL'],
+  ['C009', 'LDL'],
+  ['C010', 'Total Protein'],
+  ['C011', 'Bilirubin Total', 'Total Bilirubin'],
+  ['C012', 'Bilirubin Direct', 'Direct Bilirubin'],
+  ['C013', 'Alkaline Phosphatase', 'ALP'],
+  ['C014', 'Uric Acid'],
+  ['C015', 'Calcium'],
+  ['C016', 'Albumin'],
+  ['C017', 'GGT'],
+  ['S001', 'HBS Ag', 'HBsAg'],
+  ['S002', 'HBS Ab', 'HBsAb'],
+  ['S003', 'HCV Ab'],
+  ['S004', 'HIV'],
+  ['S005', 'Typhoid'],
+  ['S006', 'VDRL'],
+  ['S007', 'Rikettsia'],
+  ['S008', 'Infeuza,RSV,Covid19', 'Influenza RSV Covid19'],
+  ['S009', 'H.Pyloric', 'H Pylori', 'H.Pylori'],
+  ['S010', 'HAV'],
+  ['S011', 'DengueNS1gMgG', 'Dengue NS1 IgM IgG'],
+  ['S012', 'Tuberculosis(TB)', 'TB', 'Tuberculosis'],
+  ['S013', 'CEA'],
+  ['S014', 'AFP'],
+  ['S015', 'PSA'],
+  ['S016', 'HbA1C', 'HbA1c'],
+  ['S017', 'T3'],
+  ['S018', 'T4'],
+  ['S019', 'TSH'],
+  ['U001', 'Urine Test'],
+  ['U002', 'Occult Blood'],
+  ['U003'],
+  ['U004'],
+  ['U005'],
+  ['U006'],
+  ['C018', 'Wash concentreate', 'Wash concentrate'],
+  ['M001', 'Gram stain'],
+  ['H007'],
+  ['H008'],
+  ['S020', 'Amphetamine'],
+  ['H009', 'Ts Tc', 'TS/TC'],
+  ['S021', 'Gonorrhea'],
+  ['S022', 'Chlamydia'],
+];
+const INVENTORY_CODE_ORDER = new Map();
+const INVENTORY_NAME_ORDER = new Map();
+const INVENTORY_ORDER_CODE = new Map();
+INVENTORY_EXCEL_ORDER.forEach((entry, index) => {
+  const [code, ...names] = entry;
+  if (code) {
+    INVENTORY_CODE_ORDER.set(String(code).toUpperCase(), index + 1);
+    INVENTORY_ORDER_CODE.set(index + 1, String(code).toUpperCase());
+  }
+  names.forEach(name => {
+    const key = normalizeInventoryName(name);
+    if (key && !INVENTORY_NAME_ORDER.has(key)) INVENTORY_NAME_ORDER.set(key, index + 1);
+  });
+});
 const inventoryCollapsedCategories = new Set(JSON.parse(localStorage.getItem('lis_inventory_collapsed_categories') || '[]'));
 const saveInventoryCollapsedCategories = () => {
   localStorage.setItem('lis_inventory_collapsed_categories', JSON.stringify([...inventoryCollapsedCategories]));
@@ -261,6 +333,52 @@ function masterForLot(lot) {
 
 function itemCode(row) {
   return row.item_code || row.item_id || masterForLot(row).item_code || '';
+}
+
+function normalizeInventoryName(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function inventoryOrderValue(row) {
+  const code = String(itemCode(row) || row.item_code || row.item_id || '').trim().toUpperCase();
+  if (code && INVENTORY_CODE_ORDER.has(code)) return INVENTORY_CODE_ORDER.get(code);
+  const master = masterForLot(row);
+  const candidates = [
+    row.reagent_name,
+    row.name,
+    row.test_name,
+    master.name,
+    row.item,
+  ];
+  for (const value of candidates) {
+    const key = normalizeInventoryName(value);
+    if (key && INVENTORY_NAME_ORDER.has(key)) return INVENTORY_NAME_ORDER.get(key);
+    for (const [knownName, order] of INVENTORY_NAME_ORDER.entries()) {
+      if (key && knownName && (key.startsWith(knownName) || knownName.startsWith(key))) return order;
+    }
+  }
+  const storedOrder = Number(row.sort_order ?? master.sort_order ?? 0);
+  return storedOrder > 0 ? storedOrder : 9999;
+}
+
+function inventoryExcelComparator(a, b) {
+  const orderDiff = inventoryOrderValue(a) - inventoryOrderValue(b);
+  if (orderDiff) return orderDiff;
+  const codeDiff = String(itemCode(a) || '').localeCompare(String(itemCode(b) || ''), undefined, { numeric: true });
+  if (codeDiff) return codeDiff;
+  const nameDiff = String(a.reagent_name || a.name || '').localeCompare(String(b.reagent_name || b.name || ''), undefined, { numeric: true });
+  if (nameDiff) return nameDiff;
+  return String(a.lot_no || '').localeCompare(String(b.lot_no || ''), undefined, { numeric: true });
+}
+
+function inventoryDisplayCode(row) {
+  const explicit = itemCode(row);
+  if (explicit) return explicit;
+  return INVENTORY_ORDER_CODE.get(inventoryOrderValue(row)) || '';
 }
 
 function itemDetails(row) {
@@ -546,7 +664,9 @@ function groupedInventoryLotsFrom(rows = cache.inventory) {
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(lot);
   });
-  return [...map.values()];
+  return [...map.values()]
+    .map(group => group.slice().sort(inventoryExcelComparator))
+    .sort((a, b) => inventoryExcelComparator(a[0] || {}, b[0] || {}));
 }
 
 function inventoryAlertGroups(rows = cache.inventory) {
@@ -757,6 +877,9 @@ window.setInventoryTab = function(tab) {
     renderInventoryRows(cache.inventory);
     renderInventoryAttention(cache.inventory);
   }
+  if (active === 'movements') {
+    renderStockMovementRows();
+  }
   if (active === 'settings') renderInventorySettingsPanel();
 };
 
@@ -801,14 +924,8 @@ function renderInventoryRows(rows) {
     body.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-3">No inventory data</td></tr>';
     return;
   }
-  const grouped = new Map();
-  groupedInventoryLotsFrom(rows).forEach(group => {
-    const first = group[0] || {};
-    const category = normalizeCategory(itemCategory(first));
-    if (!grouped.has(category)) grouped.set(category, []);
-    grouped.get(category).push(first);
-  });
-  body.innerHTML = [...grouped.entries()].map(([category, groupRows]) => {
+  const orderedRows = groupedInventoryLotsFrom(rows).map(group => group[0] || {}).sort(inventoryExcelComparator);
+  body.innerHTML = orderedCategoryBlocks(orderedRows).map(({ category, rows: groupRows }) => {
     const key = category.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'other';
     const collapsed = inventoryCollapsedCategories.has(key);
     const low = groupRows.filter(r => ['low', 'empty'].includes(lotStatusCode(r))).length;
@@ -838,11 +955,12 @@ function renderInventoryRows(rows) {
       const daysText = days === null ? '-' : (days < 0 ? `${Math.abs(days)} days overdue` : `${days} days`);
       const rowClass = status === 'expired' || status === 'empty' ? 'lab-row-danger' : status === 'expiring' || status === 'low' ? 'lab-row-warning' : '';
       const compPill = componentStockBadges(r); // single component pill, fits one line
+      const displayCode = inventoryDisplayCode(r);
       return `<tr class="inventory-lab-row ${rowClass} ${collapsed ? 'd-none' : ''}" data-inv-category-row="${esc(key)}">
       <td class="ps-3 col-cat-cell"><span class="cat-dot cat-dot-${esc(key)}"></span></td>
       <td class="fw-semibold col-reagent-cell">
-        <span class="reagent-primary">${esc(r.reagent_name || '-')}</span>
-        ${itemCode(r) ? `<span class="reagent-code">${esc(itemCode(r))}</span>` : ''}
+        <span class="reagent-primary" title="${esc(r.reagent_name || '-')}">${esc(r.reagent_name || '-')}</span>
+        <span class="reagent-code">${esc(displayCode)}</span>
       </td>
       <td><button type="button" class="btn btn-link btn-sm p-0 movement-order-link" onclick="openStockHistoryModal()">${esc(r.lot_no || '-')}</button></td>
       <td class="col-components"><div class="component-pill-wrap">${compPill}</div></td>
@@ -921,7 +1039,7 @@ function renderStockMovementRows() {
   };
   const empty = '<tr><td colspan="10" class="text-center text-muted py-3">No stock movements</td></tr>';
   const html = rows.map(makeRow).join('') || empty;
-  if (compactBody) compactBody.innerHTML = rows.length ? rows.slice(0, 8).map(makeRow).join('') : empty;
+  if (compactBody) compactBody.innerHTML = html;
   if (modalBody) modalBody.innerHTML = html;
 }
 window.renderStockMovementRows = renderStockMovementRows;
@@ -942,7 +1060,19 @@ function groupedInventoryLots() {
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(lot);
   });
-  return [...map.values()];
+  return [...map.values()]
+    .map(group => group.slice().sort(inventoryExcelComparator))
+    .sort((a, b) => inventoryExcelComparator(a[0] || {}, b[0] || {}));
+}
+
+function orderedCategoryBlocks(rows) {
+  return rows.slice().sort(inventoryExcelComparator).reduce((blocks, row) => {
+    const category = normalizeCategory(row.category || itemCategory(row));
+    const last = blocks[blocks.length - 1];
+    if (!last || last.category !== category) blocks.push({ category, rows: [] });
+    blocks[blocks.length - 1].rows.push(row);
+    return blocks;
+  }, []);
 }
 
 function txQty(tx) {
@@ -987,6 +1117,8 @@ function reportRows() {
               : 'Normal';
     return {
       category,
+      item_code: itemCode(first),
+      sort_order: inventoryOrderValue(first),
       reagent_name: first.reagent_name || '-',
       lot_no: lotNo || '-',
       component_summary: `R1: ${r1 || '-'} | R2: ${r2 || '-'}${r3 ? ` | R3: ${r3}` : ''}`,
@@ -1001,7 +1133,7 @@ function reportRows() {
       days_to_expire: lotDaysLeft(first),
       status
     };
-  }).filter(Boolean);
+  }).filter(Boolean).sort(inventoryExcelComparator);
 }
 
 function renderInventoryUsageInsights(rows) {
@@ -1119,13 +1251,7 @@ window.renderInventoryReport = function renderInventoryReport() {
     return;
   }
   // Group by category for readability (subtotal row per category)
-  const grouped = new Map();
-  rows.forEach(r => {
-    const cat = r.category || 'Other';
-    if (!grouped.has(cat)) grouped.set(cat, []);
-    grouped.get(cat).push(r);
-  });
-  body.innerHTML = [...grouped.entries()].map(([category, group]) => {
+  body.innerHTML = orderedCategoryBlocks(rows).map(({ category, rows: group }) => {
     const subUsed = group.reduce((s, r) => s + r.used_tests, 0);
     const subRecv = group.reduce((s, r) => s + r.received_tests, 0);
     const subEnd = group.reduce((s, r) => s + r.ending_balance_tests, 0);
@@ -1168,12 +1294,7 @@ function renderInventoryUsageReport() {
   if ($('invReportLowStock')) $('invReportLowStock').textContent = low;
   if ($('invReportExpiring')) $('invReportExpiring').textContent = expiring;
   if ($('invReportStockout2Weeks')) $('invReportStockout2Weeks').textContent = stockoutSoon;
-  const grouped = new Map();
-  rows.forEach(r => {
-    if (!grouped.has(r.category)) grouped.set(r.category, []);
-    grouped.get(r.category).push(r);
-  });
-  body.innerHTML = rows.length ? [...grouped.entries()].map(([category, group]) => {
+  body.innerHTML = rows.length ? orderedCategoryBlocks(rows).map(({ category, rows: group }) => {
     const subtotalUsed = group.reduce((s, r) => s + r.used_tests, 0);
     const subtotalUsable = group.reduce((s, r) => s + r.usable_tests, 0);
     const subtotalEnding = group.reduce((s, r) => s + r.ending_balance_tests, 0);
@@ -1215,7 +1336,7 @@ function renderInventorySettingsPanel() {
   }
   const mapBody = $('inventoryMappingSettingsBody');
   if (mapBody) {
-    mapBody.innerHTML = (cache.reagents || []).slice(0, 8).map(r => `
+    mapBody.innerHTML = (cache.reagents || []).slice().sort(inventoryExcelComparator).slice(0, 8).map(r => `
       <tr>
         <td class="fw-semibold">${esc(r.name || r.reagent_name || '-')}</td>
         <td>${categoryBadge(r.category || 'Other')}</td>
@@ -1297,7 +1418,7 @@ window.sortInventoryData = () => {
     'exp-new':    (a,b) => (b.exp_date||'').localeCompare(a.exp_date||''),
     'qty':        (a,b) => Number(b.qty_remaining||0) - Number(a.qty_remaining||0),
     'qty-asc':    (a,b) => Number(a.qty_remaining||0) - Number(b.qty_remaining||0),
-    'custom':     (a,b) => String(itemCode(a)||'ZZZ').localeCompare(String(itemCode(b)||'ZZZ'), undefined, { numeric: true }),
+    'custom':     inventoryExcelComparator,
   };
   if (sorters[mode]) rows.sort(sorters[mode]);
   cache.inventory = rows;
@@ -1308,6 +1429,8 @@ function activeLotsForSelect() {
   return cache.inventory
     .filter(l => lotQty(l) > 0 && lotStatusCode(l) !== 'expired')
     .sort((a, b) => {
+      const orderDiff = inventoryExcelComparator(a, b);
+      if (orderDiff) return orderDiff;
       const da = lotDaysLeft(a);
       const db = lotDaysLeft(b);
       return (da ?? 99999) - (db ?? 99999);
@@ -1469,7 +1592,7 @@ window.openAddLotModal = async function() {
   const sel = $('invSelectReagent');
   if (sel) {
     sel.innerHTML = '<option value="" disabled selected>-- ເລືອກນ້ຳຢາ --</option>' +
-      cache.reagents.map(r => `<option value="${r.id}" data-name="${esc(r.name)}" data-details="${esc(r.details || '')}" data-code="${esc(r.item_code || '')}">${esc(r.item_code ? r.item_code + ' - ' : '')}${esc(r.name)}${r.unit?` (${esc(r.unit)})`:''}</option>`).join('');
+      cache.reagents.slice().sort(inventoryExcelComparator).map(r => `<option value="${r.id}" data-name="${esc(r.name)}" data-details="${esc(r.details || '')}" data-code="${esc(r.item_code || '')}">${esc(r.item_code ? r.item_code + ' - ' : '')}${esc(r.name)}${r.unit?` (${esc(r.unit)})`:''}</option>`).join('');
   }
   ['invLotNo','invExpDate','invReceiveDate','invLocation','invSupplier','invQty','invDetails','invUnitQty'].forEach(id => { if ($(id)) $(id).value = ''; });
   if ($('invComponentType')) $('invComponentType').value = 'Single';
@@ -1611,11 +1734,11 @@ window.deleteInvLot = async function(id) {
 };
 
 window.exportInventoryData = function(type) {
-  const rows = cache.inventory;
+  const rows = cache.inventory.slice().sort(inventoryExcelComparator);
   if (!rows.length) return toast('info', 'ບໍ່ມີຂໍ້ມູນ');
   const headers = ['Item ID','Category','Reagent','Component','Details','Lot No','Unit Type','Unit Qty','Tests Per Unit','Total Tests','Used Tests','Remaining Tests','Usable Tests','R1 Remaining','R2 Remaining','R3 Remaining','Exp Date','Days Left','Location','Supplier','Status'];
   const data = rows.map(r => [
-    itemCode(r),
+    inventoryDisplayCode(r),
     normalizeCategory(itemCategory(r)),
     r.reagent_name,
     componentType(r),
@@ -1666,13 +1789,8 @@ window.exportInventoryUsageReport = function(type) {
     'used_tests','ending_balance_tests','usable_tests','average_usage_per_week',
     'estimated_weeks_left','exp_date','days_to_expire','status'
   ];
-  const grouped = new Map();
-  rows.forEach(r => {
-    if (!grouped.has(r.category)) grouped.set(r.category, []);
-    grouped.get(r.category).push(r);
-  });
   const data = [];
-  grouped.forEach((group, category) => {
+  orderedCategoryBlocks(rows).forEach(({ category, rows: group }) => {
     data.push([`CATEGORY: ${category}`, '', '', '', '', '', '', '', '', '', '', '', '', '']);
     group.forEach(r => data.push(headers.map(h => r[h] ?? '')));
     data.push([
@@ -1719,7 +1837,7 @@ function renderReagentTable() {
   const body = $('reagentMasterTableBody'); if (!body) return;
   const catOpts = (selected) => LAB_CATEGORIES.map(c =>
     `<option value="${esc(c)}"${normalizeCategory(selected) === c ? ' selected' : ''}>${esc(c)}</option>`).join('');
-  body.innerHTML = cache.reagents.map(r => `
+  body.innerHTML = cache.reagents.slice().sort(inventoryExcelComparator).map(r => `
     <tr data-reagent-row="${r.id}">
       <td class="ps-3 fw-semibold text-primary">${esc(r.item_code || r.id)}</td>
       <td class="fw-semibold">${esc(r.name)}</td>
@@ -1805,6 +1923,7 @@ window.saveReagentMaster = async function() {
     details: $('newReagentDetails')?.value.trim() || null,
     main_supplier: $('newReagentSupplier')?.value.trim() || null,
     storage_temp: $('newReagentStorageTemp')?.value.trim() || null,
+    sort_order: INVENTORY_CODE_ORDER.get(String($('newReagentItemCode')?.value || '').trim().toUpperCase()) || null,
   };
   // Minimal fallback keeps CRUD working on older databases that have not applied
   // the inventory category/metadata migration yet.
@@ -1859,11 +1978,17 @@ function parseInventoryWorkbookRows(workbook) {
   const main = workbook.Sheets.MainStock || workbook.Sheets['Main Stock'] || workbook.Sheets[workbook.SheetNames[0]];
   if (!main || !window.XLSX) return [];
   const rows = window.XLSX.utils.sheet_to_json(main, { defval: '' });
+  const readCell = (row, keys) => {
+    for (const key of keys) {
+      if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') return row[key];
+    }
+    return '';
+  };
   return rows
     .map((r, idx) => ({
       sort_order: idx + 1,
-      item_code: String(r['Item ID'] || '').trim(),
-      name: String(r.Item || '').trim(),
+      item_code: String(readCell(r, ['Item ID', 'ລະຫັດເຄື່ອງມື']) || '').trim(),
+      name: String(readCell(r, ['Item', 'ລາຍການ']) || '').trim(),
       details: String(r.Details || '').trim(),
       stock_standard: Number(r['ຫັກການ Calibration ແລະ ການ maintenance 20%'] || 0) || null,
       unit: String(r.Unit || '').trim(),
@@ -1874,7 +1999,7 @@ function parseInventoryWorkbookRows(workbook) {
       category: normalizeCategory(r.Category || 'Other'),
       last_received_date: excelDateToIso(r['Last Received Date']),
       exp_date: excelDateToIso(r['Expiry Date']),
-      current_stock: Number(r['Current Stock'] || 0) || 0,
+      current_stock: Number(readCell(r, ['Current Stock', 'ຍອດຄົງເຫຼືອປັດຈຸບັນ']) || 0) || 0,
       notes: String(r.Notes || '').trim(),
     }))
     .filter(r => r.item_code && r.name);
@@ -2198,7 +2323,7 @@ window.loadMappingData = async function() {
   if (testSel) testSel.innerHTML = '<option value="" disabled selected>-- ເລືອກ Test --</option>' +
     cache.testMaster.map(t => `<option value="${esc(t.name)}">${esc(t.name)}</option>`).join('');
   if (reaSel)  reaSel.innerHTML  = '<option value="" disabled selected>-- ເລືອກ Reagent --</option>' +
-    cache.reagents.map(r => `<option value="${r.id}" data-name="${esc(r.name)}">${esc(r.name)}</option>`).join('');
+    cache.reagents.slice().sort(inventoryExcelComparator).map(r => `<option value="${r.id}" data-name="${esc(r.name)}">${esc(r.name)}</option>`).join('');
 
   const body = $('mappingTableBody');
   if (body) body.innerHTML = mapping.length ? mapping.map(m => `

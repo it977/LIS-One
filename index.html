@@ -605,21 +605,8 @@
 
       <!-- ================= INVENTORY ================= -->
       <div id="inventoryPage" class="page">
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 inventory-page-head">
           <h4 class="fw-bold m-0" style="color: var(--primary-dark)"><i class="bi bi-boxes me-2 text-primary"></i> ລະບົບຈັດການສາງນ້ຳຢາ (Inventory & Lots)</h4>
-          <div class="d-flex gap-2 align-items-center">
-            <div class="btn-group border-0 shadow-sm" role="group">
-              <button class="btn btn-sm" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; border: none;" onclick="exportInventoryData('excel')" title="ດາວໂຫຼດ Excel">
-                <i class="bi bi-file-earmark-excel-fill me-1"></i> Excel
-              </button>
-              <button class="btn btn-sm" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); color: white; border: none;" onclick="exportInventoryData('csv')" title="ດາວໂຫຼດ CSV">
-                <i class="bi bi-filetype-csv me-1"></i> CSV
-              </button>
-              <button class="btn btn-sm" style="background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%); color: white; border: none;" onclick="exportInventoryData('pdf')" title="ດາວໂຫຼດ PDF">
-                <i class="bi bi-file-earmark-pdf-fill me-1"></i> PDF
-              </button>
-            </div>
-          </div>
         </div>
 
         <!-- ===== Inventory: 3-tab simplified layout ===== -->
@@ -631,6 +618,10 @@
           <button type="button" class="inventory-tab-btn" data-inventory-tab="stock" onclick="setInventoryTab('stock')">
             <i class="bi bi-boxes"></i>
             <span class="inv-tab-text"><span class="inv-tab-lao">ສາງ</span><span class="inv-tab-en">Stock</span></span>
+          </button>
+          <button type="button" class="inventory-tab-btn" data-inventory-tab="movements" onclick="setInventoryTab('movements')">
+            <i class="bi bi-clock-history"></i>
+            <span class="inv-tab-text"><span class="inv-tab-lao">ປະຫວັດ</span><span class="inv-tab-en">Movements</span></span>
           </button>
           <button type="button" class="inventory-tab-btn admin-only" data-inventory-tab="settings" onclick="setInventoryTab('settings')">
             <i class="bi bi-sliders"></i>
@@ -698,8 +689,11 @@
             </div>
           </div>
 
-          <!-- Movement timeline (always visible) -->
-          <div class="card border-0 shadow-sm mt-3">
+        </div>
+
+        <!-- ============ MOVEMENTS TAB ============ -->
+        <div id="inventoryTabMovements" class="inventory-tab-panel">
+          <div class="card border-0 shadow-sm inventory-movement-card">
             <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
               <span class="fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i>ປະຫວັດການເຄື່ອນໄຫວທັງໝົດ <span class="text-muted small fw-normal">Full movement log (in selected period)</span></span>
               <div class="d-flex gap-2 align-items-center">
@@ -718,7 +712,7 @@
               <div class="table-responsive" style="max-height:360px;overflow:auto">
                 <table class="table table-hover table-sm align-middle mb-0 w-100 inventory-lab-table" style="font-size:0.82rem">
                   <thead class="inventory-sticky-head">
-                    <tr><th class="ps-3">ວັນທີ</th><th>ນ້ຳຢາ</th><th>Lot</th><th class="text-center">ປະເພດ</th><th class="text-end">ຈຳນວນ</th><th class="text-end">ຍັງເຫຼືອ</th><th>ໂດຍ</th><th>ໝາຍເຫດ</th></tr>
+                    <tr><th class="ps-3">ວັນທີ</th><th>ໝວດ</th><th>ນ້ຳຢາ</th><th>Lot</th><th>Unit</th><th class="text-center">ປະເພດ</th><th class="text-end">ຈຳນວນ</th><th class="text-end">ຍັງເຫຼືອ</th><th>ໂດຍ</th><th>ໝາຍເຫດ</th></tr>
                   </thead>
                   <tbody id="stockMovementTableBody"></tbody>
                 </table>
@@ -752,7 +746,7 @@
               <span><b>Import Excel</b><small>Bulk receive</small></span>
             </button>
             <input type="file" id="inventoryExcelInput" class="d-none" accept=".xlsx,.xls" onchange="importInventoryExcel(event)">
-            <button type="button" class="sa-btn sa-grey" onclick="openStockHistoryModal()" title="ເບິ່ງປະຫວັດການເຂົ້າ-ອອກສາງທັງໝົດ">
+            <button type="button" class="sa-btn sa-grey" onclick="setInventoryTab('movements')" title="ເບິ່ງປະຫວັດການເຂົ້າ-ອອກສາງທັງໝົດ">
               <i class="bi bi-clock-history"></i>
               <span><b>ປະຫວັດ</b><small>Full history</small></span>
             </button>
