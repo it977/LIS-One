@@ -113,6 +113,17 @@ function toDateTimeLocal(value) {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function nowDateTimeLocal() {
+    return toDateTimeLocal(new Date());
+}
+
+function ensureOrderDateTimeDefault(force = false) {
+    const input = document.getElementById('orderDateTime');
+    if (!input) return '';
+    if (force || !input.value) input.value = nowDateTimeLocal();
+    return input.value;
+}
+
 function setSelectValue(id, value) {
     const select = document.getElementById(id);
     if (!select || value == null || value === '') return;
@@ -487,6 +498,7 @@ window.showPage = (e, id) => {
         window.loadTestMasterTable?.();
     }
     if(pageId === 'orderPage' || pageId === 'orderForm') {
+        ensureOrderDateTimeDefault();
         if (typeof window.loadTestCheckboxes === 'function') window.loadTestCheckboxes();
         populateDropdowns().catch(e => console.warn('[showPage] dropdown load failed', e));
         loadPackageSelector().catch(e => console.warn('[showPage] package load failed', e));
@@ -872,8 +884,9 @@ window.submitData = async () => {
     const testType = document.getElementById('testType')?.value || 'Normal';
     const isOutlab = document.getElementById('isOutlab')?.checked || false;
     const labDest = isOutlab ? (document.getElementById('labDest')?.value || 'Outlab') : 'In-house';
-    const orderDateTimeRaw = document.getElementById('orderDateTime')?.value || '';
-    const orderDateTime = orderDateTimeRaw ? new Date(orderDateTimeRaw).toISOString() : null;
+    const orderDateTimeRaw = ensureOrderDateTimeDefault();
+    const parsedOrderDate = orderDateTimeRaw ? new Date(orderDateTimeRaw) : new Date();
+    const orderDateTime = Number.isNaN(parsedOrderDate.getTime()) ? new Date().toISOString() : parsedOrderDate.toISOString();
     
     if(!pid || !pname) {
         Swal.fire('ແຈ້ງເຕືອນ', 'ກະລຸນາປ້ອນ Patient ID ແລະ ຊື່ຄົນເຈັບ', 'warning');
@@ -1014,6 +1027,7 @@ window.resetForm = () => {
     });
     selectedTests = [];
     renderOrderSummary();
+    ensureOrderDateTimeDefault(true);
     const submitBtn = document.getElementById('submitBtn');
     if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-save me-2"></i> ບັນທຶກການສັ່ງກວດ';
 };
@@ -1159,6 +1173,18 @@ function fileKindIcon(file = {}) {
     return 'bi-file-earmark-medical-fill text-primary';
 }
 
+function isPdfFile(file = {}) {
+    return String(file.file_type || file.type || file.file_name || '').toLowerCase().includes('pdf');
+}
+
+function orderFileViewUrl(file = {}) {
+    if (file.viewer_url) return file.viewer_url;
+    const params = new URLSearchParams();
+    if (file.id != null) params.set('file_id', String(file.id));
+    else if (file.storage_path) params.set('storage_path', String(file.storage_path));
+    return params.toString() ? `/api/file-preview?${params.toString()}` : (file.public_url || '');
+}
+
 async function renderOrderUploadModal(orderId, prefetchedFiles = null) {
     orderId = String(orderId || '').trim();
     const title = document.getElementById('orderUploadOrderId');
@@ -1196,6 +1222,19 @@ async function renderOrderUploadModal(orderId, prefetchedFiles = null) {
             </div>
         </div>
     `).join('');
+    files.forEach((file, index) => {
+        if (!isPdfFile(file)) return;
+        const item = list.children[index];
+        const viewUrl = orderFileViewUrl(file);
+        if (!item || !viewUrl) return;
+        const preview = document.createElement('div');
+        preview.className = 'upload-pdf-preview';
+        preview.innerHTML = `<iframe src="${escapeHtml(viewUrl)}" title="${escapeHtml(file.file_name || 'PDF result')}" loading="lazy"></iframe>`;
+        item.appendChild(preview);
+        item.querySelectorAll('.upload-file-actions button:not(.btn-outline-danger)').forEach(button => {
+            button.setAttribute('onclick', `window.open('${escapeHtml(viewUrl)}', '_blank')`);
+        });
+    });
 }
 
 window.viewOrderDetail = async function(orderId) {

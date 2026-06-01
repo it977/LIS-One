@@ -246,6 +246,9 @@ export async function saveOrder(orderData, items) {
   // Schema: one row per test. Strip cart-only fields and fan out.
   const base = { ...orderData };
   delete base.test_items;
+  if (!base.order_datetime || Number.isNaN(new Date(base.order_datetime).getTime())) {
+    base.order_datetime = new Date().toISOString();
+  }
 
   const rows = (items || []).map(it => ({
     ...base,
@@ -512,8 +515,12 @@ export async function getOrderFiles(orderId) {
     });
     const json = await readJsonSafe(res);
     if (!res.ok) return { success: false, data: [], error: json.error || JSON.stringify(json) };
-    console.log('[FILES] rows', { order_id: cleanOrderId, count: Array.isArray(json.data) ? json.data.length : 0, rows: json.data || [] });
-    return { success: json.success, data: Array.isArray(json.data) ? json.data : [], error: json.error };
+    const rows = Array.isArray(json.data) ? json.data.map(file => {
+      const viewerUrl = file?.id != null ? `/api/file-preview?file_id=${encodeURIComponent(file.id)}` : file.public_url;
+      return { ...file, storage_public_url: file.public_url, public_url: viewerUrl, viewer_url: viewerUrl };
+    }) : [];
+    console.log('[FILES] rows', { order_id: cleanOrderId, count: rows.length, rows });
+    return { success: json.success, data: rows, error: json.error };
   } catch (e) {
     return { success: false, data: [] };
   }

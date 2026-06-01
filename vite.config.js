@@ -228,6 +228,21 @@ function localSupabaseApi(env) {
         return parts.join('/');
       }
 
+      function encodeStorageObjectPath(storagePath) {
+        return String(storagePath || '').split('/').map(encodeURIComponent).join('/');
+      }
+
+      async function supabaseStorageResponse(path, options = {}) {
+        return fetch(`${supabaseUrl}/storage/v1/${path}`, {
+          ...options,
+          headers: {
+            apikey: supabaseKey,
+            Authorization: `Bearer ${supabaseKey}`,
+            ...(options.headers || {})
+          }
+        });
+      }
+
       function isMissingStorageObject(body) {
         const text = typeof body === 'string' ? body : JSON.stringify(body || {});
         return /not.?found|does not exist|404/i.test(text);
@@ -327,6 +342,56 @@ function localSupabaseApi(env) {
           }));
           console.log('[FILES] list rows', files);
           return sendJson(res, 200, { success: true, data: files });
+        } catch (err) {
+          return sendJson(res, 500, { success: false, error: err.message });
+        }
+      })
+
+      server.middlewares.use('/api/file-preview', async (req, res) => {
+        if (!['GET', 'HEAD'].includes(req.method)) return sendJson(res, 405, { success: false, error: 'Method not allowed' });
+        if (!supabaseUrl || !supabaseKey) return sendJson(res, 500, { success: false, error: 'Supabase env missing' });
+        try {
+          const params = new URL(req.url, 'http://localhost').searchParams;
+          const fileId = params.get('file_id') || '';
+          let row = null;
+          if (fileId) {
+            const { resp: lookupResp, body: lookupBody } = await supabaseRest(
+              `lis_one_order_result_files?select=*&id=eq.${encodeURIComponent(fileId)}&limit=1`,
+              { method: 'GET' }
+            );
+            if (!lookupResp.ok) return sendJson(res, lookupResp.status, { success: false, error: 'File lookup failed', detail: lookupBody });
+            row = Array.isArray(lookupBody) ? lookupBody[0] : lookupBody;
+          }
+
+          const storagePath = normalizeOrderFileStoragePath(row?.storage_path || params.get('storage_path') || params.get('path') || params.get('public_url'));
+          if (!storagePath) return sendJson(res, 400, { success: false, error: 'storage_path or file_id is required' });
+
+          const objectPath = `object/${ORDER_FILE_BUCKET}/${encodeStorageObjectPath(storagePath)}`;
+          const range = req.headers.range;
+          const storageResp = await supabaseStorageResponse(objectPath, {
+            method: 'GET',
+            headers: range ? { Range: range } : {}
+          });
+          if (!storageResp.ok) {
+            const detail = await storageResp.text().catch(() => '');
+            return sendJson(res, storageResp.status, { success: false, error: 'Storage read failed', detail, pathUsed: storagePath });
+          }
+
+          const originalName = String(row?.file_name || storagePath.split('/').pop() || 'result-file');
+          const fileName = originalName.replace(/[^\x20-\x7E]/g, '_').replace(/[\r\n"\\]/g, '_') || 'result-file.pdf';
+          const contentType = row?.file_type || storageResp.headers.get('content-type') || 'application/octet-stream';
+          res.statusCode = storageResp.status;
+          res.setHeader('Content-Type', contentType);
+          const contentLength = storageResp.headers.get('content-length');
+          const contentRange = storageResp.headers.get('content-range');
+          if (contentLength) res.setHeader('Content-Length', contentLength);
+          if (contentRange) res.setHeader('Content-Range', contentRange);
+          res.setHeader('Accept-Ranges', 'bytes');
+          res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+          res.setHeader('Cache-Control', 'private, max-age=300');
+          if (req.method === 'HEAD') return res.end();
+          const bytes = Buffer.from(await storageResp.arrayBuffer());
+          res.end(bytes);
         } catch (err) {
           return sendJson(res, 500, { success: false, error: err.message });
         }
