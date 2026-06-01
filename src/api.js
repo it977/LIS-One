@@ -210,7 +210,7 @@ export async function getDashboardData(sDate, eDate) {
   if (eDate) filters.push(`order_datetime=lte.${eDate}T23:59:59.999`);
   const filterStr = filters.join('&');
   
-  const res = await fetchProxy('lis_one_test_orders', { filter: filterStr, limit: 500 });
+  const res = await fetchProxy('lis_one_test_orders', { filter: filterStr, limit: 5000 });
   const orders = res.data;
   
   return { 
@@ -225,7 +225,7 @@ export async function getDashboardData(sDate, eDate) {
   };
 }
 
-export async function getRecentOrders() { const res = await fetchProxy('lis_one_test_orders', { order: 'order_datetime.desc', limit: 100 }); return res.data; }
+export async function getRecentOrders() { const res = await fetchProxy('lis_one_test_orders', { order: 'order_datetime.desc', limit: 5000 }); return res.data; }
 export async function getSettings() { const res = await fetchProxy('lis_one_settings', { order: 'id.asc' }); return res.data; }
 export async function getStockMaster() { const res = await fetchProxy('lis_one_stock_master', { order: 'name.asc', limit: 200 }); return res.data; }
 export async function getInventoryLots() { const res = await fetchProxy('lis_one_inventory_lots', { order: 'exp_date.asc', limit: 200 }); return res.data; }

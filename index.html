@@ -426,6 +426,15 @@
           <div class="card-body rounded d-flex flex-wrap gap-2 align-items-center border">
             <span class="fw-bold text-muted me-2"><i class="bi bi-search"></i> ກັ່ນຕອງວັນທີ:</span>
             <input type="date" class="form-control form-control-sm w-auto bg-light border-0" id="searchDate" onchange="filterTable()">
+            <label class="small fw-bold text-muted ms-2 mb-0" for="historyPageSize">Rows:</label>
+            <select class="form-select form-select-sm w-auto bg-light border-0" id="historyPageSize" onchange="filterTable()">
+              <option value="10">10</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="500">500</option>
+              <option value="1000">1000</option>
+            </select>
+            <span class="small text-muted" id="historyRowCount"></span>
             <button class="btn btn-outline-primary btn-sm" onclick="loadTable()" title="ລ້າງການກັ່ນຕອງ"><i class="bi bi-arrow-clockwise"></i> ໂຫຼດໃໝ່</button>
             <div class="btn-group border ms-auto shadow-sm">
               <button class="btn btn-sm btn-light text-success fw-bold" onclick="exportHistoryData('excel')" title="ດາວໂຫຼດ Excel"><i class="bi bi-file-earmark-excel-fill me-1"></i> Excel</button>

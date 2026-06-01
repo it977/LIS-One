@@ -1032,14 +1032,25 @@ window.resetForm = () => {
     if (submitBtn) submitBtn.innerHTML = '<i class="bi bi-save me-2"></i> ບັນທຶກການສັ່ງກວດ';
 };
 
+function getHistoryPageSize() {
+    const value = Number(document.getElementById('historyPageSize')?.value || 50);
+    return [10, 50, 100, 500, 1000].includes(value) ? value : 50;
+}
+
 function renderOrderHistoryTable(orders) {
     const body = document.getElementById('orderTableBody');
     if(!body) return;
 
+    const allRows = orders || [];
+    const pageSize = getHistoryPageSize();
+    const visibleRows = allRows.slice(0, pageSize);
+    const countEl = document.getElementById('historyRowCount');
+    if (countEl) countEl.textContent = `Showing ${visibleRows.length.toLocaleString()} / ${allRows.length.toLocaleString()}`;
+
     const t0 = performance.now();
     const fragment = document.createDocumentFragment();
     
-    (orders || []).forEach(o => {
+    visibleRows.forEach(o => {
         const tr = document.createElement('tr');
         tr.dataset.orderId = o.order_id;
         tr.innerHTML = `
@@ -1066,12 +1077,16 @@ function renderOrderHistoryTable(orders) {
     });
     
     body.innerHTML = '';
-    body.appendChild(fragment);
+    if (visibleRows.length) {
+        body.appendChild(fragment);
+    } else {
+        body.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No orders found</td></tr>';
+    }
     
     const renderTime = performance.now() - t0;
-    if (renderTime > 500) console.warn(`[PERF] renderOrderHistoryTable: ${renderTime.toFixed(0)}ms (${orders?.length || 0} rows)`);
+    if (renderTime > 500) console.warn(`[PERF] renderOrderHistoryTable: ${renderTime.toFixed(0)}ms (${visibleRows.length}/${allRows.length} rows)`);
     
-    hydrateOrderUploadBadges(orders || []).catch(e => console.warn('[history] upload badge failed', e));
+    hydrateOrderUploadBadges(visibleRows).catch(e => console.warn('[history] upload badge failed', e));
 }
 
 function groupOrdersById(rows = []) {
@@ -1127,7 +1142,8 @@ function findRecentOrder(orderId) {
 }
 
 async function hydrateOrderUploadBadges(orders) {
-    await Promise.all((orders || []).map(async (order) => {
+    const visibleOrders = (orders || []).slice(0, 150);
+    await Promise.all(visibleOrders.map(async (order) => {
         const badge = document.querySelector(`[data-upload-count="${CSS.escape(String(order.order_id))}"]`);
         if (!badge) return;
         const res = await api.getOrderFiles(order.order_id);
